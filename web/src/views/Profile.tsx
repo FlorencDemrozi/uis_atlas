@@ -47,6 +47,7 @@ export function ProfileView({ atlas, id }: { atlas: Atlas; id: string }) {
             <br /><span class="muted small">{t("p.autoSummary")}</span></p>
           : <p class="summary pending">{t("r.summaryPending")}</p>}
         <div class="links">
+          <a href={`${links.network}?focus=${encodeURIComponent(r.scopus_id)}`}>{t("p.exploreNetwork")}</a>
           {r.links.scopus && <a href={r.links.scopus}>{t("p.scopus")}</a>}
           {r.links.orcid && <a href={r.links.orcid}>ORCID</a>}
           {r.links.uis && <a href={r.links.uis}>{t("p.uis")}</a>}

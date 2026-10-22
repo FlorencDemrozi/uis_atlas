@@ -275,8 +275,9 @@ details.table-view summary { cursor: pointer; color: var(--accent); width: fit-c
 .net-wrap { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .net-wrap svg { display: block; width: 100%; height: min(72vh, 720px); cursor: grab; touch-action: none; }
 .net-wrap svg.dragging { cursor: grabbing; }
-.net-wrap .edge { stroke: var(--baseline); }
-.net-wrap .edge.hl { stroke: var(--ink-2); }
+.net-wrap .edge { stroke: var(--baseline); stroke-opacity: 0.45; }
+.net-wrap .edge.hl { stroke: var(--ink-2); stroke-opacity: 0.9; }
+.net-wrap .edge.soft { stroke-opacity: 0.6; }
 .net-wrap .node { stroke: var(--surface); stroke-width: 2; cursor: pointer; }
 .net-wrap .node.dim, .net-wrap .edge.dim { opacity: 0.12; }
 .net-wrap .node-label {
@@ -303,3 +304,54 @@ details.table-view summary { cursor: pointer; color: var(--accent); width: fit-c
 .people { list-style: none; padding: 0; margin: 0; }
 .people li { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--grid); font-size: 15px; }
 .loading { padding: 80px 0; text-align: center; color: var(--muted); }
+
+/* ------------------------------------------------------------------ network exploration */
+.net-wrap .node-g { cursor: pointer; }
+.net-wrap .node, .net-wrap .edge { transition: opacity 0.2s; }
+.net-wrap .node.far { opacity: 0.55; }
+.net-wrap .node.focus { stroke: var(--ink); }
+.net-wrap .node.peek { stroke: var(--accent); }
+.net-wrap .node-label.focus { font-weight: 700; }
+.net-wrap .edge-label {
+  fill: var(--ink-2); font-family: var(--font-sans); font-weight: 600; pointer-events: none;
+  paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round;
+}
+@media (prefers-reduced-motion: reduce) { .net-wrap .node, .net-wrap .edge { transition: none; } }
+
+.net-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+.net-layout.has-focus { grid-template-columns: minmax(0, 1fr) 340px; }
+@media (max-width: 900px) { .net-layout.has-focus { grid-template-columns: minmax(0, 1fr); } }
+
+.net-bar { display: flex; justify-content: space-between; align-items: center; gap: 8px 16px; flex-wrap: wrap; margin-bottom: 10px; }
+.trail { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; font-size: 15px; }
+.trail .sep { color: var(--muted); margin-right: 6px; }
+.link-btn { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; font: inherit; text-align: left; }
+.segmented { display: inline-flex; border: 1px solid var(--baseline); border-radius: 6px; overflow: hidden; }
+.segmented button { background: var(--surface); border: 0; padding: 6px 12px; cursor: pointer; font-size: 14px; color: var(--ink-2); }
+.segmented button + button { border-left: 1px solid var(--baseline); }
+.segmented button[aria-pressed="true"] { background: var(--accent); color: var(--surface); font-weight: 600; }
+
+.net-panel {
+  position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  padding: 18px 18px 16px; max-height: min(72vh, 720px); overflow-y: auto;
+}
+.net-panel h2 { font-size: 20px; padding-right: 28px; outline: none; }
+.net-panel h3 { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin: 16px 0 6px; }
+.net-panel .summary { margin-top: 8px; }
+.net-panel .close {
+  position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; border-radius: 6px; border: 1px solid transparent;
+  background: none; font-size: 22px; line-height: 1; cursor: pointer; color: var(--ink-2);
+}
+.net-panel .close:hover { border-color: var(--baseline); }
+.mini-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 14px 0 6px; }
+.mini-stats div { background: var(--surface-2); border-radius: 6px; padding: 8px 10px; }
+.mini-stats dt { font-size: 12px; color: var(--ink-2); }
+.mini-stats dd { margin: 0; font-size: 20px; font-weight: 620; }
+.collab-list { list-style: none; margin: 0; padding: 0; }
+.collab-list button {
+  width: 100%; display: flex; justify-content: space-between; gap: 10px; align-items: center; text-align: left;
+  background: none; border: 0; border-bottom: 1px solid var(--grid); padding: 7px 4px; cursor: pointer; font-size: 14px; color: var(--ink);
+}
+.collab-list button:hover { background: var(--surface-2); }
+.panel-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+.panel-actions .btn { text-decoration: none; display: inline-flex; align-items: center; }

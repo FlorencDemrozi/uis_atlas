@@ -55,6 +55,8 @@ export function ColumnChart({ data, color, height = 150, yMax, ariaLabel, unit }
   const band = data.length ? w / data.length : 0;
   const colW = Math.min(24, band * 0.62);
   const ticks = [0, max / 2, max];
+  // Thin out x labels when they would collide (~28px per short label).
+  const labelEvery = Math.max(1, Math.ceil((data.length > 8 ? 28 : 40) / Math.max(band, 1)));
   const peak = data.reduce((best, d, i) => (d.y > data[best].y ? i : best), 0);
 
   return (
@@ -78,9 +80,11 @@ export function ColumnChart({ data, color, height = 150, yMax, ariaLabel, unit }
                   {(i === peak || hover === i) && d.y > 0 && (
                     <text x={x + colW / 2} y={h - ch - 5} text-anchor="middle" class="label-strong num">{num(d.y)}</text>
                   )}
-                  <text x={x + colW / 2} y={h + 15} text-anchor="middle">
-                    {data.length > 8 ? `’${d.x.slice(2)}` : d.x}
-                  </text>
+                  {(data.length - 1 - i) % labelEvery === 0 && (
+                    <text x={x + colW / 2} y={h + 15} text-anchor="middle">
+                      {data.length > 8 ? `’${d.x.slice(2)}` : d.x}
+                    </text>
+                  )}
                   <rect class="hit" x={i * band} y={0} width={band} height={h} tabIndex={0}
                     aria-label={`${d.x}: ${num(d.y)} ${unit}${d.partial ? ` (${t("chart.partial")})` : ""}`}
                     onPointerEnter={() => setHover(i)} onPointerLeave={() => setHover(null)}

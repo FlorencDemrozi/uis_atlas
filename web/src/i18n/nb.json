@@ -3,7 +3,6 @@
   "app.skip": "Hopp til innhold",
   "app.loading": "Laster forskere …",
   "app.loadError": "Dataene kunne ikke lastes.",
-
   "nav.label": "Hovedmeny",
   "nav.language": "Språk",
   "nav.search": "Finn forskere",
@@ -13,7 +12,6 @@
   "theme.light": "Lys",
   "theme.toDark": "Bytt til mørk modus",
   "theme.toLight": "Bytt til lys modus",
-
   "search.title": "Finn riktig forsker ved UiS",
   "search.lede": "Beskriv med egne ord hva du leter etter. Vi rangerer {n} forskere ved Det teknisk-naturvitenskapelige fakultet etter hvor godt publikasjonene deres passer.",
   "search.label": "Beskriv hva du leter etter",
@@ -31,18 +29,15 @@
   "search.affinityPct": "{n} % treff",
   "search.more": "Vis {n} til",
   "search.showing": "Viser {a} av {b}",
-
   "filter.department": "Institutt",
   "filter.allDepartments": "Alle institutter",
   "filter.minPubs": "Publikasjoner",
   "filter.any": "Alle",
-
   "r.pubs": "{n} publikasjoner",
   "r.recent": "{n} siden {y}",
   "r.citations": "{n} siteringer",
   "r.profile": "Profil",
   "r.summaryPending": "Sammendrag er ikke laget ennå – vises her når KI-sammendragene er produsert (neste milepæl).",
-
   "ov.title": "Det teknisk-naturvitenskapelige fakultet i tall",
   "ov.lede": "Forskningsaktivitet basert på Scopus-publikasjoner siden {from}. Forskere som er med: {inclusion}.",
   "ov.researchers": "Forskere",
@@ -62,14 +57,12 @@
   "ov.collabSub": "Antall artikler med medforfattere fra begge institutter. Sterkere farge betyr flere felles artikler.",
   "ov.themes": "Forskningstemaer",
   "ov.themesSub": "Hyppigste nøkkelord per institutt. Klikk på et tema for å finne forskere som jobber med det.",
-
   "chart.papers": "artikler",
   "chart.partial": "året pågår",
   "chart.table": "Vis som tabell",
   "chart.tableOpen": "Vis tabell",
   "chart.fewer": "Færre",
   "chart.more": "Flere",
-
   "net.title": "Hvem jobber med hvem",
   "net.lede": "{n} forskere knyttet sammen av {e} medforfatterskap. Hver prikk er en forsker (størrelse = publikasjoner), hver linje en felles artikkel. Forskerne er gruppert rundt instituttet sitt.",
   "net.isolated": "Vis også forskere uten medforfattere ved UiS",
@@ -79,13 +72,12 @@
   "net.zoomOut": "Zoom ut",
   "net.reset": "Tilbakestill visning",
   "net.tip": "{p} publikasjoner · {c} medforfattere ved UiS · {j} felles artikler",
-  "net.help": "Pek på en prikk for å se samarbeidspartnere, klikk for å åpne profilen. Dra for å flytte, bruk + og − for å zoome.",
+  "net.help": "Klikk på en forsker for å se profil og samarbeidspartnere; klikk på en partner for å gå videre. Dobbeltklikk åpner hele profilen. Esc eller klikk på bakgrunnen viser hele nettverket igjen. Dra for å flytte, bruk + og − for å zoome.",
   "net.mostConnected": "Mest sammenkoblede forskere",
   "net.mostConnectedSub": "Rangert etter antall ulike medforfattere ved UiS i nettverket.",
   "net.name": "Navn",
   "net.colleagues": "Medforfattere ved UiS",
   "net.joint": "Felles artikler",
-
   "p.notFound": "Fant ikke forskeren",
   "p.back": "Tilbake",
   "p.active": "Publiserer {a}–{b}",
@@ -103,9 +95,21 @@
   "p.noCoauthors": "Ingen medforfattere blant forskerne i dette atlaset.",
   "p.collabDepts": "Samarbeidende institutter",
   "p.collabDeptsSub": "Artikler med medforfattere fra andre institutter.",
-
   "footer.prototype": "Prototype",
   "footer.prototypeText": "Testversjon under utvikling. Bruken av data og forskerprofilene venter på godkjenning fra Universitetsbiblioteket og personvernombudet.",
   "footer.source": "Kilde: Scopus (Elsevier), publikasjoner siden {from}, hentet {date}.",
-  "footer.summaries": "Forskersammendragene er generert automatisk fra publikasjoner og beskriver kun forskning. Forskere kan be om retting eller reservere seg."
+  "footer.summaries": "Forskersammendragene er generert automatisk fra publikasjoner og beskriver kun forskning. Forskere kan be om retting eller reservere seg.",
+  "net.whole": "Hele nettverket",
+  "net.trail": "Utforskingssti",
+  "net.depth": "Vis",
+  "net.depth1": "Direkte samarbeidspartnere",
+  "net.depth2": "+ deres samarbeidspartnere",
+  "net.close": "Lukk",
+  "net.openProfile": "Åpne hele profilen",
+  "net.collaborators": "Samarbeidspartnere ved UiS ({n})",
+  "net.noCollaborators": "Ingen medforfattere blant forskerne i dette atlaset.",
+  "net.lastYears": "Publikasjoner, siste 10 år",
+  "net.focusAria": "Samarbeidsnettverket til {name}",
+  "net.tipJoint": "{n} felles artikler med {name}",
+  "p.exploreNetwork": "Utforsk samarbeidsnettverket"
 }

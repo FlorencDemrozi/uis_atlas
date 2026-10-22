@@ -27,7 +27,7 @@ export function App() {
   if (error) content = <p class="loading">{i18n.t("app.loadError")} ({error})</p>;
   else if (!atlas) content = <p class="loading" role="status">{i18n.t("app.loading")}</p>;
   else if (route.view === "overview") content = <OverviewView atlas={atlas} />;
-  else if (route.view === "network") content = <NetworkView atlas={atlas} />;
+  else if (route.view === "network") content = <NetworkView atlas={atlas} route={route} />;
   else if (route.view === "profile") content = <ProfileView atlas={atlas} id={route.id!} key={route.id} />;
   else content = <SearchView atlas={atlas} route={route} />;
 
