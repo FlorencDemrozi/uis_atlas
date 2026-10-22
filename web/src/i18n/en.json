@@ -9,6 +9,10 @@
   "nav.search": "Find researchers",
   "nav.overview": "Faculty overview",
   "nav.network": "Collaboration network",
+  "theme.dark": "Dark",
+  "theme.light": "Light",
+  "theme.toDark": "Switch to dark mode",
+  "theme.toLight": "Switch to light mode",
 
   "search.title": "Find the right researcher at UiS",
   "search.lede": "Describe what you are looking for in your own words. We rank {n} researchers from the Faculty of Science and Technology by how well their published work matches.",

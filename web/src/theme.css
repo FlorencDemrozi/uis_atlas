@@ -120,6 +120,13 @@ mark { background: var(--mark); color: inherit; border-radius: 2px; padding: 0 1
   background: none; border: 0; color: var(--brand-ink-2); padding: 4px 10px; cursor: pointer; font-size: 14px;
 }
 .lang button[aria-pressed="true"] { background: var(--brand-ink); color: var(--brand); font-weight: 600; }
+.theme-toggle {
+  display: inline-flex; align-items: center; gap: 6px; background: none; color: var(--brand-ink-2);
+  border: 1px solid rgba(255, 255, 255, 0.35); border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 14px;
+}
+.theme-toggle:hover { color: var(--brand-ink); border-color: var(--brand-ink-2); }
+.theme-toggle span[aria-hidden] { font-size: 15px; line-height: 1; }
+@media (max-width: 480px) { .theme-label { display: none; } }
 @media (max-width: 760px) {
   .nav a { padding: 10px 10px 8px; }
   .topbar .wrap { gap: 8px 16px; padding-top: 8px; padding-bottom: 4px; }

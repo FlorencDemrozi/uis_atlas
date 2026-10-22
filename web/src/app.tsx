@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { loadAtlas, type Atlas } from "./data";
 import { I18n, useI18n, useI18nState } from "./i18n";
 import { links, useRoute, type View } from "./router";
+import { useTheme } from "./theme";
 import { SearchView } from "./views/Search";
 import { OverviewView } from "./views/Overview";
 import { NetworkView } from "./views/Network";
@@ -46,6 +47,7 @@ export function App() {
 
 function Header({ view }: { view: View }) {
   const { t, lang, setLang } = useI18n();
+  const [theme, toggleTheme] = useTheme();
   const items: [View, string][] = [["search", links.search()], ["overview", links.overview], ["network", links.network]];
   return (
     <header class="topbar">
@@ -62,6 +64,12 @@ function Header({ view }: { view: View }) {
           <button type="button" aria-pressed={lang === "nb"} onClick={() => setLang("nb")} lang="nb">Norsk</button>
           <button type="button" aria-pressed={lang === "en"} onClick={() => setLang("en")} lang="en">English</button>
         </div>
+        <button type="button" class="theme-toggle" onClick={toggleTheme}
+          aria-label={t(theme === "dark" ? "theme.toLight" : "theme.toDark")}
+          title={t(theme === "dark" ? "theme.toLight" : "theme.toDark")}>
+          <span aria-hidden="true">{theme === "dark" ? "☀" : "☾"}</span>
+          <span class="theme-label">{t(theme === "dark" ? "theme.light" : "theme.dark")}</span>
+        </button>
       </div>
     </header>
   );

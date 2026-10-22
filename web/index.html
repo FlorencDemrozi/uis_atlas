@@ -7,6 +7,13 @@
     <meta name="robots" content="noindex, nofollow" />
     <meta name="description" content="Find researchers at the Faculty of Science and Technology, University of Stavanger." />
     <title>UiS Researcher Atlas</title>
+    <script>
+      // Apply the saved light/dark choice before first paint (see src/theme.ts).
+      try {
+        var t = localStorage.getItem("atlas-theme");
+        if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="app"></div>

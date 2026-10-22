@@ -9,6 +9,10 @@
   "nav.search": "Finn forskere",
   "nav.overview": "Fakultetsoversikt",
   "nav.network": "Samarbeidsnettverk",
+  "theme.dark": "Mørk",
+  "theme.light": "Lys",
+  "theme.toDark": "Bytt til mørk modus",
+  "theme.toLight": "Bytt til lys modus",
 
   "search.title": "Finn riktig forsker ved UiS",
   "search.lede": "Beskriv med egne ord hva du leter etter. Vi rangerer {n} forskere ved Det teknisk-naturvitenskapelige fakultet etter hvor godt publikasjonene deres passer.",
