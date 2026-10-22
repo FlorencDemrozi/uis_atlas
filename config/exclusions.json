@@ -1,0 +1,4 @@
+{
+  "_comment": "Scopus author IDs of researchers who have opted out. They are dropped by export_public.py.",
+  "scopus_ids": []
+}

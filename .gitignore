@@ -1,0 +1,27 @@
+# Secrets
+.env
+*.key
+
+# Licensed Scopus data – never commit (see docs/DATA_POLICY.md)
+data/raw/*
+data/interim/*
+!data/raw/.gitkeep
+!data/interim/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# Node / web
+node_modules/
+web/dist/
+# copy of data/public/, made by web/scripts/sync-data.mjs
+web/public/data/
+
+# OS / editors
+.DS_Store
+.vscode/
+.idea/

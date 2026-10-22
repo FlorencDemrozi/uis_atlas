@@ -1,0 +1,4 @@
+{
+  "_comment": "Manual corrections keyed by any of the person's Scopus author IDs. Fields: name, department, merge_with (list of other Scopus IDs of the same person), include (true/false forces inclusion regardless of the activity threshold); summary and links are applied by export_public.py. Example: \"55198880200\": {\"merge_with\": [\"60913288300\"]}",
+  "authors": {}
+}

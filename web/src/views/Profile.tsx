@@ -1,0 +1,147 @@
+import type { Atlas, Paper } from "../data";
+import { dept, orderedDepts } from "../departments";
+import { useI18n } from "../i18n";
+import { links } from "../router";
+import { BarList, ColumnChart } from "../components/charts";
+import { DeptLabel, doiUrl } from "../components/common";
+
+export function ProfileView({ atlas, id }: { atlas: Atlas; id: string }) {
+  const { t, num, deptName } = useI18n();
+  const r = atlas.byId.get(id);
+  if (!r) {
+    return (
+      <div class="page-head">
+        <h1>{t("p.notFound")}</h1>
+        <p><a href={links.search()}>{t("p.back")}</a></p>
+      </div>
+    );
+  }
+  const color = dept(r.department).color;
+  const lastYear = new Date(atlas.meta.generated).getFullYear();
+  const years: string[] = [];
+  for (let y = atlas.meta.period.first_year; y <= lastYear; y++) years.push(String(y));
+  const keywords = atlas.keywords.get(r.scopus_id) ?? [];
+  const recent = atlas.recent.get(r.scopus_id) ?? 0;
+  const byYear = new Map<string, Paper[]>();
+  for (const eid of r.paper_ids) {
+    const p = atlas.papers[eid];
+    if (!p) continue;
+    byYear.set(p.year, [...(byYear.get(p.year) ?? []), p]);
+  }
+  const collabDepts = orderedDepts(Object.keys(r.collab_departments));
+
+  return (
+    <>
+      <p class="small" style={{ marginBottom: "16px" }}><a href={links.search()} onClick={(e) => {
+        if (history.length > 1) { e.preventDefault(); history.back(); }
+      }}>← {t("p.back")}</a></p>
+
+      <header class="profile-head">
+        <h1>{r.name}</h1>
+        <div class="meta-line">
+          <DeptLabel name={r.department} short={false} />
+          <span>{t("p.active", { a: String(r.first_year), b: String(r.last_year) })}</span>
+        </div>
+        {r.summary
+          ? <p class="summary" style={{ fontSize: "17px" }}>{r.summary}
+            <br /><span class="muted small">{t("p.autoSummary")}</span></p>
+          : <p class="summary pending">{t("r.summaryPending")}</p>}
+        <div class="links">
+          {r.links.scopus && <a href={r.links.scopus}>{t("p.scopus")}</a>}
+          {r.links.orcid && <a href={r.links.orcid}>ORCID</a>}
+          {r.links.uis && <a href={r.links.uis}>{t("p.uis")}</a>}
+          {r.links.cristin && <a href={r.links.cristin}>Cristin</a>}
+        </div>
+      </header>
+
+      <div class="tiles" style={{ marginTop: "24px" }}>
+        <div class="tile"><div class="label">{t("ov.publications")}</div><div class="value">{num(r.n_publications)}</div>
+          <div class="hint">{t("ov.since", { y: String(atlas.meta.period.first_year) })}</div></div>
+        <div class="tile"><div class="label">{t("p.recent")}</div><div class="value">{num(recent)}</div>
+          <div class="hint">{t("ov.since", { y: String(atlas.meta.period.recent_from) })}</div></div>
+        <div class="tile"><div class="label">{t("ov.citations")}</div><div class="value">{num(r.citations)}</div>
+          <div class="hint">{t("ov.citationsHint")}</div></div>
+        <div class="tile"><div class="label">{t("p.coauthors")}</div><div class="value">{num(r.top_coauthors.length)}</div>
+          <div class="hint">{t("p.coauthorsHint")}</div></div>
+      </div>
+
+      <div class="profile-grid">
+        <div>
+          <section aria-labelledby="h-topics">
+            <h2 id="h-topics" style={{ marginBottom: "8px" }}>{t("p.topics")}</h2>
+            <div class="tags">
+              {(r.tags.length ? r.tags.map((x): [string, number] => [x, 0]) : keywords.slice(0, 20)).map(([k, n]) => (
+                <a class="tag" key={k} href={links.search(k)}>{k}{n > 1 && <span class="n">{n}</span>}</a>
+              ))}
+            </div>
+          </section>
+
+          <section class="section" aria-labelledby="h-pubs">
+            <h2 id="h-pubs">{t("p.publications", { n: r.n_publications })}</h2>
+            {[...byYear.entries()].map(([year, papers]) => (
+              <div class="pub-year" key={year}>
+                <h3>{year} <span class="muted">· {papers.length}</span></h3>
+                <ul class="pubs">
+                  {papers.map((p) => {
+                    const url = doiUrl(p.doi);
+                    const others = p.uis_author_ids.filter((x) => x !== r.scopus_id)
+                      .map((x) => atlas.byId.get(x)).filter((x) => !!x);
+                    return (
+                      <li key={p.eid}>
+                        {url ? <a href={url}>{p.title}</a> : p.title}
+                        <div class="venue">
+                          {[p.venue, p.type].filter(Boolean).join(" · ")}
+                          {p.citations > 0 && ` · ${t("r.citations", { n: num(p.citations) })}`}
+                          {others.length > 0 && <> · {t("p.with")} {others.map((o, i) => (
+                            <span key={o!.scopus_id}>{i > 0 && ", "}<a href={links.profile(o!.scopus_id)}>{o!.name}</a></span>
+                          ))}</>}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </section>
+        </div>
+
+        <aside>
+          <section class="panel" aria-labelledby="h-years">
+            <h2 id="h-years" style={{ fontSize: "17px", marginBottom: "8px" }}>{t("ov.perYear")}</h2>
+            <ColumnChart color={color} unit={t("chart.papers")} height={150} ariaLabel={t("ov.perYear")}
+              data={years.map((y) => ({ x: y, y: r.pubs_per_year[y] ?? 0, partial: Number(y) === lastYear }))} />
+          </section>
+
+          <section class="panel" style={{ marginTop: "20px" }} aria-labelledby="h-co">
+            <h2 id="h-co" style={{ fontSize: "17px", marginBottom: "8px" }}>{t("p.uisCoauthors")}</h2>
+            {r.top_coauthors.length ? (
+              <ul class="people">
+                {r.top_coauthors.map((c) => {
+                  const co = atlas.byId.get(c.scopus_id);
+                  return (
+                    <li key={c.scopus_id}>
+                      <span class="dept">
+                        <span class="dot" style={{ background: dept(co?.department ?? "").color }} aria-hidden="true" />
+                        <a href={links.profile(c.scopus_id)}>{c.name}</a>
+                      </span>
+                      <span class="muted num">{t("p.jointPapers", { n: c.n_papers })}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : <p class="muted small">{t("p.noCoauthors")}</p>}
+          </section>
+
+          {collabDepts.length > 0 && (
+            <section class="panel" style={{ marginTop: "20px" }} aria-labelledby="h-cd">
+              <h2 id="h-cd" style={{ fontSize: "17px", marginBottom: "4px" }}>{t("p.collabDepts")}</h2>
+              <p class="muted small" style={{ marginBottom: "10px" }}>{t("p.collabDeptsSub")}</p>
+              <BarList ariaLabel={t("p.collabDepts")} rows={collabDepts.map((d) => ({
+                key: d.key, label: deptName(d.key, true), value: r.collab_departments[d.key], color: d.color }))} />
+            </section>
+          )}
+        </aside>
+      </div>
+    </>
+  );
+}

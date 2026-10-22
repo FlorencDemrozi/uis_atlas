@@ -1,0 +1,9 @@
+{
+  "_comment": "Must match pipeline/config.py (EMBED_MODEL, QUERY_PREFIX, RANKING). tests/test_policy.py checks this.",
+  "model": "Xenova/multilingual-e5-small",
+  "queryPrefix": "query: ",
+  "semanticWeight": 0.7,
+  "keywordWeight": 0.3,
+  "topPapersPerResearcher": 3,
+  "recencyBoost": 0.05
+}
