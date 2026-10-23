@@ -9,6 +9,26 @@ const PLACES = new Set(("norway norge norwegian scandinavia nordic europe europe
   "western norway sweden denmark finland iceland germany united kingdom uk usa united states china india " +
   "africa asia brazil indonesia").split(" ").concat(["western norway", "united kingdom", "united states", "north sea"]));
 
+/** Most frequent topics in the people's papers since meta.period.recent_from. */
+export function recentTopics(atlas: Atlas, people: Researcher[], limit: number): [string, number][] {
+  const ids = new Set(people.map((r) => r.scopus_id));
+  const from = atlas.meta.period.recent_from;
+  const count = new Map<string, number>();
+  const spelling = new Map<string, Map<string, number>>();
+  for (const p of Object.values(atlas.papers)) {
+    if (Number(p.year) < from || !p.uis_author_ids.some((id) => ids.has(id))) continue;
+    for (const k of new Set(p.keywords)) {
+      const key = kwKey(k);
+      if (PLACES.has(key)) continue;
+      count.set(key, (count.get(key) ?? 0) + 1);
+      const s = spelling.get(key) ?? spelling.set(key, new Map()).get(key)!;
+      s.set(k.toLowerCase(), (s.get(k.toLowerCase()) ?? 0) + 1);
+    }
+  }
+  return [...count].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, limit)
+    .map(([key, n]) => [[...spelling.get(key)!].sort((a, b) => b[1] - a[1])[0][0], n]);
+}
+
 export interface UnitTotals { researchers: number; papers: number; citations: number }
 
 export interface ScopedStats {

@@ -2,7 +2,7 @@
 // The faculty/department selection (?org=…) travels with every link and address update.
 import { useEffect, useState } from "preact/hooks";
 
-export type View = "search" | "overview" | "network" | "profile";
+export type View = "search" | "overview" | "network" | "profile" | "shortlist";
 export interface Route { view: View; id?: string; params: URLSearchParams }
 
 export function parseHash(hash: string): Route {
@@ -11,6 +11,7 @@ export function parseHash(hash: string): Route {
   const parts = path.split("/").filter(Boolean);
   if (parts[0] === "overview") return { view: "overview", params };
   if (parts[0] === "network") return { view: "network", params };
+  if (parts[0] === "shortlist") return { view: "shortlist", params };
   if (parts[0] === "r" && parts[1]) return { view: "profile", id: decodeURIComponent(parts[1]), params };
   return { view: "search", params };
 }
@@ -49,4 +50,5 @@ export const links = {
   get network() { return build("/network"); },
   networkFocus: (id: string) => build("/network", { focus: id }),
   profile: (id: string) => build(`/r/${encodeURIComponent(id)}`),
+  shortlist: (ids?: string[]) => build("/shortlist", ids?.length ? { ids: ids.join(",") } : undefined),
 };

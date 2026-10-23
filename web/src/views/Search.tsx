@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { Atlas, Researcher } from "../data";
 import { useI18n } from "../i18n";
 import { links, replaceHash, type Route } from "../router";
@@ -6,7 +6,12 @@ import { buildIndex, search, type Hit } from "../search";
 import { inScope, isAll, useSelection } from "../selection";
 import { DeptLabel, Highlight, Position, doiUrl } from "../components/common";
 import { OrgFilter } from "../components/OrgFilter";
+import { Explore } from "../components/Explore";
+import { Affinity, ResultsTable, ShortlistButton, SplitView } from "../components/results";
 import en from "../i18n/en.json";
+
+type Mode = "list" | "split" | "table";
+const wide = () => matchMedia("(min-width: 1000px)").matches;
 
 // Keyword search matches English titles only, so Norwegian examples are offered
 // once meaning-based search (vectors) is available.
@@ -21,20 +26,41 @@ export function SearchView({ atlas, route }: { atlas: Atlas; route: Route }) {
   const { sel } = useSelection();
   const [minPubs, setMinPubs] = useState(Number(route.params.get("min") ?? 0));
   const [shown, setShown] = useState(PAGE);
+  const param = route.params.get("view");
+  const [mode, setMode] = useState<Mode>(param === "split" || param === "table" ? param : "list");
+  const [selected, setSelected] = useState<string | null>(route.params.get("r"));
+  const [isWide, setWide] = useState(wide);
+  useEffect(() => {
+    const onResize = () => setWide(wide());
+    addEventListener("resize", onResize);
+    return () => removeEventListener("resize", onResize);
+  }, []);
+  const shownMode: Mode = mode === "split" && !isWide ? "list" : mode;
 
   // Follow hash changes (example clicks, theme links from other views).
   useEffect(() => {
     const next = route.params.get("q") ?? "";
     setQ(next); setQuery(next);
   }, [route.params.get("q")]);
+  useEffect(() => {
+    const v = route.params.get("view");
+    setMode(v === "split" || v === "table" ? v : "list");
+    if (route.params.get("r")) setSelected(route.params.get("r"));
+  }, [route.params.get("view"), route.params.get("r")]);
 
   // Keep the URL shareable without adding history entries per keystroke.
   useEffect(() => {
     const p = new URLSearchParams();
     if (query) p.set("q", query);
     if (minPubs) p.set("min", String(minPubs));
+    if (mode !== "list") p.set("view", mode);
+    if (mode === "split" && selected) p.set("r", selected);
     replaceHash("/", p);
-    setShown(PAGE);
+  }, [query, sel, minPubs, mode, selected]);
+  const firstRun = useRef(true);   // keep a shared ?r= on first load
+  useEffect(() => {
+    if (firstRun.current) { firstRun.current = false; return; }
+    setShown(PAGE); setSelected(null);
   }, [query, sel, minPubs]);
 
   // Search as you type, lightly debounced.
@@ -79,20 +105,33 @@ export function SearchView({ atlas, route }: { atlas: Atlas; route: Route }) {
         </label>
       </OrgFilter>
 
+      {!query && <Explore atlas={atlas} />}
+
       <div class="results-head">
         <h2 aria-live="polite">
           {query ? t("search.results", { n: hits.length, q: query }) : t("search.browse", { n: hits.length })}
         </h2>
         {!isAll(sel) && <span class="muted small">{t("search.inScope", { n: inScopeCount })}</span>}
         {!query && <span class="muted small">{t("search.browseSort")}</span>}
+        <span class="segmented view-switch" role="group" aria-label={t("view.label")}>
+          {(["list", "split", "table"] as Mode[]).filter((m) => m !== "split" || isWide).map((m) => (
+            <button key={m} type="button" aria-pressed={shownMode === m} onClick={() => setMode(m)}>{t(`view.${m}`)}</button>
+          ))}
+        </span>
       </div>
 
       {query && hits.length === 0 && <p class="muted" style={{ padding: "24px 0" }}>{t("search.none")}</p>}
 
-      <ol style={{ listStyle: "none", padding: 0, margin: 0 }}>
-        {hits.slice(0, shown).map((h, i) => <ResultItem key={h.researcher.scopus_id} hit={h} rank={i + 1} atlas={atlas} ranked={!!query} />)}
-      </ol>
-      {shown < hits.length && (
+      {shownMode === "table" && <ResultsTable hits={hits} atlas={atlas} ranked={!!query} />}
+      {shownMode === "split" && (
+        <SplitView hits={hits.slice(0, shown)} atlas={atlas} ranked={!!query} selected={selected} onSelect={setSelected} />
+      )}
+      {shownMode === "list" && (
+        <ol style={{ listStyle: "none", padding: 0, margin: 0 }}>
+          {hits.slice(0, shown).map((h, i) => <ResultItem key={h.researcher.scopus_id} hit={h} rank={i + 1} atlas={atlas} ranked={!!query} />)}
+        </ol>
+      )}
+      {shownMode !== "table" && shown < hits.length && (
         <p style={{ marginTop: "20px" }}>
           <button class="btn" onClick={() => setShown(shown + PAGE)}>
             {t("search.more", { n: Math.min(PAGE, hits.length - shown) })}
@@ -113,18 +152,16 @@ function ResultItem({ hit, rank, atlas, ranked }: { hit: Hit; rank: number; atla
     <li class="result">
       <span class="rank">{ranked ? rank : ""}</span>
       <div>
-        <h3><a href={links.profile(r.scopus_id)}>{r.name}</a></h3>
+        <div class="result-title">
+          <h3><a href={links.profile(r.scopus_id)}>{r.name}</a></h3>
+          <ShortlistButton r={r} />
+        </div>
         <div class="meta-line">
           <Position r={r} />
           <DeptLabel name={r.department} withFaculty />
           <span>{t("r.pubs", { n: r.n_publications })}</span>
           <span>{t("r.recent", { n: recent, y: String(atlas.meta.period.recent_from) })}</span>
-          {ranked && (
-            <span class="affinity" title={t("search.affinity")}>
-              <span class="track" aria-hidden="true"><span class="fill" style={{ display: "block", width: `${Math.round(hit.score * 100)}%` }} /></span>
-              {t("search.affinityPct", { n: Math.round(hit.score * 100) })}
-            </span>
-          )}
+          {ranked && <Affinity score={hit.score} />}
         </div>
         {r.summary && <p class="summary">{r.summary}</p>}
         <div class="tags">

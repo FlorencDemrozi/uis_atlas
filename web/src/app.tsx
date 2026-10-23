@@ -3,15 +3,18 @@ import { loadAtlas, type Atlas } from "./data";
 import { I18n, useI18n, useI18nState } from "./i18n";
 import { links, parseHash, replaceHash, setOrgParam, useRoute, type View } from "./router";
 import { decodeOrg, encodeOrg, SelectionContext, type Selection } from "./selection";
+import { ShortlistContext, useShortlist, useShortlistState } from "./shortlist";
 import { useTheme } from "./theme";
 import { SearchView } from "./views/Search";
 import { OverviewView } from "./views/Overview";
 import { NetworkView } from "./views/Network";
 import { ProfileView } from "./views/Profile";
+import { ShortlistView } from "./views/Shortlist";
 
 export function App() {
   const i18n = useI18nState();
   const route = useRoute();
+  const shortlist = useShortlistState();
   const [atlas, setAtlas] = useState<Atlas | null>(null);
   const [error, setError] = useState<string | null>(null);
   const mainRef = useRef<HTMLElement>(null);
@@ -47,12 +50,14 @@ export function App() {
   else if (!atlas) content = <p class="loading" role="status">{i18n.t("app.loading")}</p>;
   else if (route.view === "overview") content = <OverviewView atlas={atlas} />;
   else if (route.view === "network") content = <NetworkView atlas={atlas} route={route} />;
+  else if (route.view === "shortlist") content = <ShortlistView atlas={atlas} route={route} />;
   else if (route.view === "profile") content = <ProfileView atlas={atlas} id={route.id!} key={route.id} />;
   else content = <SearchView atlas={atlas} route={route} />;
 
   return (
     <I18n.Provider value={i18n}>
     <SelectionContext.Provider value={selection}>
+    <ShortlistContext.Provider value={shortlist}>
       <a class="skip" href="#main" onClick={(e) => { e.preventDefault(); mainRef.current?.focus(); }}>
         {i18n.t("app.skip")}
       </a>
@@ -61,6 +66,7 @@ export function App() {
         <div class="wrap">{content}</div>
       </main>
       <Footer atlas={atlas} />
+    </ShortlistContext.Provider>
     </SelectionContext.Provider>
     </I18n.Provider>
   );
@@ -69,7 +75,9 @@ export function App() {
 function Header({ view }: { view: View }) {
   const { t, lang, setLang } = useI18n();
   const [theme, toggleTheme] = useTheme();
-  const items: [View, string][] = [["search", links.search()], ["overview", links.overview], ["network", links.network]];
+  const { ids } = useShortlist();
+  const items: [View, string][] = [["search", links.search()], ["overview", links.overview], ["network", links.network],
+    ["shortlist", links.shortlist()]];
   return (
     <header class="topbar">
       <div class="wrap">
@@ -78,6 +86,7 @@ function Header({ view }: { view: View }) {
           {items.map(([v, href]) => (
             <a key={v} href={href} aria-current={view === v || (v === "search" && view === "profile") ? "page" : undefined}>
               {t(`nav.${v}`)}
+              {v === "shortlist" && ids.length > 0 && <span class="nav-count">{ids.length}</span>}
             </a>
           ))}
         </nav>
