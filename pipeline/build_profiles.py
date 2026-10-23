@@ -3,19 +3,27 @@
 Stage 2 – Build one profile per researcher.
 
 Input:  config.RAW_ATLAS and config.RAW_DOCS (from collect_scopus.py),
+        config.DIRECTORY (from collect_directory.py, optional),
         config/overrides.json
 Output: config.PROFILES, config.MERGE_LOG, review CSVs in config.REVIEW_DIR
-        (all licensed – local only, never commit)
+        (all licensed or personal data – local only, never commit)
 
 Steps:
+- Match each Scopus author to the UiS employee directory by name (see
+  pipeline/directory.py). A match confirms the person as current staff and
+  gives today's department, position and UiS profile link. Staff listed only in
+  excluded units (national centres, museum, divisions) are left out.
 - Merge duplicate Scopus author IDs for the same person: forced merges from
-  overrides, same ORCID, or same normalised name + department + a shared
-  co-author. Name-only matches are not merged but listed for review.
-- Keep researchers with at least config.MIN_RECENT_PUBLICATIONS papers in the
-  last config.RECENT_YEARS years (overrides can force include/exclude).
-- Compute per researcher: department, paper ids (newest first), counts,
-  citations, publications per year, keywords, UiS co-authors, collaborating
-  departments, first/last active year.
+  overrides, same ORCID, the same directory person, or same normalised name +
+  department + a shared co-author. Name-only matches are not merged but listed
+  for review.
+- Department: override, else directory, else Scopus affiliations.
+- Keep researchers with enough recent papers: confirmed staff need
+  config.MIN_RECENT_PUBLICATIONS in config.RECENT_YEARS years, others the
+  stricter config.UNCONFIRMED_* rule (overrides can force include/exclude).
+- Compute per researcher: faculty, department, position, paper ids (newest
+  first), counts, citations, publications per year, keywords, UiS co-authors,
+  collaborating departments, first/last active year.
 
 overrides.json format (keyed by any of the person's Scopus IDs):
   {"authors": {"123": {"name": "...", "department": "...",
@@ -29,8 +37,9 @@ from datetime import datetime
 from itertools import combinations
 
 import config
+from directory import Directory
 
-NOT_STATED = config.NOT_STATED
+NOT_STATED_KEYS = config.NOT_STATED_KEYS
 SCOPUS_AUTHOR_URL = "https://www.scopus.com/authid/detail.uri?authorId={}"
 TRANSLIT = str.maketrans({"ø": "o", "æ": "ae", "ð": "d", "þ": "th", "ß": "ss", "ł": "l", "đ": "d"})
 
@@ -83,9 +92,11 @@ class UnionFind:
         return True
 
 
-def find_merges(authors: dict, papers: dict, name_parts: dict, overrides: dict):
+def find_merges(authors: dict, papers: dict, name_parts: dict, overrides: dict,
+                dir_match: dict | None = None):
     """Return (UnionFind, merge log, unmerged name-match candidates)."""
     uf, log, candidates = UnionFind(), [], []
+    dir_match = dir_match or {}
     for auid in authors:
         uf.find(auid)
 
@@ -106,6 +117,16 @@ def find_merges(authors: dict, papers: dict, name_parts: dict, overrides: dict):
         if len(ids) > 1:
             merge(ids, "same ORCID")
 
+    # Several Scopus IDs with a good name match to the same current employee.
+    by_employee = defaultdict(list)
+    for auid, (entry, score) in dir_match.items():
+        if score >= 2:
+            by_employee[entry["id"]].append(auid)
+    for ids in by_employee.values():
+        for x, y in combinations(ids, 2):
+            if not set(authors[x]["papers"]) & set(authors[y]["papers"]):
+                merge([x, y], "same person in the UiS employee directory")
+
     def coauthors(auid: str) -> set[str]:
         return {c for p in authors[auid]["papers"] for c in papers[p]["coauthor_ids"]} - {auid}
 
@@ -124,7 +145,7 @@ def find_merges(authors: dict, papers: dict, name_parts: dict, overrides: dict):
             shared = coauthors(x) & coauthors(y)
             if same_dept and shared and given_compatible(given[x], given[y]):
                 merge([x, y], f"same name, department and {len(shared)} shared co-author(s)")
-            else:
+            elif any(a["department"] or a["scopus_id"] in dir_match for a in (ax, ay)):
                 candidates.append({
                     "ids": [x, y], "names": [ax["name"], ay["name"]],
                     "departments": [ax["department"], ay["department"]],
@@ -139,13 +160,37 @@ def year_of(paper: dict) -> int | None:
     return int(y) if y.isdigit() else None
 
 
+def place(scopus_dept: str | None, entry: dict | None) -> tuple[str | None, str]:
+    """(department, source) from the directory entry and the Scopus department."""
+    if entry is None:
+        return scopus_dept, "scopus"
+    if entry["excluded"]:
+        return None, "directory: unit not in the atlas"
+    if entry["departments"]:
+        dept = scopus_dept if scopus_dept in entry["departments"] else entry["departments"][0]
+        return dept, "directory"
+    if config.FACULTY_OF.get(scopus_dept or "") == entry["faculty"]:
+        return scopus_dept, "directory (faculty) + scopus"
+    return config.not_stated(entry["faculty"]), "directory (faculty)"
+
+
 def build(atlas: dict, name_parts: dict, overrides: dict, reference_year: int,
-          recent_years: int, min_recent: int) -> dict:
+          recent_years: int, min_recent: int, directory: Directory | None = None,
+          unconfirmed_years: int | None = None, unconfirmed_min: int | None = None) -> dict:
     authors = {a["scopus_id"]: a for a in atlas["authors"]}
     papers = atlas["papers"]
     recent_from = reference_year - recent_years + 1
+    unconfirmed_from = reference_year - (unconfirmed_years or recent_years) + 1
+    unconfirmed_min = unconfirmed_min if unconfirmed_min is not None else min_recent
 
-    uf, merge_log, candidates = find_merges(authors, papers, name_parts, overrides)
+    dir_match = {}
+    for auid, a in authors.items():
+        surname, given = name_parts.get(auid) or split_name(a["name"])
+        entry, score = directory.match(surname, given, a["department"]) if directory else (None, 0)
+        if entry:
+            dir_match[auid] = (entry, score)
+
+    uf, merge_log, candidates = find_merges(authors, papers, name_parts, overrides, dir_match)
     clusters = defaultdict(list)
     for auid in authors:
         clusters[uf.find(auid)].append(auid)
@@ -159,17 +204,30 @@ def build(atlas: dict, name_parts: dict, overrides: dict, reference_year: int,
             ov.update(overrides.get(i, {}))
         dept_votes = Counter()
         for i in members:
-            dept_votes[authors[i]["department"]] += len(authors[i]["papers"])
-        real = [d for d, _ in dept_votes.most_common() if d != NOT_STATED]
+            if authors[i]["department"]:
+                dept_votes[authors[i]["department"]] += len(authors[i]["papers"])
+        ranked = [d for d, _ in dept_votes.most_common()]
+        real = [d for d in ranked if d not in NOT_STATED_KEYS]
+        scopus_dept = (real or ranked or [None])[0]
+        matches = sorted((dir_match[i] for i in members if i in dir_match),
+                         key=lambda m: -m[1])
+        entry, score = matches[0] if matches else (None, 0)
+        dept, source = place(scopus_dept, entry)
         paper_ids = sorted({p for i in members for p in authors[i]["papers"]},
                            key=lambda p: (-(year_of(papers[p]) or 0), p))
         years = [y for p in paper_ids if (y := year_of(papers[p]))]
+        dept = ov.get("department") or dept
         people[main_id] = {
             "scopus_id": main_id,
             "scopus_ids": members,
-            "name": ov.get("name") or authors[main_id]["name"],
+            "name": ov.get("name") or (entry["name"] if entry and score >= 2 else authors[main_id]["name"]),
             "orcid": next((authors[i]["orcid"] for i in members if authors[i].get("orcid")), None),
-            "department": ov.get("department") or (real[0] if real else NOT_STATED),
+            "faculty": config.FACULTY_OF.get(dept or ""),
+            "department": dept,
+            "position": ({"nb": entry.get("position_nb"), "en": entry.get("position_en")}
+                         if entry and not entry["excluded"] else None),
+            "uis_links": ({"nb": entry.get("url_nb"), "en": entry.get("url_en")}
+                          if entry and not entry["excluded"] else None),
             "paper_ids": paper_ids,
             "n_publications": len(paper_ids),
             "n_recent": sum(1 for y in years if y >= recent_from),
@@ -178,6 +236,10 @@ def build(atlas: dict, name_parts: dict, overrides: dict, reference_year: int,
             "first_year": min(years, default=None),
             "last_year": max(years, default=None),
             "_include_override": ov.get("include"),
+            "_confirmed": entry is not None and not entry["excluded"],
+            "_source": "override" if ov.get("department") else source,
+            "_directory": (entry["name"], score) if entry else None,
+            "_n_unconfirmed_recent": sum(1 for y in years if y >= unconfirmed_from),
             "_affiliations": [s for i in members for s in authors[i].get("affiliation_strings", [])],
         }
         for i in members:
@@ -185,9 +247,18 @@ def build(atlas: dict, name_parts: dict, overrides: dict, reference_year: int,
 
     for pid, person in people.items():
         forced = person.pop("_include_override")
-        person["included"] = forced if forced is not None else person["n_recent"] >= min_recent
+        if forced is not None:
+            person["included"] = forced and person["department"] is not None
+        elif not person["department"]:
+            person["included"] = False
+        elif person["_confirmed"]:
+            person["included"] = person["n_recent"] >= min_recent
+        else:
+            person["included"] = person["_n_unconfirmed_recent"] >= unconfirmed_min
 
     for pid, person in people.items():
+        if not person["included"]:
+            continue
         kw_count, kw_spellings = Counter(), defaultdict(Counter)
         co_count, dept_count = Counter(), Counter()
         for p in person["paper_ids"]:
@@ -195,18 +266,20 @@ def build(atlas: dict, name_parts: dict, overrides: dict, reference_year: int,
                 kw_count[k.lower()] += 1
                 kw_spellings[k.lower()][k] += 1
             co = {canon[c] for c in papers[p]["coauthor_ids"] if c in canon} - {pid}
-            co_count.update(co)
-            dept_count.update({people[c]["department"] for c in co} - {person["department"], NOT_STATED})
+            co_count.update(c for c in co if people[c]["included"])
+            dept_count.update({people[c]["department"] for c in co}
+                              - {person["department"], None} - NOT_STATED_KEYS)
         person["keywords"] = [
             [max(kw_spellings[k].items(), key=lambda s: (s[1], sum(c.isupper() for c in s[0])))[0], n]
             for k, n in kw_count.most_common(30)]
         person["top_coauthors"] = [
             {"scopus_id": c, "name": people[c]["name"], "n_papers": n}
-            for c, n in co_count.most_common() if people[c]["included"]][:10]
+            for c, n in co_count.most_common(10)]
         person["collab_departments"] = dict(dept_count.most_common())
 
     return {"people": people, "merge_log": merge_log, "candidates": candidates,
-            "recent_from": recent_from}
+            "recent_from": recent_from, "unconfirmed_from": unconfirmed_from,
+            "directory_matched": {e["id"] for e, _ in dir_match.values()}}
 
 
 def threshold_table(years_by_person: dict, reference_year: int) -> list[str]:
@@ -257,12 +330,22 @@ def main() -> None:
     atlas = json.loads(config.RAW_ATLAS.read_text(encoding="utf-8"))
     overrides = json.loads(config.OVERRIDES.read_text(encoding="utf-8")).get("authors", {})
     name_parts, years_by_author = load_raw_docs()
+    if config.DIRECTORY.exists():
+        dir_data = json.loads(config.DIRECTORY.read_text(encoding="utf-8"))
+        print(f"UiS employee directory from {dir_data['generated'][:10]}: "
+              f"{len(dir_data['employees'])} employees.")
+    else:
+        dir_data = None
+        print("No employee directory yet (run pipeline/collect_directory.py) – "
+              "everyone is treated as unconfirmed.")
+    directory = Directory(dir_data)
 
     res = build(atlas, name_parts, overrides, config.REFERENCE_YEAR,
-                config.RECENT_YEARS, config.MIN_RECENT_PUBLICATIONS)
+                config.RECENT_YEARS, config.MIN_RECENT_PUBLICATIONS, directory,
+                config.UNCONFIRMED_RECENT_YEARS, config.UNCONFIRMED_MIN_RECENT_PUBLICATIONS)
     people = res["people"]
     included = [p for p in people.values() if p["included"]]
-    included.sort(key=lambda p: (p["department"], p["name"]))
+    included.sort(key=lambda p: (p["faculty"], p["department"], p["name"]))
 
     config.INTERIM.mkdir(parents=True, exist_ok=True)
     out = {
@@ -270,6 +353,8 @@ def main() -> None:
         "reference_year": config.REFERENCE_YEAR,
         "recent_from": res["recent_from"],
         "min_recent_publications": config.MIN_RECENT_PUBLICATIONS,
+        "unconfirmed_from": res["unconfirmed_from"],
+        "unconfirmed_min_recent_publications": config.UNCONFIRMED_MIN_RECENT_PUBLICATIONS,
         "researchers": [{k: v for k, v in p.items() if not k.startswith("_") and k != "included"}
                         for p in included],
     }
@@ -278,25 +363,34 @@ def main() -> None:
                                 encoding="utf-8")
 
     # ---- review files for the project owner
+    listed = [p for p in people.values() if p["department"] or p["_directory"]]
     write_csv(config.REVIEW_DIR / "researchers.csv",
-              ["status", "scopus_id", "other_scopus_ids", "name", "department", "n_publications",
-               f"n_since_{res['recent_from']}", "last_year", "affiliation_example", "scopus_url"],
+              ["status", "scopus_id", "other_scopus_ids", "name", "faculty", "department",
+               "department_source", "directory_name", "directory_match", "position",
+               "n_publications", f"n_since_{res['recent_from']}", "last_year",
+               "affiliation_example", "scopus_url"],
               [["included" if p["included"] else "dropped", p["scopus_id"],
-                " ".join(p["scopus_ids"][1:]), p["name"], p["department"], p["n_publications"],
-                p["n_recent"], p["last_year"], (p["_affiliations"] or [""])[0],
-                SCOPUS_AUTHOR_URL.format(p["scopus_id"])]
-               for p in sorted(people.values(),
-                               key=lambda p: (not p["included"], p["department"], p["name"]))])
-    unmatched = sorted(atlas["unmatched_authors"],
-                       key=lambda u: -sum(1 for y in years_by_author.get(u["scopus_id"], [])
-                                          if y >= res["recent_from"]))
+                " ".join(p["scopus_ids"][1:]), p["name"], p["faculty"], p["department"],
+                p["_source"], (p["_directory"] or ["", ""])[0], (p["_directory"] or ["", ""])[1],
+                (p["position"] or {}).get("nb"), p["n_publications"], p["n_recent"], p["last_year"],
+                (p["_affiliations"] or [""])[0], SCOPUS_AUTHOR_URL.format(p["scopus_id"])]
+               for p in sorted(listed, key=lambda p: (not p["included"], p["faculty"] or "~",
+                                                      p["department"] or "", p["name"]))])
+    unmatched = sorted((p for p in people.values()
+                        if not p["department"] and not p["_directory"] and p["_affiliations"]),
+                       key=lambda p: -p["n_recent"])
     write_csv(config.REVIEW_DIR / "unmatched_uis_authors.csv",
               ["scopus_id", "name", "n_papers_total", f"n_since_{res['recent_from']}",
                "affiliation_strings", "scopus_url"],
-              [[u["scopus_id"], u["name"], len(years_by_author.get(u["scopus_id"], [])),
-                sum(1 for y in years_by_author.get(u["scopus_id"], []) if y >= res["recent_from"]),
-                " || ".join(u["affiliation_strings"]), SCOPUS_AUTHOR_URL.format(u["scopus_id"])]
-               for u in unmatched])
+              [[p["scopus_id"], p["name"], p["n_publications"], p["n_recent"],
+                " || ".join(p["_affiliations"]), SCOPUS_AUTHOR_URL.format(p["scopus_id"])]
+               for p in unmatched])
+    if dir_data:
+        staff = [e for e in directory.entries if e["departments"] and e["id"] not in res["directory_matched"]]
+        write_csv(config.REVIEW_DIR / "directory_staff_without_scopus.csv",
+                  ["name", "department", "position", "uis_profile"],
+                  [[e["name"], e["departments"][0], e.get("position_nb"), e.get("url_nb")]
+                   for e in sorted(staff, key=lambda e: (e["departments"][0], e["name"]))])
     write_csv(config.REVIEW_DIR / "possible_duplicates.csv",
               ["scopus_id_1", "name_1", "department_1", "scopus_id_2", "name_2", "department_2",
                "shared_coauthors"],
@@ -305,15 +399,24 @@ def main() -> None:
                for c in res["candidates"]])
 
     # ---- report
-    years_by_person = {pid: [y for p in person["paper_ids"] if (y := year_of(atlas["papers"][p]))]
-                    for pid, person in people.items()}
+    confirmed = sum(1 for p in included if p["_confirmed"])
     print(f"{len(atlas['authors'])} Scopus author IDs → {len(people)} people after "
           f"{len(res['merge_log'])} merges ({len(res['candidates'])} possible duplicates left for review).")
-    print(f"Included: {len(included)} with ≥{config.MIN_RECENT_PUBLICATIONS} papers since "
-          f"{res['recent_from']}; dropped {len(people) - len(included)}.\n")
-    for dept, n in Counter(p["department"] for p in included).most_common():
-        print(f"  {n:4d}  {dept}")
-    print("\nResearchers under other inclusion rules (for tuning config.py):")
+    print(f"Included: {len(included)} – {confirmed} confirmed in the employee directory "
+          f"(≥{config.MIN_RECENT_PUBLICATIONS} papers since {res['recent_from']}), "
+          f"{len(included) - confirmed} from Scopus only "
+          f"(≥{config.UNCONFIRMED_MIN_RECENT_PUBLICATIONS} since {res['unconfirmed_from']}).\n")
+    by_faculty = defaultdict(Counter)
+    for p in included:
+        by_faculty[p["faculty"]][p["department"]] += 1
+    for f in config.FACULTIES:
+        depts = by_faculty.get(f["name"], Counter())
+        print(f"  {sum(depts.values()):4d}  {f['name']}")
+        for dept, n in depts.most_common():
+            print(f"        {n:4d}  {dept}")
+    years_by_person = {pid: [y for p in person["paper_ids"] if (y := year_of(atlas["papers"][p]))]
+                       for pid, person in people.items() if person["department"]}
+    print("\nPeople with a department under other inclusion rules (for tuning config.py):")
     print("\n".join(threshold_table(years_by_person, config.REFERENCE_YEAR)))
     print(f"\nWrote {config.PROFILES.name}, {config.MERGE_LOG.name} and review CSVs in "
           f"{config.REVIEW_DIR} (local only, never commit).")

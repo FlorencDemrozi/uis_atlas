@@ -22,7 +22,7 @@ from itertools import combinations
 import config
 
 RESEARCHER_FIELDS = [
-    "scopus_id", "name", "orcid", "department", "summary", "tags",
+    "scopus_id", "name", "orcid", "faculty", "department", "position", "summary", "tags",
     "n_publications", "citations", "pubs_per_year", "first_year", "last_year",
     "top_coauthors", "collab_departments", "paper_ids", "links",
 ]
@@ -43,6 +43,11 @@ def links_for(r: dict, extra: dict) -> dict:
     links = {"scopus": f"https://www.scopus.com/authid/detail.uri?authorId={r['scopus_id']}"}
     if r.get("orcid"):
         links["orcid"] = f"https://orcid.org/{r['orcid']}"
+    uis = r.get("uis_links") or {}
+    if uis.get("nb"):
+        links["uis"] = uis["nb"]
+    if uis.get("en"):
+        links["uis_en"] = uis["en"]
     links.update(extra or {})
     return links
 
@@ -61,30 +66,37 @@ def check_no_copied_text(researchers: list[dict], abstracts: list[str]) -> None:
                                  f"sentence. Regenerate it or override it in config/overrides.json.")
 
 
-def build_stats(researchers: list[dict], papers: dict) -> dict:
-    dept_of = {r["scopus_id"]: r["department"] for r in researchers}
-    per_dept = defaultdict(lambda: {"researchers": 0, "papers": set(), "citations": 0})
+def unit_stats(researchers: list[dict], papers: dict, key: str) -> dict:
+    """Researchers, papers, citations, papers per year, collaboration and themes per
+    unit, where key is "department" or "faculty"."""
+    unit_of = {r["scopus_id"]: r[key] for r in researchers}
+    per_unit = defaultdict(lambda: {"researchers": 0, "papers": set(), "citations": 0})
     for r in researchers:
-        d = per_dept[r["department"]]
-        d["researchers"] += 1
-        d["papers"].update(r["paper_ids"])
+        u = per_unit[r[key]]
+        u["researchers"] += 1
+        u["papers"].update(r["paper_ids"])
     years, themes = defaultdict(Counter), defaultdict(Counter)
     collab = Counter()
     for eid, p in papers.items():
-        depts = {dept_of[a] for a in p["uis_author_ids"]}
-        for d in depts:
-            years[d][p["year"]] += 1
-            per_dept[d]["citations"] += p["citations"] or 0
-            themes[d].update({k.lower() for k in p["keywords"]})
-        for a, b in combinations(sorted(depts), 2):
+        units = {unit_of[a] for a in p["uis_author_ids"]}
+        for u in units:
+            years[u][p["year"]] += 1
+            per_unit[u]["citations"] += p["citations"] or 0
+            themes[u].update({k.lower() for k in p["keywords"]})
+        for a, b in combinations(sorted(units), 2):
             collab[(a, b)] += 1
     return {
-        "departments": {d: {"researchers": v["researchers"], "papers": len(v["papers"]),
-                            "citations": v["citations"]} for d, v in sorted(per_dept.items())},
-        "papers_per_year": {d: dict(sorted(c.items())) for d, c in sorted(years.items())},
-        "department_collaboration": [{"a": a, "b": b, "papers": n} for (a, b), n in collab.most_common()],
-        "top_themes": {d: c.most_common(20) for d, c in sorted(themes.items())},
+        "units": {u: {"researchers": v["researchers"], "papers": len(v["papers"]),
+                      "citations": v["citations"]} for u, v in sorted(per_unit.items())},
+        "papers_per_year": {u: dict(sorted(c.items())) for u, c in sorted(years.items())},
+        "collaboration": [{"a": a, "b": b, "papers": n} for (a, b), n in collab.most_common()],
+        "top_themes": {u: c.most_common(20) for u, c in sorted(themes.items())},
     }
+
+
+def build_stats(researchers: list[dict], papers: dict) -> dict:
+    return {"departments": unit_stats(researchers, papers, "department"),
+            "faculties": unit_stats(researchers, papers, "faculty")}
 
 
 def main() -> None:
@@ -121,9 +133,14 @@ def main() -> None:
 
     meta = {
         "generated": datetime.now().isoformat(timespec="seconds"),
-        "faculty": config.FACULTY_NAME,
+        "institution": config.INSTITUTION_NAME,
+        "faculties": [{"name": f["name"], "departments": [d["name"] for d in f["departments"]]}
+                      for f in config.FACULTIES],
         "period": {"first_year": config.FIRST_YEAR, "recent_from": profiles["recent_from"]},
-        "inclusion": f"≥{profiles['min_recent_publications']} publications since {profiles['recent_from']}",
+        "inclusion": {"confirmed": {"min": profiles["min_recent_publications"],
+                                    "from": profiles["recent_from"]},
+                      "unconfirmed": {"min": profiles["unconfirmed_min_recent_publications"],
+                                      "from": profiles["unconfirmed_from"]}},
         "n_researchers": len(researchers),
         "n_papers": len(papers),
         "embedding_model": config.EMBED_MODEL,

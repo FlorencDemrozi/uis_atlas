@@ -5,7 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pipeline"))
 from build_profiles import build, given_compatible  # noqa: E402
 
-CS = "Computer Science and Electrical Engineering"
+CS = "Electrical Engineering and Computer Science"
 MATH = "Mathematics and Physics"
 
 

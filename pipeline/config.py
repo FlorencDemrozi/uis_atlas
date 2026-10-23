@@ -16,52 +16,153 @@ load_dotenv(ROOT / ".env")
 AFID = "60014497"  # University of Stavanger in Scopus
 FIRST_YEAR = int(os.environ.get("ATLAS_FIRST_YEAR", "2020"))
 SCOPUS_QUERY = f"AF-ID({AFID}) AND PUBYEAR > {FIRST_YEAR - 1}"
-FACULTY_NAME = "Faculty of Science and Technology"
+INSTITUTION_NAME = "University of Stavanger"
 
-# Departments of the faculty, with English and Norwegian name fragments used to
-# recognise them in Scopus affiliation strings. Order matters: more specific first.
-# To add another faculty later, extend this structure rather than the scripts.
-DEPARTMENTS = [
-    ("Energy Resources", ["energy resources", "energiressurs"]),
-    ("Energy and Petroleum Engineering", ["petroleum"]),
-    ("Chemistry, Bioscience and Environmental Engineering",
-     ["chemistry", "bioscience", "environmental engineering", "kjemi", "miljøteknikk"]),
-    ("Computer Science and Electrical Engineering",
-     ["computer science", "electrical engineering", "elektro", "data- og"]),
-    ("Mathematics and Physics", ["mathematics", "physics", "matematikk", "fysikk"]),
-    ("Mechanical and Structural Engineering and Materials Science",
-     ["mechanical", "structural engineering", "materials science", "maskin", "konstruksjon"]),
-    ("Safety, Economics and Planning",
-     ["safety, economics", "safety economics", "industrial economics",
-      "risk management", "sikkerhet", "planlegging"]),
+# Faculties and their departments (as of 2026-10-23, confirmed by the project owner).
+# "phrases": lower-case English/Norwegian fragments that recognise a department in
+# Scopus affiliation strings. All departments are checked in this order, so put
+# more specific phrases first. "directory": unit ids in the UiS employee directory
+# (www.uis.no/nb/sok/ansatte, facet "department:<id>"); a department without ids
+# is assigned from Scopus affiliations only. "hints": faculty-level phrases.
+FACULTIES = [
+    {"name": "Faculty of Science and Technology", "directory": 1222,
+     "hints": ["science and technology", "teknisk-naturvitenskapelig", "teknisk- naturvitenskapelig",
+               "technology and natural sci", "technology and science", "sciences & technology"],
+     "departments": [
+         {"name": "Energy and Petroleum Engineering", "directory": [1268, 1250],
+          "phrases": ["energy resources", "energiressurs", "petroleum"]},
+         {"name": "Chemistry, Bioscience and Environmental Engineering", "directory": [1247],
+          "phrases": ["chemistry", "bioscience", "environmental engineering", "kjemi",
+                      "miljøteknikk", "miljøteknologi"]},
+         {"name": "Electrical Engineering and Computer Science", "directory": [1256],
+          "phrases": ["computer science", "electrical engineering", "elektro", "data- og"]},
+         {"name": "Mathematics and Physics", "directory": [1259],
+          "phrases": ["mathematics", "physics", "matematikk", "fysikk"]},
+         {"name": "Mechanical and Structural Engineering and Materials Science", "directory": [1234],
+          "phrases": ["mechanical", "structural engineering", "materials science", "maskin",
+                      "konstruksjon"]},
+         {"name": "Safety, Economics and Planning", "directory": [1223],
+          "phrases": ["safety, economics", "safety economics", "industrial economics",
+                      "risk management", "sikkerhet", "planlegging"]},
+     ]},
+    {"name": "Faculty of Arts and Education", "directory": 1224,
+     "hints": ["arts and education", "education and arts", "utdanningsvitenskap og humaniora"],
+     "departments": [
+         {"name": "Department of Early Childhood Education", "directory": [1272],
+          "phrases": ["early childhood", "barnehagelærer"]},
+         {"name": "Department of Education and Sports Science", "directory": [1228],
+          "phrases": ["education and sport", "sports science", "sport science", "grunnskolelærer",
+                      "idrett og spesialpedagogikk"]},
+         {"name": "Department of Cultural Studies and Languages", "directory": [1225],
+          "phrases": ["cultural studies", "kultur- og språk"]},
+     ]},
+    {"name": "Faculty of Performing Arts", "directory": 1275,
+     "hints": ["performing arts", "utøvende kunstfag"],
+     "departments": [
+         {"name": "Department of Jazz, Dance, Practical-Pedagogical Education and Music Production",
+          "directory": [1276], "phrases": ["jazz", "dance", "music production", "musikkproduksjon"]},
+         {"name": "Department of Classical Music", "directory": [1298],
+          "phrases": ["classical music", "klassisk musikk"]},
+     ]},
+    {"name": "UiS School of Business and Law", "directory": 1229,
+     "hints": ["business school", "school of business and law", "handelshøgskolen"],
+     "departments": [
+         {"name": "Department of Economics and Finance", "directory": [1249],
+          "phrases": ["economics and finance", "samfunnsøkonomi og finans"]},
+         {"name": "Department of Innovation, Management and Marketing", "directory": [1255],
+          "phrases": ["innovation, management", "innovation, leadership", "department of innovation",
+                      "management and marketing", "innovasjon, led"]},
+         {"name": "Department of Accounting and Law", "directory": [1294],
+          "phrases": ["accounting", "regnskap", "rettsvitenskap", "department of law"]},
+     ]},
+    {"name": "Faculty of Health Sciences", "directory": 1235,
+     "hints": ["faculty of health", "health sciences", "helsevitenskap",
+               "centre for resilience in healthcare", "center for resilience in healthcare"],
+     "departments": [
+         {"name": "Department of Public Health", "directory": [1243],
+          "phrases": ["public health", "folkehelse"]},
+         {"name": "Department of Quality and Health Technology", "directory": [1240],
+          "phrases": ["quality and health technology", "health technology", "helseteknologi"]},
+         {"name": "Department of Caring and Ethics", "directory": [1236],
+          "phrases": ["caring and ethics", "care and ethics", "omsorg og etikk"]},
+     ]},
+    {"name": "Faculty of Social Sciences", "directory": 1241,
+     "hints": ["faculty of social science", "samfunnsvitenskap"],
+     "departments": [
+         # Not a unit in the employee directory: assigned from Scopus affiliations only.
+         {"name": "NHS – Department of Leadership and Service Innovation", "directory": [],
+          "phrases": ["hotel management", "hotellhøgskole", "leadership and service innovation",
+                      "service innovation"]},
+         {"name": "Department of Media and Social Sciences", "directory": [1242],
+          "phrases": ["media and social science", "medie- og samfunnsfag", "department of media"]},
+         {"name": "Department of Social Studies", "directory": [1271],
+          "phrases": ["social studies", "social work", "sosialfag"]},
+         {"name": "Department of Psychology", "directory": [8977],
+          "phrases": ["psychology", "psykologi"]},
+     ]},
 ]
-FACULTY_HINTS = ["science and technology", "teknisk-naturvitenskapelig",
-                 "technology and natural sci", "technology and science", "sciences & technology"]
-NOT_STATED = f"{FACULTY_NAME} (department not stated)"
+
+# Units deliberately left out (project owner, 2026-10-23): national centres and
+# the museum. Their affiliation text never assigns a department or faculty.
+EXCLUDED_UNIT_PHRASES = [
+    "reading centre", "reading center", "reading education", "lesesenter", "leseopplæring",
+    "learning environment", "læringsmiljø", "behavioural research in education",
+    "behavioral research in education", "knowledge centre for education",
+    "knowledge center for education", "kunnskapssenter for utdanning",
+    "museum of archaeology", "archaeological museum", "arkeologisk museum",
+]
+# The same units in the employee directory: Norwegian Centre for Learning
+# Environment, Norwegian Reading Centre, Knowledge Centre for Education, Museum
+# of Archaeology. Staff listed only there are left out. Staff of a faculty's
+# administration count as the faculty (department taken from Scopus if possible).
+DIRECTORY_EXCLUDED_UNITS = [1269, 1226, 1227, 1260]
+
+
+def not_stated(faculty: str) -> str:
+    return f"{faculty} (department not stated)"
+
+
+FACULTY_OF = {}  # department or "not stated" key -> faculty name
+for _f in FACULTIES:
+    FACULTY_OF[not_stated(_f["name"])] = _f["name"]
+    for _d in _f["departments"]:
+        FACULTY_OF[_d["name"]] = _f["name"]
+NOT_STATED_KEYS = {not_stated(f["name"]) for f in FACULTIES}
+DEPARTMENTS = [(d["name"], d["phrases"]) for f in FACULTIES for d in f["departments"]]
+FACULTY_HINTS = [(f["name"], f["hints"]) for f in FACULTIES]
+DIRECTORY_DEPARTMENTS = {uid: d["name"] for f in FACULTIES for d in f["departments"]
+                         for uid in d["directory"]}
+DIRECTORY_FACULTIES = {f["directory"]: f["name"] for f in FACULTIES}
 
 # Former department names, checked BEFORE the current names above. Derived from
 # authors whose affiliation changed over time; confirmed by the project owner
-# 2026-10-22. "until": the name only means this for papers up to that year
-# (later papers use normal matching). "became": None marks a split – the paper
-# shows the faculty but not today's department, so it never decides a person's
-# department on its own.
+# 2026-10-22/23. "until": the name only means this for papers up to that year
+# (later papers use normal matching). "became": None marks a split or unclear
+# successor – the paper shows the faculty ("faculty") but not today's
+# department, so it never decides a person's department on its own.
 DEPARTMENT_HISTORY = [
     {"phrases": ["organelle research"],                       # CORE
      "became": "Chemistry, Bioscience and Environmental Engineering", "change": "moved"},
     {"phrases": ["mathematics and natural science", "mathematics and nat. sci",
                  "natural science and mathematics"],
-     "became": None, "change": "split ~2018",
+     "became": None, "faculty": "Faculty of Science and Technology", "change": "split ~2018",
      "split_into": ["Chemistry, Bioscience and Environmental Engineering", "Mathematics and Physics"]},
-    {"phrases": ["petroleum engineering", "petroleum technology"], "until": 2017,
-     "became": None, "change": "split ~2018",
-     "split_into": ["Energy Resources", "Energy and Petroleum Engineering"]},
     {"phrases": ["electrical and computer engineering", "elec./computer", "elec. and comp",
                  "eletrical and computer", "electr. and computer", "electrical and computer science",
                  "computer and electrical engineering", "electronic engineering and computer science",
                  "electrical eng. and comp"],
-     "became": "Computer Science and Electrical Engineering", "change": "renamed"},
+     "became": "Electrical Engineering and Computer Science", "change": "renamed"},
     {"phrases": ["industrial economics", "risk management and planning"],
      "became": "Safety, Economics and Planning", "change": "renamed ~2018"},
+    {"phrases": ["department of health studies", "department of health sciences",
+                 "institutt for helsefag"],
+     "became": None, "faculty": "Faculty of Health Sciences", "change": "split"},
+    {"phrases": ["department of business administration"],
+     "became": None, "faculty": "UiS School of Business and Law", "change": "split"},
+    {"phrases": ["department of social sciences"],
+     "became": None, "faculty": "Faculty of Social Sciences", "change": "split"},
+    {"phrases": ["teacher education", "lærerutdanning"],
+     "became": None, "faculty": "Faculty of Arts and Education", "change": "split"},
 ]
 
 # Periods for which the collector fetches at least one affiliation per author,
@@ -79,6 +180,8 @@ RAW_DOCS = RAW / "docs.jsonl"
 RAW_SEARCH_STATE = RAW / "search_state.json"
 RAW_DETAILS = RAW / "details.jsonl"
 RAW_ATLAS = RAW / "atlas_data.json"     # combined output of collect_scopus.py
+RAW_DIRECTORY = DATA / "raw" / "uis_directory"  # UiS employee directory: personal data, local only
+DIRECTORY = RAW_DIRECTORY / "employees.json"
 
 PROFILES = INTERIM / "profiles.json"
 MERGE_LOG = INTERIM / "merge_log.json"
@@ -115,6 +218,15 @@ RANKING = {
 # A researcher is included with at least MIN_RECENT_PUBLICATIONS papers in the
 # last RECENT_YEARS calendar years (REFERENCE_YEAR and the years before it).
 # Papers dated after REFERENCE_YEAR (in press) also count as recent.
+# People found in the UiS employee directory are confirmed current staff and
+# get this lower threshold (project owner, 2026-10-23). Everyone else may have
+# left UiS and needs the stricter UNCONFIRMED_* rule.
 REFERENCE_YEAR = int(os.environ.get("ATLAS_REFERENCE_YEAR", date.today().year))
-RECENT_YEARS = 2
-MIN_RECENT_PUBLICATIONS = 3
+RECENT_YEARS = 3
+MIN_RECENT_PUBLICATIONS = 1
+UNCONFIRMED_RECENT_YEARS = 2
+UNCONFIRMED_MIN_RECENT_PUBLICATIONS = 3
+
+# ---- UiS employee directory ---------------------------------------------
+DIRECTORY_URL = "https://www.uis.no/{lang}/{path}"   # path: "sok/ansatte" (nb), "search/employees" (en)
+DIRECTORY_SLEEP = 1.0                               # seconds between requests: be polite

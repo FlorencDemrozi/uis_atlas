@@ -15,6 +15,9 @@ Phases:
                config.HISTORY_PERIODS, so renamed/split departments are resolved
   3. Build   – data/raw/scopus/atlas_data.json (licensed data: local only, never commit)
                Department = most recent affiliation (see pipeline/departments.py)
+
+  python pipeline/collect_scopus.py --build-only   reruns phase 3 from the files
+  already collected (no network), e.g. after changing the department mapping.
 """
 import getpass
 import json
@@ -313,34 +316,33 @@ def build(docs, details):
             orgs_by_author[auid].update(o for o in orgs if o)
             observations[auid].append((year.get(eid), match_dept(orgs, year.get(eid))))
 
-    faculty, unmatched = [], []
+    # Every UiS author is kept: build_profiles.py also places people through the
+    # UiS employee directory when Scopus names no department ("department": None).
+    matched = 0
     for auid, rec in authors.items():
         rec["affiliation_strings"] = [o for o, _ in orgs_by_author[auid].most_common(3)]
-        dept = current_department(observations[auid])
-        if dept:
-            rec["department"] = dept
-            rec["department_history"] = sorted([y, d] for y, d in observations[auid] if y and d)
-            faculty.append(rec)
-        elif orgs_by_author[auid]:
-            unmatched.append({"scopus_id": auid, "name": rec["name"],
-                              "affiliation_strings": rec["affiliation_strings"]})
+        rec["department"] = current_department(observations[auid])
+        rec["department_history"] = sorted([y, d] for y, d in observations[auid] if y and d)
+        matched += rec["department"] is not None
 
-    used = {p for r in faculty for p in r["papers"]}
     out = {
         "generated": datetime.now().isoformat(timespec="seconds"),
         "query": QUERY,
-        "authors": faculty,
-        "papers": {k: v for k, v in papers.items() if k in used},
-        "unmatched_authors": unmatched,
+        "authors": list(authors.values()),
+        "papers": papers,
     }
     FINAL_FILE.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
-    print(f"\nDone. {len(faculty)} Science and Technology researchers, {len(used)} papers.")
-    print(f"{len(unmatched)} other UiS authors listed for checking.")
+    print(f"\nDone. {len(authors)} UiS authors ({matched} with a department from Scopus), "
+          f"{len(papers)} papers.")
     print(f"Output (local only, never commit): {FINAL_FILE}")
-    print("Next: python pipeline/run_all.py")
+    print("Next: python pipeline/collect_directory.py (if not run recently), then python pipeline/run_all.py")
 
 
 if __name__ == "__main__":
+    if "--build-only" in sys.argv:   # rebuild from files already collected, no network
+        all_docs = load_docs()
+        build(all_docs, load_details())
+        sys.exit()
     session = make_session()
     phase_search(session)
     all_docs = load_docs()
