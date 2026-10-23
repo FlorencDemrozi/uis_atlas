@@ -29,6 +29,7 @@ Researcher profiles are personal data, even though they describe professional ac
 - Confirm the legal basis and approach with the UiS data protection officer (personvernombud).
 - Publish a short privacy notice on the site: what is shown, where it comes from, how often it is updated.
 - Provide a way for researchers to **correct or opt out** (for v1: a contact email plus `config/exclusions.json` and `config/overrides.json`, which the pipeline respects).
+- The UiS employee directory (`collect_directory.py`) is used to confirm current staff and their unit. The raw copy (`data/raw/uis_directory/`) stays local and is never committed. Only name, position, faculty/department and the UiS profile link may reach the public site, and only for researchers who are in the atlas.
 - Summaries describe research only. Never generate personal judgements, rankings of quality, or anything beyond published work.
 
 ## 4. AI-generated summaries

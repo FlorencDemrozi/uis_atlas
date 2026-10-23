@@ -1,6 +1,6 @@
 # CLAUDE.md — Brief for Claude Code
 
-You are helping build the **UiS Researcher Atlas**: a public dashboard where anyone can describe what they are looking for in plain words and get a ranked list of matching researchers from the Faculty of Science and Technology at the University of Stavanger, each with a short overview.
+You are helping build the **UiS Researcher Atlas**: a public dashboard where anyone can describe what they are looking for in plain words and get a ranked list of matching researchers from the six faculties of the University of Stavanger, each with a short overview.
 
 **Read these before doing anything else:**
 1. `docs/SPEC.md` — what we are building and how (architecture, ranking method, features, milestones)
@@ -25,7 +25,8 @@ You are helping build the **UiS Researcher Atlas**: a public dashboard where any
 ## Current state
 
 - `pipeline/collect_scopus.py` — **done and tested in principle**; collects publications and department information from Scopus. Run: `python pipeline/collect_scopus.py`.
-- All other pipeline scripts and the website are **stubs** with docstrings describing what they must do.
+- `pipeline/collect_directory.py` — current staff from the public UiS employee directory (any network).
+- `build_profiles.py`, `export_public.py` and the website (search, overview, network, profile; faculty/department picker) are implemented for all six faculties. `summarize.py` and `embed.py` are still stubs.
 
 ## Commands
 
@@ -39,6 +40,8 @@ C:\python-envs\.atlas\Scripts\Activate.ps1            # activate (PowerShell)
 pip install -r requirements.txt
 Copy-Item .env.example .env                           # then fill in keys
 python pipeline/collect_scopus.py                     # stage 1 (UiS network)
+python pipeline/collect_scopus.py --build-only        # rebuild stage 1 output offline (after mapping changes)
+python pipeline/collect_directory.py                  # stage 1b (UiS employee directory)
 python pipeline/run_all.py                            # stages 2–5
 pytest                                                # tests
 cd web; npm install; npm run dev                      # website (once scaffolded)

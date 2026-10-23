@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-The UiS Researcher Atlas is a public, searchable dashboard of researchers at the **Faculty of Science and Technology, University of Stavanger (UiS)**. Its job is to help people find the right UiS researcher to collaborate with.
+The UiS Researcher Atlas is a public, searchable dashboard of researchers at the **six faculties of the University of Stavanger (UiS)**. Its job is to help people find the right UiS researcher to collaborate with.
 
 A visitor describes, in their own words, what they are looking for — for example *“machine learning for predictive maintenance of offshore wind turbines”* or *“CO₂ storage in North Sea reservoirs”*. The atlas returns a list of researchers **ranked by affinity** to that description, each with a short overview of who they are and why they matched.
 
@@ -18,19 +18,22 @@ Visitors are not expected to know UiS’s organisation or academic vocabulary. T
 
 ## 2. Scope (version 1)
 
-- **Unit:** Faculty of Science and Technology (Det teknisk-naturvitenskapelige fakultet), seven departments:
-  - Chemistry, Bioscience and Environmental Engineering
-  - Computer Science and Electrical Engineering
-  - Energy and Petroleum Engineering
-  - Energy Resources
-  - Mathematics and Physics
-  - Mechanical and Structural Engineering and Materials Science
-  - Safety, Economics and Planning
+- **Units:** all six faculties and their departments (as of 23/10/2026, confirmed by the project owner; defined in `pipeline/config.py` `FACULTIES`):
+  - Faculty of Science and Technology: Mathematics and Physics; Electrical Engineering and Computer Science; Safety, Economics and Planning; Energy and Petroleum Engineering (incl. former Energy Resources); Chemistry, Bioscience and Environmental Engineering; Mechanical and Structural Engineering and Materials Science
+  - Faculty of Arts and Education: Education and Sports Science; Cultural Studies and Languages; Early Childhood Education
+  - Faculty of Performing Arts: Jazz, Dance, Practical-Pedagogical Education and Music Production; Classical Music
+  - UiS School of Business and Law: Economics and Finance; Innovation, Management and Marketing; Accounting and Law
+  - Faculty of Health Sciences: Public Health; Quality and Health Technology; Caring and Ethics
+  - Faculty of Social Sciences: Media and Social Sciences; Social Studies; Psychology; NHS – Leadership and Service Innovation (assigned from Scopus affiliations only; not a unit in the employee directory)
+  - Not included: national centres (Reading Centre, Learning Environment Centre, Knowledge Centre for Education), the Museum of Archaeology, central divisions.
+- **Current staff and departments:** the public UiS employee directory (www.uis.no/nb/sok/ansatte) is the source of who works where today; Scopus affiliations are the fallback.
+- **Inclusion:** staff found in the directory with ≥1 publication in the last 3 years; others (who may have left UiS) with ≥3 in the last 2 years (`config.py`).
 - **Period:** publications from 2020 onward (configurable via `ATLAS_FIRST_YEAR`).
 - **Source:** Scopus (Elsevier), UiS affiliation ID `60014497`, via the Scopus API.
-- The design must allow other faculties to be added later by configuration, not by rewriting code.
+- Faculties and departments are configuration (`pipeline/config.py`, `web/src/org.ts`), not code.
+- Known limitation: Scopus covers humanities, law and especially performing arts poorly, so those units look thinner than they are.
 
-Out of scope for v1: login, editing by researchers through the site, other faculties, funding data, patents.
+Out of scope for v1: login, editing by researchers through the site, funding data, patents.
 
 ## 3. Architecture
 
@@ -51,6 +54,7 @@ Why static: it can be hosted anywhere (GitHub Pages, UiS web server), costs noth
 | Stage | Script | Input → Output | Notes |
 |---|---|---|---|
 | 1. Collect | `collect_scopus.py` | Scopus API → `data/raw/scopus/` | **Already implemented.** Resumable. Must run on the UiS network or with an institutional token. |
+| 1b. Directory | `collect_directory.py` | UiS employee directory → `data/raw/uis_directory/` | Current staff, unit, position, profile link (nb + en). Any network; polite (~100 requests). |
 | 2. Build profiles | `build_profiles.py` | raw → `data/interim/profiles.json` | One record per researcher: department, papers, keywords, co-authors, metrics. Handles name variants and duplicate Scopus author IDs. |
 | 3. Summarize | `summarize.py` | profiles → `data/interim/summaries.json` | Uses the Claude API **offline** to write a 2–3 sentence overview and 3–6 topic tags per researcher. Cached and only regenerated when a profile changes. |
 | 4. Embed | `embed.py` | profiles + summaries → `data/interim/embeddings.npy` | Semantic vectors for each researcher and for each paper (see §4). |
@@ -98,14 +102,14 @@ Create `tests/search_eval.json` with 15–20 realistic queries and the researche
   - “Why this match”: the most relevant papers (title, year, venue, link via DOI)
   - Number of publications in the period, main collaborating departments
   - Links: UiS profile, Cristin, ORCID, Scopus author page
-- Filters: department, minimum number of publications, recent activity.
+- Filters: faculties and departments (any combination: faculty chips for one click, a grouped checklist for single departments; the choice applies to all views and is kept in the URL as `?org=`), minimum number of publications.
 - Shareable search URLs (the query encoded in the link).
 
 ### 5.2 Researcher profile
 A detail view for one researcher: full overview, all topic tags, publication list (titles, links), frequent UiS co-authors (linking to their profiles), publications per year.
 
-### 5.3 Faculty overview
-A dashboard page with: researchers and publications per department, publications per year, main research themes per department, and a collaboration network between departments (and optionally between researchers).
+### 5.3 Overview
+A dashboard page for the selected faculties/departments (grouped by faculty when several faculties are selected, else by department) with: researchers and publications per unit, publications per year, main research themes per department, and a collaboration network between departments (and optionally between researchers).
 
 ### 5.4 Language
 User interface in **Norwegian (bokmål) and English**, switchable. Researcher summaries in English for v1 (Norwegian optional later).
