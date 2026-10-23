@@ -6,14 +6,11 @@ import { buildIndex, search, type Hit } from "../search";
 import { inScope, isAll, useSelection } from "../selection";
 import { DeptLabel, Highlight, Position, doiUrl } from "../components/common";
 import { OrgFilter } from "../components/OrgFilter";
+import en from "../i18n/en.json";
 
-const EXAMPLES = [
-  "machine learning for predictive maintenance",
-  "CO2 storage in reservoirs",
-  "patient safety",
-  "early childhood education",
-  "tourism and hospitality",
-];
+// Keyword search matches English titles only, so Norwegian examples are offered
+// once meaning-based search (vectors) is available.
+const examples = (text: string) => text.split("|");
 const PAGE = 20;
 
 export function SearchView({ atlas, route }: { atlas: Atlas; route: Route }) {
@@ -69,19 +66,18 @@ export function SearchView({ atlas, route }: { atlas: Atlas; route: Route }) {
         </form>
         <div class="examples">
           <span>{t("search.try")}</span>
-          {EXAMPLES.map((ex) => <a class="chip-btn" key={ex} href={links.search(ex)}>{ex}</a>)}
+          {examples(atlas.meta.has_vectors ? t("search.examples") : en["search.examples"]).map((ex) => <a class="chip-btn" key={ex} href={links.search(ex)}>{ex}</a>)}
         </div>
         {!atlas.meta.has_vectors && <p class="note">{t("search.keywordOnly")}</p>}
       </section>
 
-      <OrgFilter atlas={atlas} />
-      <div class="filters" role="group" aria-label={t("search.filters")}>
+      <OrgFilter atlas={atlas}>
         <label class="field">{t("filter.minPubs")}
           <select value={String(minPubs)} onChange={(e) => setMinPubs(Number((e.target as HTMLSelectElement).value))}>
             {[0, 5, 10, 20, 40].map((n) => <option key={n} value={String(n)}>{n ? `≥ ${n}` : t("filter.any")}</option>)}
           </select>
         </label>
-      </div>
+      </OrgFilter>
 
       <div class="results-head">
         <h2 aria-live="polite">
@@ -130,9 +126,7 @@ function ResultItem({ hit, rank, atlas, ranked }: { hit: Hit; rank: number; atla
             </span>
           )}
         </div>
-        {r.summary
-          ? <p class="summary">{r.summary}</p>
-          : <p class="summary pending">{t("r.summaryPending")}</p>}
+        {r.summary && <p class="summary">{r.summary}</p>}
         <div class="tags">
           {(r.tags.length ? r.tags.map((x): [string, number] => [x, 0]) : kw).map(([k]) => (
             <a class="tag" key={k} href={links.search(k)}><Highlight text={k} terms={hit.terms} /></a>

@@ -7,6 +7,7 @@ import { DeptLabel, Position, doiUrl } from "../components/common";
 
 export function ProfileView({ atlas, id }: { atlas: Atlas; id: string }) {
   const { t, num, deptName, lang } = useI18n();
+  const ptype = (type: string) => { const s = t(`ptype.${type}`); return s.startsWith("ptype.") ? type : s; };
   const r = atlas.byId.get(id);
   if (!r) {
     return (
@@ -19,7 +20,9 @@ export function ProfileView({ atlas, id }: { atlas: Atlas; id: string }) {
   const color = dept(r.department).color;
   const lastYear = new Date(atlas.meta.generated).getFullYear();
   const years: string[] = [];
-  for (let y = atlas.meta.period.first_year; y <= lastYear; y++) years.push(String(y));
+  // From the person's first year (at least the last 10 years), not the whole period.
+  const fromYear = Math.max(atlas.meta.period.first_year, Math.min(r.first_year ?? lastYear, lastYear - 9));
+  for (let y = fromYear; y <= lastYear; y++) years.push(String(y));
   const keywords = atlas.keywords.get(r.scopus_id) ?? [];
   const recent = atlas.recent.get(r.scopus_id) ?? 0;
   const byYear = new Map<string, Paper[]>();
@@ -92,7 +95,7 @@ export function ProfileView({ atlas, id }: { atlas: Atlas; id: string }) {
                       <li key={p.eid}>
                         {url ? <a href={url}>{p.title}</a> : p.title}
                         <div class="venue">
-                          {[p.venue, p.type].filter(Boolean).join(" · ")}
+                          {[p.venue, p.type && ptype(p.type)].filter(Boolean).join(" · ")}
                           {p.citations > 0 && ` · ${t("r.citations", { n: num(p.citations) })}`}
                           {others.length > 0 && <> · {t("p.with")} {others.map((o, i) => (
                             <span key={o!.scopus_id}>{i > 0 && ", "}<a href={links.profile(o!.scopus_id)}>{o!.name}</a></span>

@@ -77,12 +77,18 @@ async function getJson<T>(name: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+/** Key that merges case and simple plural variants ("Wind turbines" ~ "wind turbine"). */
+export function kwKey(k: string): string {
+  const s = k.toLowerCase().trim();
+  return /[a-z]{3}[^siu]s$/.test(s) ? s.slice(0, -1) : s;
+}
+
 export function aggregateKeywords(paperIds: string[], papers: Record<string, Paper>, limit = 25) {
   const count = new Map<string, number>();
   const spelling = new Map<string, Map<string, number>>();
   for (const id of paperIds) {
     for (const k of papers[id]?.keywords ?? []) {
-      const key = k.toLowerCase();
+      const key = kwKey(k);
       count.set(key, (count.get(key) ?? 0) + 1);
       const s = spelling.get(key) ?? new Map<string, number>();
       s.set(k, (s.get(k) ?? 0) + 1);

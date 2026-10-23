@@ -1,6 +1,7 @@
 // Picks the faculties and departments every view is scoped to. One click on a
 // faculty chip shows just that faculty; more clicks add (or remove) faculties.
 // "Choose departments" opens a grouped checklist for finer selections.
+import type { ComponentChildren } from "preact";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { Atlas } from "../data";
 import { FACULTIES, type Faculty } from "../org";
@@ -9,7 +10,8 @@ import { isAll, useSelection } from "../selection";
 
 type State = "all" | "some" | "none";
 
-export function OrgFilter({ atlas }: { atlas: Atlas }) {
+/** children: further filters shown in the same box (e.g. minimum publications). */
+export function OrgFilter({ atlas, children }: { atlas: Atlas; children?: ComponentChildren }) {
   const { t, num, deptName } = useI18n();
   const { sel, setSel } = useSelection();
   const [open, setOpen] = useState(false);
@@ -93,6 +95,7 @@ export function OrgFilter({ atlas }: { atlas: Atlas }) {
           {t("org.chooseDepts")} <span aria-hidden="true">{open ? "▴" : "▾"}</span>
         </button>
       </div>
+      {children && <div class="org-extra">{children}</div>}
       {open && (
         <div id="org-panel" class="org-panel" ref={panelRef}>
           <p class="muted small">{t("org.help")}</p>

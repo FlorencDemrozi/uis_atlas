@@ -172,7 +172,8 @@ select, input[type="search"], input[type="text"] {
   border-radius: 999px; padding: 4px 12px; cursor: pointer; font-size: 14px; color: var(--ink-2); text-decoration: none;
 }
 .chip-btn:hover { border-color: var(--baseline); color: var(--ink); }
-.chip-btn[aria-pressed="false"] { opacity: 0.55; }
+.chip-btn[aria-pressed="false"] { background: transparent; color: var(--muted); }
+.chip-btn[aria-pressed="false"] .dot { opacity: 0.4; }
 
 /* faculty / department picker */
 .org-filter { margin: 0 0 16px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
@@ -181,7 +182,8 @@ select, input[type="search"], input[type="text"] {
 .org-summary { color: var(--ink-2); }
 .org-chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .org-chip .n { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.chip-btn.org-chip[aria-pressed="false"] { opacity: 1; }
+.chip-btn.org-chip[aria-pressed="false"] { color: var(--ink-2); }
+.chip-btn.org-chip[aria-pressed="false"] .dot { opacity: 1; }
 .chip-btn.org-chip[aria-pressed="true"] {
   background: var(--accent-wash); border-color: var(--accent); color: var(--ink); font-weight: 600;
 }
@@ -196,6 +198,10 @@ select, input[type="search"], input[type="text"] {
 .check input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); flex: none; }
 .check .num { margin-left: auto; font-size: 12px; }
 .org-group > .check:not(.strong) { padding-left: 26px; }
+.org-extra { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; margin-top: 10px;
+  padding-top: 10px; border-top: 1px solid var(--grid); font-size: 14px; color: var(--ink-2); }
+.org-extra .field { flex-direction: row; align-items: center; gap: 8px; }
+.org-extra select { min-height: 32px; padding: 4px 8px; }
 .org-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
 .position { color: var(--ink); font-weight: 500; }
 
@@ -288,7 +294,10 @@ details.table-view summary { cursor: pointer; color: var(--accent); width: fit-c
 
 .matrix { border-collapse: separate; border-spacing: 2px; font-size: 13px; }
 .matrix th { font-weight: 500; color: var(--ink-2); padding: 4px 8px; text-align: right; white-space: nowrap; }
-.matrix thead th { text-align: center; vertical-align: bottom; white-space: normal; max-width: 92px; font-size: 12px; }
+.matrix thead th {
+  text-align: center; vertical-align: bottom; white-space: normal; min-width: 104px; max-width: 132px; font-size: 12px;
+  hyphens: manual;
+}
 .matrix td { width: 64px; height: 40px; text-align: center; border-radius: 4px; font-variant-numeric: tabular-nums; }
 .matrix td.diag { background: transparent; color: var(--muted); }
 .matrix td.zero { background: var(--surface-2); color: var(--muted); }
@@ -317,7 +326,10 @@ details.table-view summary { cursor: pointer; color: var(--accent); width: fit-c
   width: 36px; height: 36px; background: var(--surface); border: 1px solid var(--baseline); border-radius: 6px;
   cursor: pointer; font-size: 18px; line-height: 1;
 }
-.legend { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 12px 0; font-size: 13px; }
+.legend-label { color: var(--muted); margin-right: 4px; }
+.legend .chip-btn { border-radius: 4px; border-color: transparent; padding: 2px 8px; font-size: 13px; }
+.legend .chip-btn[aria-pressed="true"] { background: var(--surface-2); color: var(--ink); }
 
 /* ------------------------------------------------------------------ profile */
 .profile-head { display: grid; gap: 10px; }

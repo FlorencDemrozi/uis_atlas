@@ -330,6 +330,7 @@ export function NetworkView({ atlas, route }: { atlas: Atlas; route: Route }) {
         </label>
       </div>
       <div class="legend" role="group" aria-label={t("net.legend")}>
+        <span class="legend-label" aria-hidden="true">{t("net.legend")}:</span>
         {g.groups.map((d) => (
           <button key={d.key} class="chip-btn" aria-pressed={focusDept === null || focusDept === d.key}
             onClick={() => { clearFocus(); setFocusDept(focusDept === d.key ? null : d.key); }}>

@@ -101,7 +101,7 @@ export function OverviewView({ atlas }: { atlas: Atlas }) {
 
       <section class="section" aria-labelledby="h-years">
         <h2 id="h-years">{t("ov.perYear")}</h2>
-        <p class="sub">{t("ov.perYearSub", { y: String(lastYear) })}</p>
+        <p class="sub">{t("ov.perYearSub", { y: String(lastYear), units: t(level === "faculty" ? "ov.faculties" : "ov.departments") })}</p>
         <div class="panel" style={{ marginBottom: "20px" }}>
           <h3 style={{ marginBottom: "8px" }}>{t("ov.wholeScope")}</h3>
           <ColumnChart data={scopePerYear} color="var(--accent)" height={190} unit={t("chart.papers")}
@@ -170,7 +170,7 @@ export function OverviewView({ atlas }: { atlas: Atlas }) {
 
       <section class="section" aria-labelledby="h-themes">
         <h2 id="h-themes">{t("ov.themes")}</h2>
-        <p class="sub">{t("ov.themesSub")}</p>
+        <p class="sub">{t(level === "faculty" ? "ov.themesSubFac" : "ov.themesSub")}</p>
         <div class="panel">
           <div class="small-multiples">
             {units.map((u) => (
