@@ -67,7 +67,7 @@
   "net.zoomOut": "Zoom out",
   "net.reset": "Reset view",
   "net.tip": "{p} publications · {c} UiS co-authors · {j} joint papers",
-  "net.help": "Click a researcher to see their profile and collaborators; click a collaborator to move on. Double-click opens the full profile. Esc or a click on the background returns to the whole network. Drag to move, + and − to zoom.",
+  "net.help": "Click a researcher to see their profile and collaborators; click a collaborator to move on. Double-click opens the full profile. Esc or a click on the background returns to the whole network. Drag to move; use the mouse wheel (or + and −) to zoom in on the point under the cursor.",
   "net.mostConnected": "Most connected researchers",
   "net.mostConnectedSub": "Ranked by number of different UiS co-authors in the network.",
   "net.name": "Name",

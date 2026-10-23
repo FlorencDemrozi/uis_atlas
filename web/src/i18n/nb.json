@@ -67,7 +67,7 @@
   "net.zoomOut": "Zoom ut",
   "net.reset": "Tilbakestill visning",
   "net.tip": "{p} publikasjoner · {c} medforfattere ved UiS · {j} felles artikler",
-  "net.help": "Klikk på en forsker for å se profil og samarbeidspartnere; klikk på en partner for å gå videre. Dobbeltklikk åpner hele profilen. Esc eller klikk på bakgrunnen viser hele nettverket igjen. Dra for å flytte, bruk + og − for å zoome.",
+  "net.help": "Klikk på en forsker for å se profil og samarbeidspartnere; klikk på en partner for å gå videre. Dobbeltklikk åpner hele profilen. Esc eller klikk på bakgrunnen viser hele nettverket igjen. Dra for å flytte; bruk musehjulet (eller + og −) for å zoome inn der markøren er.",
   "net.mostConnected": "Mest sammenkoblede forskere",
   "net.mostConnectedSub": "Rangert etter antall ulike medforfattere ved UiS i nettverket.",
   "net.name": "Navn",

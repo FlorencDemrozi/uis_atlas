@@ -197,6 +197,30 @@ export function NetworkView({ atlas, route }: { atlas: Atlas; route: Route }) {
   };
   const zoom = (f: number) => setView((v) => ({ ...v, k: Math.min(6, Math.max(1, v.k * f)) }));
 
+  // Mouse wheel zooms towards the cursor: the point under it stays in place.
+  // A non-passive listener, so the page does not scroll while over the graph.
+  const boxRef = useRef(g.box);
+  boxRef.current = g.box;
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const onWheel = (e: WheelEvent) => {
+      const ctm = svg.getScreenCTM();
+      if (!ctm) return;
+      e.preventDefault();
+      cancelAnimationFrame(anim.current);
+      const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse());
+      const v = viewRef.current, box = boxRef.current;
+      const k = Math.min(6, Math.max(1, v.k * Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0015))));
+      const f = k / v.k;
+      if (f === 1) return;
+      const cx = box.x + v.x + box.w / 2, cy = box.y + v.y + box.h / 2;
+      setView({ k, x: k === 1 ? 0 : v.x + (p.x - cx) * (1 - 1 / f), y: k === 1 ? 0 : v.y + (p.y - cy) * (1 - 1 / f) });
+    };
+    svg.addEventListener("wheel", onWheel, { passive: false });
+    return () => svg.removeEventListener("wheel", onWheel);
+  }, []);
+
   const onDown = (e: PointerEvent) => {
     if ((e.target as Element).closest(".node-g")) return;
     cancelAnimationFrame(anim.current);
