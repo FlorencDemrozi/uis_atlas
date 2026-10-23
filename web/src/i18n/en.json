@@ -94,6 +94,8 @@
   "footer.prototypeText": "Test version under development. Data use and researcher profiles are awaiting confirmation from the UiS Library and data protection officer.",
   "footer.source": "Source: Scopus (Elsevier), publications since {from}, retrieved {date}. Departments and positions: UiS employee directory.",
   "footer.summaries": "Researcher overviews are generated automatically from publications and describe research only. Researchers can request corrections or opt out.",
+  "footer.designedBy": "Atlas designed by",
+  "footer.designerRole": "Professor in Biomedical Sensing Systems, University of Stavanger.",
   "net.whole": "Whole network",
   "net.trail": "Exploration path",
   "net.depth": "Show",

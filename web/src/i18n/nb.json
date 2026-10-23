@@ -94,6 +94,8 @@
   "footer.prototypeText": "Testversjon under utvikling. Bruken av data og forskerprofilene venter på godkjenning fra Universitetsbiblioteket og personvernombudet.",
   "footer.source": "Kilde: Scopus (Elsevier), publikasjoner siden {from}, hentet {date}. Institutter og stillinger: UiS’ ansattkatalog.",
   "footer.summaries": "Forskersammendragene er generert automatisk fra publikasjoner og beskriver kun forskning. Forskere kan be om retting eller reservere seg.",
+  "footer.designedBy": "Atlaset er utformet av",
+  "footer.designerRole": "professor i biomedisinske sensorsystemer, Universitetet i Stavanger.",
   "net.whole": "Hele nettverket",
   "net.trail": "Utforskingssti",
   "net.depth": "Vis",
