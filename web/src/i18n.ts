@@ -2,7 +2,7 @@ import { createContext } from "preact";
 import { useCallback, useContext, useEffect, useMemo, useState } from "preact/hooks";
 import en from "./i18n/en.json";
 import nb from "./i18n/nb.json";
-import { dept } from "./departments";
+import { unit } from "./org";
 
 export type Lang = "en" | "nb";
 const STRINGS: Record<Lang, Record<string, string>> = { en, nb };
@@ -11,6 +11,7 @@ export interface I18nValue {
   lang: Lang;
   setLang: (l: Lang) => void;
   t: (key: string, vars?: Record<string, string | number>) => string;
+  /** Name of a faculty or department in the current language. */
   deptName: (key: string, short?: boolean) => string;
   num: (n: number) => string;
 }
@@ -45,7 +46,7 @@ export function useI18nState(): I18nValue {
         return s;
       },
       deptName: (key, short) => {
-        const d = dept(key);
+        const d = unit(key);
         return lang === "nb" ? (short ? d.nbShort : d.nb) : (short ? d.enShort : d.en);
       },
       num: (n) => fmt.format(n),

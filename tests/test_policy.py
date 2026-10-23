@@ -37,3 +37,24 @@ def test_embedding_model_matches_browser():
     cfg = json.loads(web_cfg.read_text())
     assert cfg["model"].split("/")[-1] == config.EMBED_MODEL.split("/")[-1]
     assert cfg["queryPrefix"] == config.QUERY_PREFIX
+
+
+def test_web_organisation_matches_pipeline():
+    """Faculty and department keys in web/src/org.ts must be those the pipeline writes."""
+    import re
+    import sys
+    sys.path.insert(0, str(ROOT / "pipeline"))
+    import config
+    org = ROOT / "web" / "src" / "org.ts"
+    if not org.exists():
+        return
+    keys = set(re.findall(r'^\s*(?:faculty\(\d, )?\["([^"]+)", "[a-z-]+",', org.read_text(encoding="utf-8"), re.M))
+    expected = {f["name"] for f in config.FACULTIES} | {d for d, _ in config.DEPARTMENTS}
+    assert keys == expected
+
+
+def test_no_directory_only_fields_in_public_data():
+    for f in PUBLIC.glob("*.json"):
+        text = f.read_text(encoding="utf-8")
+        assert '"units"' not in text or f.name == "stats.json", f"{f.name} contains directory units"
+        assert '"url_nb"' not in text and '"_directory"' not in text, f"{f.name} contains raw directory data"

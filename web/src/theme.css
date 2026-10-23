@@ -33,6 +33,9 @@
   --dept-6: #008300;
   --dept-7: #4a3aa7;
   --dept-none: #898781;
+  /* Faculty colours: slots of the same palette (they follow its dark-mode values). */
+  --fac-1: var(--dept-1); --fac-2: var(--dept-2); --fac-3: var(--dept-5);
+  --fac-4: var(--dept-4); --fac-5: var(--dept-3); --fac-6: var(--dept-7);
 
   --seq-1: #cde2fb; --seq-2: #9ec5f4; --seq-3: #6da7ec;
   --seq-4: #3987e5; --seq-5: #256abf; --seq-6: #184f95;
@@ -170,6 +173,31 @@ select, input[type="search"], input[type="text"] {
 }
 .chip-btn:hover { border-color: var(--baseline); color: var(--ink); }
 .chip-btn[aria-pressed="false"] { opacity: 0.55; }
+
+/* faculty / department picker */
+.org-filter { margin: 0 0 16px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+.org-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; margin-bottom: 8px; font-size: 14px; }
+.org-label { font-weight: 600; color: var(--ink); }
+.org-summary { color: var(--ink-2); }
+.org-chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.org-chip .n { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.chip-btn.org-chip[aria-pressed="false"] { opacity: 1; }
+.chip-btn.org-chip[aria-pressed="true"] {
+  background: var(--accent-wash); border-color: var(--accent); color: var(--ink); font-weight: 600;
+}
+.chip-btn.org-chip.partial { border-style: dashed; }
+.org-toggle { min-height: 32px; padding: 4px 12px; font-size: 14px; }
+.org-panel { margin-top: 12px; border-top: 1px solid var(--grid); padding-top: 12px; }
+.org-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px 20px; margin-top: 8px; }
+.org-group { border: 0; margin: 0; padding: 0; min-width: 0; }
+.org-group legend { padding: 0; margin-bottom: 4px; }
+.check { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 14px; color: var(--ink-2); cursor: pointer; }
+.check.strong { font-weight: 600; color: var(--ink); }
+.check input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); flex: none; }
+.check .num { margin-left: auto; font-size: 12px; }
+.org-group > .check:not(.strong) { padding-left: 26px; }
+.org-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+.position { color: var(--ink); font-weight: 500; }
 
 /* ------------------------------------------------------------------ search */
 .hero-search { padding: 8px 0 28px; }

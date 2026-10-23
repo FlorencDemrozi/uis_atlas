@@ -1,17 +1,32 @@
 import type { ComponentChildren } from "preact";
 import { useLayoutEffect, useRef, useState } from "preact/hooks";
-import { dept } from "../departments";
+import type { Researcher } from "../data";
+import { dept, unit } from "../org";
 import { useI18n } from "../i18n";
 import { STOPWORDS } from "../search";
 
-export function DeptLabel({ name, short = true }: { name: string; short?: boolean }) {
+/** Department (or faculty) name with its faculty's colour dot; "own" colours a
+ * department by its own slot (views scoped to one faculty). */
+export function DeptLabel({ name, short = true, withFaculty = false, own = false }:
+  { name: string; short?: boolean; withFaculty?: boolean; own?: boolean }) {
   const { deptName } = useI18n();
+  const d = dept(name);
+  const notStated = d.notStated && d.faculty;
   return (
     <span class="dept">
-      <span class="dot" style={{ background: dept(name).color }} aria-hidden="true" />
-      {deptName(name, short)}
+      <span class="dot" style={{ background: own ? d.ownColor : unit(name).color }} aria-hidden="true" />
+      {notStated && withFaculty ? deptName(d.faculty, short)
+        : withFaculty && d.faculty ? <>{deptName(name, short)}<span class="muted"> · {deptName(d.faculty, true)}</span></>
+        : deptName(name, short)}
     </span>
   );
+}
+
+/** Job title from the UiS employee directory, in the current language. */
+export function Position({ r }: { r: Researcher }) {
+  const { lang } = useI18n();
+  const p = r.position && (r.position[lang] ?? r.position.nb ?? r.position.en);
+  return p ? <span class="position">{p}</span> : null;
 }
 
 /** Wraps matched query terms in <mark> without using innerHTML. */

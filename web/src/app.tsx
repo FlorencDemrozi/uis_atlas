@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { loadAtlas, type Atlas } from "./data";
 import { I18n, useI18n, useI18nState } from "./i18n";
-import { links, useRoute, type View } from "./router";
+import { links, parseHash, replaceHash, setOrgParam, useRoute, type View } from "./router";
+import { decodeOrg, encodeOrg, SelectionContext, type Selection } from "./selection";
 import { useTheme } from "./theme";
 import { SearchView } from "./views/Search";
 import { OverviewView } from "./views/Overview";
@@ -14,6 +15,24 @@ export function App() {
   const [atlas, setAtlas] = useState<Atlas | null>(null);
   const [error, setError] = useState<string | null>(null);
   const mainRef = useRef<HTMLElement>(null);
+  const [sel, setSelState] = useState<Selection>(() => decodeOrg(route.params.get("org")));
+  setOrgParam(encodeOrg(sel));
+
+  // Links into the site (or the back button) may carry another ?org=.
+  useEffect(() => {
+    const next = decodeOrg(route.params.get("org"));
+    if (encodeOrg(next) !== encodeOrg(sel)) setSelState(next);
+  }, [route.params.get("org")]);
+
+  const selection = useMemo(() => ({
+    sel,
+    setSel: (next: Selection) => {
+      setOrgParam(encodeOrg(next));
+      const { params } = parseHash(location.hash);
+      replaceHash(location.hash.replace(/^#/, "").split("?")[0] || "/", params);
+      setSelState(next);
+    },
+  }), [sel]);
 
   useEffect(() => { loadAtlas().then(setAtlas).catch((e) => setError(String(e))); }, []);
   useEffect(() => { window.scrollTo(0, 0); }, [route.view, route.id]);
@@ -33,6 +52,7 @@ export function App() {
 
   return (
     <I18n.Provider value={i18n}>
+    <SelectionContext.Provider value={selection}>
       <a class="skip" href="#main" onClick={(e) => { e.preventDefault(); mainRef.current?.focus(); }}>
         {i18n.t("app.skip")}
       </a>
@@ -41,6 +61,7 @@ export function App() {
         <div class="wrap">{content}</div>
       </main>
       <Footer atlas={atlas} />
+    </SelectionContext.Provider>
     </I18n.Provider>
   );
 }

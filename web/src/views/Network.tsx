@@ -1,16 +1,19 @@
 // Co-authorship network of included researchers. The layout is computed once;
-// departments are pulled towards their own sector so groups stay readable.
+// faculties (or, within one faculty, departments) are pulled towards their own
+// sector so groups stay readable. Only researchers in the selected scope are shown.
 // Click a researcher to focus on them (profile panel + their collaborators),
 // click a collaborator to move on, double-click to open the full profile.
 import { forceCollide, forceLink, forceManyBody, forceSimulation, forceX, forceY,
   type SimulationNodeDatum } from "d3-force";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { Atlas, Researcher } from "../data";
-import { dept, orderedDepts } from "../departments";
+import { dept, orderedDepts, orderedFaculties, unit, type Unit } from "../org";
 import { useI18n } from "../i18n";
-import { links, parseHash, type Route } from "../router";
+import { links, parseHash, replaceHash, type Route } from "../router";
+import { facultiesIn, inScope, naturalLevel, unitKey, useSelection, type Level, type Selection } from "../selection";
 import { ColumnChart } from "../components/charts";
 import { DeptLabel, TableView, useWidth } from "../components/common";
+import { OrgFilter } from "../components/OrgFilter";
 
 interface Node extends SimulationNodeDatum { id: string; r: Researcher; degree: number; joint: number; rad: number }
 interface Edge { source: Node; target: Node; w: number }
@@ -18,10 +21,13 @@ interface View { k: number; x: number; y: number }
 
 const pairKey = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
 
-function buildGraph(atlas: Atlas, includeIsolated: boolean) {
+function buildGraph(atlas: Atlas, sel: Selection, includeIsolated: boolean) {
+  const level: Level = naturalLevel(sel);
+  const single = level === "department";
+  const scoped = new Set(atlas.researchers.filter((r) => inScope(sel, r.department)).map((r) => r.scopus_id));
   const weights = new Map<string, number>();
   for (const p of Object.values(atlas.papers)) {
-    const ids = p.uis_author_ids;
+    const ids = p.uis_author_ids.filter((id) => scoped.has(id));
     for (let i = 0; i < ids.length; i++) {
       for (let j = i + 1; j < ids.length; j++) {
         const key = pairKey(ids[i], ids[j]);
@@ -38,7 +44,7 @@ function buildGraph(atlas: Atlas, includeIsolated: boolean) {
     }
   }
   const nodes: Node[] = atlas.researchers
-    .filter((r) => includeIsolated || degree.has(r.scopus_id))
+    .filter((r) => scoped.has(r.scopus_id) && (includeIsolated || degree.has(r.scopus_id)))
     .map((r) => ({
       id: r.scopus_id, r, degree: degree.get(r.scopus_id) ?? 0, joint: joint.get(r.scopus_id) ?? 0,
       rad: 3 + Math.sqrt(r.n_publications) * 0.9,
@@ -50,20 +56,24 @@ function buildGraph(atlas: Atlas, includeIsolated: boolean) {
     if (byId.has(a) && byId.has(b)) edges.push({ source: byId.get(a)!, target: byId.get(b)!, w });
   }
 
-  // Department anchors on a circle, in the fixed department order.
-  const depts = orderedDepts(nodes.map((n) => n.r.department));
-  const anchor = new Map(depts.map((d, i) => {
-    const a = (i / depts.length) * 2 * Math.PI - Math.PI / 2;
-    return [d.key, { x: Math.cos(a) * 260, y: Math.sin(a) * 260 }];
+  // Unit anchors on a circle, in the fixed faculty/department order.
+  const groupOf = (n: Node) => unitKey(n.r.department, level);
+  const groups: Unit[] = single ? orderedDepts(nodes.map((n) => n.r.department))
+    : orderedFaculties(nodes.map((n) => n.r.faculty));
+  const ring = 260 * Math.max(1, Math.sqrt(nodes.length / 300));
+  const anchor = new Map(groups.map((d, i) => {
+    const a = (i / groups.length) * 2 * Math.PI - Math.PI / 2;
+    return [d.key, { x: Math.cos(a) * ring, y: Math.sin(a) * ring }];
   }));
+  const colorOf = (r: Researcher) => (single ? dept(r.department).ownColor : unit(r.faculty).color);
   forceSimulation<Node>(nodes)
     .force("link", forceLink<Node, Edge>(edges).distance(34).strength((e) => Math.min(1, 0.15 + e.w * 0.08)))
     .force("charge", forceManyBody<Node>().strength(-40))
     .force("collide", forceCollide<Node>().radius((n) => n.rad + 2))
-    .force("x", forceX<Node>((n) => anchor.get(n.r.department)?.x ?? 0).strength(0.11))
-    .force("y", forceY<Node>((n) => anchor.get(n.r.department)?.y ?? 0).strength(0.11))
+    .force("x", forceX<Node>((n) => anchor.get(groupOf(n))?.x ?? 0).strength(0.11))
+    .force("y", forceY<Node>((n) => anchor.get(groupOf(n))?.y ?? 0).strength(0.11))
     .stop()
-    .tick(420);
+    .tick(Math.round(Math.min(420, Math.max(160, 120000 / Math.max(1, nodes.length)))));
 
   const xs = nodes.map((n) => n.x ?? 0), ys = nodes.map((n) => n.y ?? 0);
   const pad = 40;
@@ -76,18 +86,20 @@ function buildGraph(atlas: Atlas, includeIsolated: boolean) {
     (neighbours.get(e.source.id) ?? neighbours.set(e.source.id, new Set()).get(e.source.id)!).add(e.target.id);
     (neighbours.get(e.target.id) ?? neighbours.set(e.target.id, new Set()).get(e.target.id)!).add(e.source.id);
   }
-  return { nodes, edges, box, neighbours, depts, byId, weight: (a: string, b: string) => weights.get(pairKey(a, b)) ?? 0 };
+  return { nodes, edges, box, neighbours, groups, groupOf, colorOf, single, byId,
+    weight: (a: string, b: string) => weights.get(pairKey(a, b)) ?? 0 };
 }
 
 type Graph = ReturnType<typeof buildGraph>;
 
 export function NetworkView({ atlas, route }: { atlas: Atlas; route: Route }) {
   const { t, num, deptName } = useI18n();
+  const { sel } = useSelection();
   // Read the live address: focus changes are written with replaceState, which the router does not see.
   const startParams = parseHash(location.hash).params;
   const initialFocus = startParams.get("focus");
   const [isolated, setIsolated] = useState(() => !!initialFocus && !hasCoauthors(atlas, initialFocus));
-  const g = useMemo(() => buildGraph(atlas, isolated), [atlas, isolated]);
+  const g = useMemo(() => buildGraph(atlas, sel, isolated), [atlas, sel, isolated]);
   const [trail, setTrail] = useState<string[]>(() =>
     initialFocus && atlas.byId.has(initialFocus) ? [initialFocus] : []);
   const focus = trail.length ? trail[trail.length - 1] : null;
@@ -120,9 +132,14 @@ export function NetworkView({ atlas, route }: { atlas: Atlas; route: Route }) {
     const p = new URLSearchParams();
     if (focus) p.set("focus", focus);
     if (focus && depth === 2) p.set("depth", "2");
-    const hash = `#/network${p.toString() ? `?${p}` : ""}`;
-    if (location.hash !== hash) history.replaceState(null, "", hash);
-  }, [focus, depth]);
+    replaceHash("/network", p);
+  }, [focus, depth, sel]);
+
+  // A new scope can hide the focused researcher or the highlighted group.
+  useEffect(() => {
+    if (focus && !g.byId.has(focus)) setTrail([]);
+    setFocusDept(null);
+  }, [g]);
 
   // Distance from the focused researcher: 0 = focus, 1 = direct collaborator, 2 = two steps.
   const levels = useMemo(() => {
@@ -208,7 +225,7 @@ export function NetworkView({ atlas, route }: { atlas: Atlas; route: Route }) {
       return l === 0 ? " focus" : l === 2 ? " far" : "";
     }
     if (hover) return n.id === hover.id || g.neighbours.get(hover.id)?.has(n.id) ? "" : " dim";
-    if (focusDept) return n.r.department === focusDept ? "" : " dim";
+    if (focusDept) return g.groupOf(n) === focusDept ? "" : " dim";
     return "";
   };
   const edgeClass = (e: Edge) => {
@@ -219,7 +236,7 @@ export function NetworkView({ atlas, route }: { atlas: Atlas; route: Route }) {
       return a === 2 && b === 2 ? " dim" : " soft";
     }
     if (hover) return e.source.id === hover.id || e.target.id === hover.id ? " hl" : " dim";
-    if (focusDept) return e.source.r.department === focusDept || e.target.r.department === focusDept ? "" : " dim";
+    if (focusDept) return g.groupOf(e.source) === focusDept || g.groupOf(e.target) === focusDept ? "" : " dim";
     return "";
   };
 
@@ -250,7 +267,7 @@ export function NetworkView({ atlas, route }: { atlas: Atlas; route: Route }) {
       return [hover];
     } else {
       candidates = [...g.nodes].sort((a, b) => b.degree - a.degree)
-        .filter((n) => !focusDept || n.r.department === focusDept);
+        .filter((n) => !focusDept || g.groupOf(n) === focusDept);
     }
     const placed: { x0: number; x1: number; y0: number; y1: number }[] = [];
     const out: Node[] = [];
@@ -280,6 +297,8 @@ export function NetworkView({ atlas, route }: { atlas: Atlas; route: Route }) {
         <p>{t("net.lede", { n: num(g.nodes.length), e: num(g.edges.length) })}</p>
       </div>
 
+      <OrgFilter atlas={atlas} />
+      {facultiesIn(sel).length > 1 && <p class="muted small" style={{ margin: "0 0 8px" }}>{t("net.byFaculty")}</p>}
       <div class="filters" style={{ marginBottom: "4px" }}>
         <label class="field" style={{ flexDirection: "row", alignItems: "center", gap: "8px" }}>
           <input type="checkbox" checked={isolated} onChange={(e) => setIsolated((e.target as HTMLInputElement).checked)} />
@@ -287,10 +306,10 @@ export function NetworkView({ atlas, route }: { atlas: Atlas; route: Route }) {
         </label>
       </div>
       <div class="legend" role="group" aria-label={t("net.legend")}>
-        {g.depts.map((d) => (
+        {g.groups.map((d) => (
           <button key={d.key} class="chip-btn" aria-pressed={focusDept === null || focusDept === d.key}
             onClick={() => { clearFocus(); setFocusDept(focusDept === d.key ? null : d.key); }}>
-            <span class="dot" style={{ background: d.color }} aria-hidden="true" />{deptName(d.key, true)}
+            <span class="dot" style={{ background: g.single ? dept(d.key).ownColor : d.color }} aria-hidden="true" />{deptName(d.key, true)}
           </button>
         ))}
       </div>
@@ -335,7 +354,7 @@ export function NetworkView({ atlas, route }: { atlas: Atlas; route: Route }) {
                   onDblClick={() => { location.hash = links.profile(n.id); }}
                   onPointerEnter={() => showTip(n)} onPointerLeave={hideTip}>
                   <circle class={`node${nodeClass(n)}${peek === n.id ? " peek" : ""}`} cx={n.x} cy={n.y}
-                    r={radius(n)} fill={dept(n.r.department).color}
+                    r={radius(n)} fill={g.colorOf(n.r)}
                     stroke-width={(focus === n.id || peek === n.id ? 3 : 2) / Math.sqrt(view.k)} />
                 </g>
               ))}
@@ -362,7 +381,7 @@ export function NetworkView({ atlas, route }: { atlas: Atlas; route: Route }) {
           {hover && tip && (
             <div class="tooltip" style={{ left: `${tip.x}px`, top: `${tip.y}px` }}>
               <strong>{hover.r.name}</strong>
-              <DeptLabel name={hover.r.department} /><br />
+              <DeptLabel name={hover.r.department} withFaculty own={g.single} /><br />
               {focus && hover.id !== focus && g.weight(focus, hover.id) > 0
                 ? t("net.tipJoint", { n: num(g.weight(focus, hover.id)), name: focusNode?.r.name ?? "" })
                 : t("net.tip", { p: num(hover.r.n_publications), c: num(hover.degree), j: num(hover.joint) })}
@@ -386,7 +405,7 @@ export function NetworkView({ atlas, route }: { atlas: Atlas; route: Route }) {
               <tr key={n.id}>
                 <td><button type="button" class="link-btn" onClick={() => { goTo(n.id); scrollTo({ top: 0, behavior: "smooth" }); }}>
                   {n.r.name}</button></td>
-                <td><DeptLabel name={n.r.department} /></td>
+                <td><DeptLabel name={n.r.department} withFaculty own={g.single} /></td>
                 <td class="n">{num(n.degree)}</td><td class="n">{num(n.joint)}</td></tr>
             ))}</tbody>
           </table>
@@ -424,7 +443,7 @@ function ProfilePanel({ atlas, g, node, onGo, onPeek, onClose }: {
     <aside class="net-panel" ref={panelRef} aria-labelledby="net-panel-name">
       <button type="button" class="close" aria-label={t("net.close")} onClick={onClose}>×</button>
       <h2 id="net-panel-name" ref={headingRef} tabIndex={-1}>{r.name}</h2>
-      <div class="meta-line"><DeptLabel name={r.department} short={false} /></div>
+      <div class="meta-line"><DeptLabel name={r.department} withFaculty own={g.single} /></div>
       {r.summary ? <p class="summary small">{r.summary}</p> : null}
 
       <dl class="mini-stats">
@@ -436,7 +455,7 @@ function ProfilePanel({ atlas, g, node, onGo, onPeek, onClose }: {
       <p class="muted small">{t("p.active", { a: String(r.first_year), b: String(r.last_year) })}</p>
 
       <h3>{t("net.lastYears")}</h3>
-      <ColumnChart color={dept(r.department).color} unit={t("chart.papers")} height={110} ariaLabel={t("net.lastYears")}
+      <ColumnChart color={g.colorOf(r)} unit={t("chart.papers")} height={110} ariaLabel={t("net.lastYears")}
         data={years.map((y) => ({ x: y, y: r.pubs_per_year[y] ?? 0, partial: Number(y) === lastYear }))} />
 
       {topics.length > 0 && (<>
@@ -452,7 +471,7 @@ function ProfilePanel({ atlas, g, node, onGo, onPeek, onClose }: {
               <button type="button" onClick={() => onGo(n.id)}
                 onPointerEnter={() => onPeek(n.id)} onPointerLeave={() => onPeek(null)}
                 onFocus={() => onPeek(n.id)} onBlur={() => onPeek(null)}>
-                <span class="dept"><span class="dot" style={{ background: dept(n.r.department).color }} aria-hidden="true" />{n.r.name}</span>
+                <span class="dept"><span class="dot" style={{ background: g.colorOf(n.r) }} aria-hidden="true" />{n.r.name}</span>
                 <span class="muted num">{t("p.jointPapers", { n: w })}</span>
               </button>
             </li>

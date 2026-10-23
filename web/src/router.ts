@@ -1,4 +1,5 @@
 // Hash routing so the site works as plain static files and search URLs are shareable.
+// The faculty/department selection (?org=…) travels with every link and address update.
 import { useEffect, useState } from "preact/hooks";
 
 export type View = "search" | "overview" | "network" | "profile";
@@ -24,9 +25,28 @@ export function useRoute(): Route {
   return route;
 }
 
+// Current ?org= value, set by the app whenever the selection changes.
+let org = "";
+export function setOrgParam(value: string) { org = value; }
+
+function build(path: string, params?: URLSearchParams | Record<string, string>) {
+  const p = new URLSearchParams(params);
+  p.delete("org");
+  if (org) p.set("org", org);
+  const qs = p.toString().replace(/%2C/g, ",");
+  return `#${path}${qs ? `?${qs}` : ""}`;
+}
+
+/** Update the address without a history entry or a hashchange event. */
+export function replaceHash(path: string, params?: URLSearchParams) {
+  const hash = build(path, params);
+  if (location.hash !== hash) history.replaceState(null, "", hash);
+}
+
 export const links = {
-  search: (q?: string) => (q ? `#/?q=${encodeURIComponent(q)}` : "#/"),
-  overview: "#/overview",
-  network: "#/network",
-  profile: (id: string) => `#/r/${encodeURIComponent(id)}`,
+  search: (q?: string) => build("/", q ? { q } : undefined),
+  get overview() { return build("/overview"); },
+  get network() { return build("/network"); },
+  networkFocus: (id: string) => build("/network", { focus: id }),
+  profile: (id: string) => build(`/r/${encodeURIComponent(id)}`),
 };

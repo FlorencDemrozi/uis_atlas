@@ -6,7 +6,9 @@ export interface Researcher {
   scopus_id: string;
   name: string;
   orcid: string | null;
+  faculty: string;
   department: string;
+  position: { nb: string | null; en: string | null } | null;
   summary: string | null;
   tags: string[];
   n_publications: number;
@@ -32,18 +34,23 @@ export interface Paper {
   uis_author_ids: string[];
 }
 
-export interface Stats {
-  departments: Record<string, { researchers: number; papers: number; citations: number }>;
+export interface UnitStats {
+  units: Record<string, { researchers: number; papers: number; citations: number }>;
   papers_per_year: Record<string, Record<string, number>>;
-  department_collaboration: { a: string; b: string; papers: number }[];
+  collaboration: { a: string; b: string; papers: number }[];
   top_themes: Record<string, [string, number][]>;
 }
 
+export interface Stats { departments: UnitStats; faculties: UnitStats }
+
+export interface Rule { min: number; from: number }
+
 export interface Meta {
   generated: string;
-  faculty: string;
+  institution: string;
+  faculties: { name: string; departments: string[] }[];
   period: { first_year: number; recent_from: number };
-  inclusion: string;
+  inclusion: { confirmed: Rule; unconfirmed: Rule };
   n_researchers: number;
   n_papers: number;
   has_summaries: boolean;

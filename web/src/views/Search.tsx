@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useState } from "preact/hooks";
 import type { Atlas, Researcher } from "../data";
-import { orderedDepts } from "../departments";
 import { useI18n } from "../i18n";
-import { links, type Route } from "../router";
+import { links, replaceHash, type Route } from "../router";
 import { buildIndex, search, type Hit } from "../search";
-import { DeptLabel, Highlight, doiUrl } from "../components/common";
+import { inScope, isAll, useSelection } from "../selection";
+import { DeptLabel, Highlight, Position, doiUrl } from "../components/common";
+import { OrgFilter } from "../components/OrgFilter";
 
 const EXAMPLES = [
   "machine learning for predictive maintenance",
   "CO2 storage in reservoirs",
-  "offshore wind turbines",
-  "hydrogen",
+  "patient safety",
+  "early childhood education",
+  "tourism and hospitality",
 ];
 const PAGE = 20;
 
@@ -19,7 +21,7 @@ export function SearchView({ atlas, route }: { atlas: Atlas; route: Route }) {
   const index = useMemo(() => buildIndex(atlas), [atlas]);
   const [q, setQ] = useState(route.params.get("q") ?? "");
   const [query, setQuery] = useState(q);
-  const [deptFilter, setDept] = useState(route.params.get("dept") ?? "");
+  const { sel } = useSelection();
   const [minPubs, setMinPubs] = useState(Number(route.params.get("min") ?? 0));
   const [shown, setShown] = useState(PAGE);
 
@@ -27,19 +29,16 @@ export function SearchView({ atlas, route }: { atlas: Atlas; route: Route }) {
   useEffect(() => {
     const next = route.params.get("q") ?? "";
     setQ(next); setQuery(next);
-    setDept(route.params.get("dept") ?? "");
-  }, [route.params.toString()]);
+  }, [route.params.get("q")]);
 
   // Keep the URL shareable without adding history entries per keystroke.
   useEffect(() => {
     const p = new URLSearchParams();
     if (query) p.set("q", query);
-    if (deptFilter) p.set("dept", deptFilter);
     if (minPubs) p.set("min", String(minPubs));
-    const hash = `#/${p.toString() ? `?${p}` : ""}`;
-    if (location.hash !== hash) history.replaceState(null, "", hash);
+    replaceHash("/", p);
     setShown(PAGE);
-  }, [query, deptFilter, minPubs]);
+  }, [query, sel, minPubs]);
 
   // Search as you type, lightly debounced.
   useEffect(() => {
@@ -48,21 +47,20 @@ export function SearchView({ atlas, route }: { atlas: Atlas; route: Route }) {
   }, [q]);
 
   const hits: Hit[] = useMemo(() => {
-    const keep = (r: Researcher) => (!deptFilter || r.department === deptFilter) && r.n_publications >= minPubs;
+    const keep = (r: Researcher) => inScope(sel, r.department) && r.n_publications >= minPubs;
     if (query) return search(index, atlas, query).filter((h) => keep(h.researcher));
     return atlas.researchers.filter(keep)
       .sort((a, b) => (atlas.recent.get(b.scopus_id) ?? 0) - (atlas.recent.get(a.scopus_id) ?? 0)
         || a.name.localeCompare(b.name))
       .map((researcher) => ({ researcher, score: 0, papers: [], terms: [] }));
-  }, [index, atlas, query, deptFilter, minPubs]);
-
-  const depts = orderedDepts(atlas.researchers.map((r) => r.department));
+  }, [index, atlas, query, sel, minPubs]);
+  const inScopeCount = useMemo(() => atlas.researchers.filter((r) => inScope(sel, r.department)).length, [atlas, sel]);
 
   return (
     <>
       <section class="hero-search" aria-labelledby="search-title">
         <h1 id="search-title">{t("search.title")}</h1>
-        <p class="lede">{t("search.lede", { n: atlas.researchers.length })}</p>
+        <p class="lede">{t("search.lede", { n: atlas.researchers.length, f: atlas.meta.faculties.length })}</p>
         <form class="searchbox" role="search" onSubmit={(e) => { e.preventDefault(); setQuery(q.trim()); }}>
           <label for="q" class="visually-hidden">{t("search.label")}</label>
           <input id="q" type="search" value={q} autoComplete="off" placeholder={t("search.placeholder")}
@@ -76,13 +74,8 @@ export function SearchView({ atlas, route }: { atlas: Atlas; route: Route }) {
         {!atlas.meta.has_vectors && <p class="note">{t("search.keywordOnly")}</p>}
       </section>
 
+      <OrgFilter atlas={atlas} />
       <div class="filters" role="group" aria-label={t("search.filters")}>
-        <label class="field">{t("filter.department")}
-          <select value={deptFilter} onChange={(e) => setDept((e.target as HTMLSelectElement).value)}>
-            <option value="">{t("filter.allDepartments")}</option>
-            {depts.map((d) => <option key={d.key} value={d.key}><DeptName k={d.key} /></option>)}
-          </select>
-        </label>
         <label class="field">{t("filter.minPubs")}
           <select value={String(minPubs)} onChange={(e) => setMinPubs(Number((e.target as HTMLSelectElement).value))}>
             {[0, 5, 10, 20, 40].map((n) => <option key={n} value={String(n)}>{n ? `≥ ${n}` : t("filter.any")}</option>)}
@@ -94,6 +87,7 @@ export function SearchView({ atlas, route }: { atlas: Atlas; route: Route }) {
         <h2 aria-live="polite">
           {query ? t("search.results", { n: hits.length, q: query }) : t("search.browse", { n: hits.length })}
         </h2>
+        {!isAll(sel) && <span class="muted small">{t("search.inScope", { n: inScopeCount })}</span>}
         {!query && <span class="muted small">{t("search.browseSort")}</span>}
       </div>
 
@@ -114,11 +108,6 @@ export function SearchView({ atlas, route }: { atlas: Atlas; route: Route }) {
   );
 }
 
-function DeptName({ k }: { k: string }) {
-  const { deptName } = useI18n();
-  return <>{deptName(k)}</>;
-}
-
 function ResultItem({ hit, rank, atlas, ranked }: { hit: Hit; rank: number; atlas: Atlas; ranked: boolean }) {
   const { t, num } = useI18n();
   const r = hit.researcher;
@@ -130,7 +119,8 @@ function ResultItem({ hit, rank, atlas, ranked }: { hit: Hit; rank: number; atla
       <div>
         <h3><a href={links.profile(r.scopus_id)}>{r.name}</a></h3>
         <div class="meta-line">
-          <DeptLabel name={r.department} />
+          <Position r={r} />
+          <DeptLabel name={r.department} withFaculty />
           <span>{t("r.pubs", { n: r.n_publications })}</span>
           <span>{t("r.recent", { n: recent, y: String(atlas.meta.period.recent_from) })}</span>
           {ranked && (

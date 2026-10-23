@@ -1,12 +1,12 @@
 import type { Atlas, Paper } from "../data";
-import { dept, orderedDepts } from "../departments";
+import { dept, orderedDepts } from "../org";
 import { useI18n } from "../i18n";
 import { links } from "../router";
 import { BarList, ColumnChart } from "../components/charts";
-import { DeptLabel, doiUrl } from "../components/common";
+import { DeptLabel, Position, doiUrl } from "../components/common";
 
 export function ProfileView({ atlas, id }: { atlas: Atlas; id: string }) {
-  const { t, num, deptName } = useI18n();
+  const { t, num, deptName, lang } = useI18n();
   const r = atlas.byId.get(id);
   if (!r) {
     return (
@@ -39,7 +39,8 @@ export function ProfileView({ atlas, id }: { atlas: Atlas; id: string }) {
       <header class="profile-head">
         <h1>{r.name}</h1>
         <div class="meta-line">
-          <DeptLabel name={r.department} short={false} />
+          <Position r={r} />
+          <DeptLabel name={r.department} short={false} withFaculty />
           <span>{t("p.active", { a: String(r.first_year), b: String(r.last_year) })}</span>
         </div>
         {r.summary
@@ -47,10 +48,10 @@ export function ProfileView({ atlas, id }: { atlas: Atlas; id: string }) {
             <br /><span class="muted small">{t("p.autoSummary")}</span></p>
           : <p class="summary pending">{t("r.summaryPending")}</p>}
         <div class="links">
-          <a href={`${links.network}?focus=${encodeURIComponent(r.scopus_id)}`}>{t("p.exploreNetwork")}</a>
+          <a href={links.networkFocus(r.scopus_id)}>{t("p.exploreNetwork")}</a>
           {r.links.scopus && <a href={r.links.scopus}>{t("p.scopus")}</a>}
           {r.links.orcid && <a href={r.links.orcid}>ORCID</a>}
-          {r.links.uis && <a href={r.links.uis}>{t("p.uis")}</a>}
+          {r.links.uis && <a href={(lang === "en" && r.links.uis_en) || r.links.uis}>{t("p.uis")}</a>}
           {r.links.cristin && <a href={r.links.cristin}>Cristin</a>}
         </div>
       </header>
