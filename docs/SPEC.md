@@ -33,7 +33,9 @@ Visitors are not expected to know UiS’s organisation or academic vocabulary. T
 - Faculties and departments are configuration (`pipeline/config.py`, `web/src/org.ts`), not code.
 - Known limitation: Scopus covers humanities, law and especially performing arts poorly, so those units look thinner than they are.
 
-Out of scope for v1: login, editing by researchers through the site, funding data, patents.
+Out of scope for v1: login, editing by researchers through the site, patents.
+
+**Funding calls (added 2026-10-26, project owner):** open and planned calls from the Research Council of Norway, matched with researchers' publications from the last 5 years, with internal collaborator suggestions. Password protected. See `docs/FUNDING.md`. Deferred: external collaborators, suggested teams, other funders.
 
 ## 3. Architecture
 

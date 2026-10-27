@@ -38,3 +38,11 @@ Researcher profiles are personal data, even though they describe professional ac
 - Must be written in fresh words, never copying abstract sentences.
 - Labelled on the site as automatically generated from publications.
 - Spot-checked by the project owner before first launch; researchers can request corrections through the override file.
+
+## 5. Funding calls (docs/FUNDING.md)
+
+- Source: public call pages of the Research Council of Norway, collected politely (robots.txt respected; call PDFs under `*/Download` are not fetched). Raw pages stay in `data/raw/rcn/`.
+- Call facts are shown with their source page and location; nothing is filled in by guesswork. AI readings of a call are labelled and checked against quotes from the call.
+- Matches and collaborator suggestions describe published work only. They are not an assessment of a person's quality, and never say that someone has agreed to take part.
+- `data/public/funding.enc.json` is encrypted with `ATLAS_FUNDING_PASSWORD` (in `.env`, never committed or printed). Its plain content is checked by `export_funding.py` for licensed fields before encryption; it holds paper ids, not abstracts.
+- Only researchers who appear on the public site are matched (exclusions and opt-outs apply). External (non-UiS) researchers are not included.

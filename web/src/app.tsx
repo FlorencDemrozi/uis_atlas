@@ -10,11 +10,15 @@ import { OverviewView } from "./views/Overview";
 import { NetworkView } from "./views/Network";
 import { ProfileView } from "./views/Profile";
 import { ShortlistView } from "./views/Shortlist";
+import { FundingView } from "./views/Funding";
+import { CallView } from "./views/Call";
+import { FundingContext, callTitle, useFundingState } from "./funding";
 
 export function App() {
   const i18n = useI18nState();
   const route = useRoute();
   const shortlist = useShortlistState();
+  const funding = useFundingState();
   const [atlas, setAtlas] = useState<Atlas | null>(null);
   const [error, setError] = useState<string | null>(null);
   const mainRef = useRef<HTMLElement>(null);
@@ -41,9 +45,12 @@ export function App() {
   useEffect(() => { window.scrollTo(0, 0); }, [route.view, route.id]);
   useEffect(() => {
     const title = i18n.t(`nav.${route.view === "profile" ? "search" : route.view}`);
-    const name = route.view === "profile" && atlas ? atlas.byId.get(route.id ?? "")?.name : null;
+    const call = route.view === "call" && funding.state.status === "ready"
+      ? funding.state.data.byId.get(route.id ?? "") : null;
+    const name = route.view === "profile" && atlas ? atlas.byId.get(route.id ?? "")?.name
+      : call ? callTitle(call, i18n.lang) : null;
     document.title = `${name ?? title} – ${i18n.t("app.name")}`;
-  }, [route, atlas, i18n]);
+  }, [route, atlas, i18n, funding.state]);
 
   let content;
   if (error) content = <p class="loading">{i18n.t("app.loadError")} ({error})</p>;
@@ -52,12 +59,15 @@ export function App() {
   else if (route.view === "network") content = <NetworkView atlas={atlas} route={route} />;
   else if (route.view === "shortlist") content = <ShortlistView atlas={atlas} route={route} />;
   else if (route.view === "profile") content = <ProfileView atlas={atlas} id={route.id!} key={route.id} />;
+  else if (route.view === "funding") content = <FundingView atlas={atlas} route={route} />;
+  else if (route.view === "call") content = <CallView atlas={atlas} id={route.id!} key={route.id} />;
   else content = <SearchView atlas={atlas} route={route} />;
 
   return (
     <I18n.Provider value={i18n}>
     <SelectionContext.Provider value={selection}>
     <ShortlistContext.Provider value={shortlist}>
+    <FundingContext.Provider value={funding}>
       <a class="skip" href="#main" onClick={(e) => { e.preventDefault(); mainRef.current?.focus(); }}>
         {i18n.t("app.skip")}
       </a>
@@ -66,6 +76,7 @@ export function App() {
         <div class="wrap">{content}</div>
       </main>
       <Footer atlas={atlas} />
+    </FundingContext.Provider>
     </ShortlistContext.Provider>
     </SelectionContext.Provider>
     </I18n.Provider>
@@ -77,14 +88,15 @@ function Header({ view }: { view: View }) {
   const [theme, toggleTheme] = useTheme();
   const { ids } = useShortlist();
   const items: [View, string][] = [["search", links.search()], ["overview", links.overview], ["network", links.network],
-    ["shortlist", links.shortlist()]];
+    ["funding", links.funding()], ["shortlist", links.shortlist()]];
   return (
     <header class="topbar">
       <div class="wrap">
         <a class="wordmark" href={links.search()}><b>UiS</b><span>{t("app.name")}</span></a>
         <nav class="nav" aria-label={t("nav.label")}>
           {items.map(([v, href]) => (
-            <a key={v} href={href} aria-current={view === v || (v === "search" && view === "profile") ? "page" : undefined}>
+            <a key={v} href={href} aria-current={view === v || (v === "search" && view === "profile") || (v === "funding" && view === "call")
+              ? "page" : undefined}>
               {t(`nav.${v}`)}
               {v === "shortlist" && ids.length > 0 && <span class="nav-count">{ids.length}</span>}
             </a>

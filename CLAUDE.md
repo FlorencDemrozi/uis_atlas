@@ -26,7 +26,9 @@ You are helping build the **UiS Researcher Atlas**: a public dashboard where any
 
 - `pipeline/collect_scopus.py` — **done and tested in principle**; collects publications and department information from Scopus. Run: `python pipeline/collect_scopus.py`.
 - `pipeline/collect_directory.py` — current staff from the public UiS employee directory (any network).
-- `build_profiles.py`, `export_public.py` and the website (search, overview, network, profile; faculty/department picker) are implemented for all six faculties. `summarize.py` and `embed.py` are still stubs.
+- `build_profiles.py`, `export_public.py` and the website (search, overview, network, profile; faculty/department picker) are implemented for all six faculties.
+- `summarize.py` (needs `ANTHROPIC_API_KEY`) and `embed.py` are implemented; both use only papers from the last 5 years (`config.ACTIVE_YEARS`). Vectors stay local (not published).
+- Funding Intelligence (RCN calls, matching, internal collaborators; password protected): `collect_rcn.py`, `build_calls.py`, `profile_calls.py`, `match_funding.py`, `export_funding.py`, web views `Funding`/`Call` and the profile section. See `docs/FUNDING.md`. `run_weekly.py` runs everything incl. the web build.
 
 ## Commands
 
@@ -42,7 +44,9 @@ Copy-Item .env.example .env                           # then fill in keys
 python pipeline/collect_scopus.py                     # stage 1 (UiS network)
 python pipeline/collect_scopus.py --build-only        # rebuild stage 1 output offline (after mapping changes)
 python pipeline/collect_directory.py                  # stage 1b (UiS employee directory)
-python pipeline/run_all.py                            # stages 2–5
+python pipeline/collect_rcn.py                        # stage 1c (RCN funding calls, any network)
+python pipeline/run_all.py                            # stages 2–5 + funding stages
+python pipeline/run_weekly.py                         # everything + web build (scheduled job)
 pytest                                                # tests
 cd web; npm install; npm run dev                      # website (once scaffolded)
 ```

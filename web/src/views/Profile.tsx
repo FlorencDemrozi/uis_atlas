@@ -4,6 +4,53 @@ import { useI18n } from "../i18n";
 import { links } from "../router";
 import { BarList, ColumnChart } from "../components/charts";
 import { DeptLabel, Position, doiUrl } from "../components/common";
+import { CategoryBadge, FundingGate, MatchDetails, StatusBadge, useFmt } from "../components/funding";
+import { callTitle, nextDeadline, pick, useFunding } from "../funding";
+
+/** Funding calls that fit this researcher's recent work (password-protected data). */
+function ProfileFunding({ atlas, id, name }: { atlas: Atlas; id: string; name: string }) {
+  const { t, lang } = useI18n();
+  const fmt = useFmt();
+  const { state } = useFunding();
+  if (state.status === "missing") return null;
+  return (
+    <section class="section funding-profile" aria-labelledby="h-funding">
+      <h2 id="h-funding">{t("f.profileTitle")}</h2>
+      <FundingGate compact>{(data) => {
+        // Strong and medium matches; if there are none, the best weaker ones.
+        const all = data.byResearcher.get(id) ?? [];
+        const strong = all.filter(({ match }) => match.category !== "low");
+        const items = strong.length ? strong : all.slice(0, 3);
+        return (
+          <>
+            <p class="sub">{t("f.profileSub", { name, y: String(data.meta.papers_from_year) })}</p>
+            {items.length === 0 ? <p class="muted small">{t("f.profileNone")}</p> : (
+              <ul class="call-list compact">
+                {items.map(({ call, match }) => {
+                  const d = nextDeadline(call) ?? call.fields.deadline.v;
+                  return (
+                    <li class="call-card" key={call.id}>
+                      <div class="call-main">
+                        <h3><a href={links.call(call.id)}>{callTitle(call, lang)}</a> <CategoryBadge m={match} /></h3>
+                        <p class="meta-line">
+                          <StatusBadge status={call.fields.status.v} />
+                          <span>{pick<string>(call.fields.funder.v, lang).value}</span>
+                          <span>{t("f.deadline")}: {d ? fmt.date(d, true) : call.fields.rolling.v ? t("f.rolling") : t("f.noDeadline")}</span>
+                          {fmt.range(call) && <span>{fmt.range(call)}</span>}
+                        </p>
+                        <MatchDetails atlas={atlas} call={call} m={match} />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </>
+        );
+      }}</FundingGate>
+    </section>
+  );
+}
 
 export function ProfileView({ atlas, id }: { atlas: Atlas; id: string }) {
   const { t, num, deptName, lang } = useI18n();
@@ -80,6 +127,8 @@ export function ProfileView({ atlas, id }: { atlas: Atlas; id: string }) {
               ))}
             </div>
           </section>
+
+          <ProfileFunding atlas={atlas} id={r.scopus_id} name={r.name} />
 
           <section class="section" aria-labelledby="h-pubs">
             <h2 id="h-pubs">{t("p.publications", { n: r.n_publications })}</h2>
