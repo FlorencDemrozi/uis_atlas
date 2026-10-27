@@ -91,6 +91,10 @@ ORIENTATION = [
     (r"senter|centre|infrastruktur", "centre_infrastructure"),
 ]
 
+# A call that says it is open to all fields (e.g. FRIPRO) has no topic to match on.
+OPEN_FIELD = re.compile(r"alle fag|alle forskningsområder|alle fagområder|all research (areas|fields)|"
+                        r"all (academic )?(fields|disciplines)|uavhengig av fag", re.I)
+
 CHANGE_KEYS = ["status", "deadline", "preliminary_deadline", "full_proposal_deadline", "opening_date",
                "min_amount", "max_amount", "total_budget", "target_groups", "updated"]
 
@@ -117,8 +121,11 @@ def deadline_kind(label: str) -> str | None:
 
 
 def status_of(listing: dict, meta: dict) -> str:
+    """Closed only when RCN lists the call as completed. In the current list
+    "Se Resultat" means results of earlier rounds are out (e.g. rolling FRIPRO
+    calls), not that the call has closed."""
     s = listing["status"].lower()
-    if listing["timeframe"] == "completed" or "gjennomført" in s or "resultat" in s:
+    if listing["timeframe"] == "completed" or "gjennomført" in s:
         return "closed"
     if "planlagt" in s or "kommer" in listing["date"].lower():
         return "planned"
@@ -155,15 +162,25 @@ def uis_can_apply(groups: str | None, applicants: list[dict]) -> tuple[bool | No
     must be registered in the Register of Business Enterprises" -> no, even if
     research organisations are a target group as partners). Otherwise the target
     groups decide, with lower confidence."""
-    text = "\n".join(s["text"] for s in applicants).lower()
-    if text:
-        if re.search(r"forskningsorganisasjon|research organisation|universitet|universit(y|ies)", text):
-            return True, text[:400], "medium"
-        if re.search(r"foretaksregister|enhetsregister|register of business|bedrift|company|companies|"
-                     r"kommune|municipalit|offentlig virksomhet|public (sector )?(entity|enterprise)", text):
-            return False, text[:400], "medium"
+    # RCN's own target groups decide when research organisations are not among them.
+    if groups and not re.search(r"forskningsorganisasjon", groups, re.I):
+        return False, groups, "medium"
+    # Otherwise only sentences about who can apply / be project owner count; the
+    # requirement text also mentions research organisations as partners.
+    text = "\n".join(s["text"] for s in applicants)
+    owner = [x for x in re.split(r"(?<=[.!?])\s+|\n", text)
+             if re.search(r"prosjektansvarlig|project owner|kan søke|may apply|can apply|eligible to apply|søker må", x, re.I)]
+    # A sentence naming research organisations as possible applicants wins, even when
+    # it also names companies or municipalities ("either a research organisation or …").
+    for sentence in owner:
+        if re.search(r"forskningsorganisasjon|research organisation|universitet|universit(y|ies)", sentence, re.I):
+            return True, sentence.strip()[:400], "medium"
+    for sentence in owner:
+        if re.search(r"foretaksregister|enhetsregister|register of business|må være en bedrift|must be a (private )?company|"
+                     r"offentlig virksomhet|public (sector )?(entity|enterprise)|kommune|municipalit", sentence, re.I):
+            return False, sentence.strip()[:400], "medium"
     if groups:
-        return bool(re.search(r"forskningsorganisasjon", groups, re.I)), groups, "low"
+        return True, groups, "low"
     return None, None, "low"
 
 
@@ -231,7 +248,7 @@ def build_call(raw: dict) -> dict:
                          m="section")
     f["description"] = desc
     status = status_of(listing, meta_nb)
-    f["status"] = field(status, "explicit", "call list status", config.RCN_LIST_URL.format(timeframe=0),
+    f["status"] = field(status, "explicit", "call list status", config.RCN_LISTS[0][0],
                         listing["status"])
 
     deadlines: dict[str, list] = {}
@@ -303,6 +320,14 @@ def build_call(raw: dict) -> dict:
     orient = next((o for pat, o in ORIENTATION if re.search(pat, basis)), None)
     f["orientation"] = (field(orient, "inferred", "funding scheme", url_nb, scheme or listing["group"],
                               "medium", "rule") if orient else missing())
+    open_hit = next(((s, m) for s in [{"path": ["introduction"], "text": pre_nb}, {"path": ["introduction"], "text": pre_en}]
+                     + sec_nb + sec_en if (m := OPEN_FIELD.search(s["text"] or ""))), None)
+    if open_hit:
+        s, m = open_hit
+        sentence = next((x for x in re.split(r"(?<=[.!?])\s+|\n", s["text"]) if OPEN_FIELD.search(x)), m.group(0))
+        f["open_field"] = field(True, "explicit", " > ".join(s["path"]), url_nb, sentence.strip()[:300], "high", "section")
+    else:
+        f["open_field"] = missing()
     trl = sorted({int(n) for s in sec_nb + sec_en for n in re.findall(r"\bTRL\s*-?\s*(\d)", s["text"])})
     f["trl"] = (field(f"TRL {trl[0]}–{trl[-1]}" if len(trl) > 1 else f"TRL {trl[0]}", "explicit",
                       "call text", url_nb, None, "medium", "section") if trl else missing())

@@ -1,7 +1,7 @@
 import type { ComponentChildren } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import type { Atlas } from "../data";
-import { callTitle, isStale, pick, useFunding, type Call, type Field, type Funding, type Match } from "../funding";
+import { callTitle, isStale, pick, useFunding, type Call, type Eligibility, type Field, type Funding, type Match } from "../funding";
 import { useI18n } from "../i18n";
 import { links } from "../router";
 import { DeptLabel, Position, doiUrl } from "./common";
@@ -221,9 +221,8 @@ export function CategoryBadge({ m }: { m: Match }) {
   );
 }
 
-export function EligibilityBadge({ m }: { m: Match }) {
+export function EligibilityBadge({ e }: { e: Eligibility }) {
   const { t } = useI18n();
-  const e = m.eligibility;
   return (
     <div class="elig">
       <span class={`elig-badge ${e.status}`}>{t(`f.elig.${e.status}`)}</span>
@@ -279,7 +278,7 @@ export function MatchDetails({ atlas, call, m, who = false }: { atlas: Atlas; ca
         </div>
       )}
       <p class="small"><strong>{t("f.role")}:</strong> {t(`f.role.${m.role}`)}</p>
-      <EligibilityBadge m={m} />
+      <EligibilityBadge e={m.eligibility} />
       {m.collaborators.length > 0 && (
         <div class="collabs">
           <h4>{t("f.collabs")}</h4>

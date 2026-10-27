@@ -116,19 +116,21 @@ def _split_headings(path: list[str], fragment: str) -> list[dict]:
 def sections(props: dict) -> list[dict]:
     """Flatten the call text into [{"path": [section, subsection, ...], "text", "links"}].
 
-    Two page layouts exist: structured calls ("TibiProposalPage": tabs with
-    sections and subsections) and simpler pages, mostly international joint
-    calls ("ProposalPage": one description with headings inside)."""
+    Page layouts seen: tabs whose content is "tibi" (sectionTitle / sectionText /
+    subSections) or "evurdering" (title / ingress / texts) – the latter is used by
+    most calls, FRIPRO included – and a "descriptionText" with headings inside.
+    Tabs with application results ("Søknadsresultater") are not call text."""
     out = []
     for tab in props.get("tabs", {}).get("items", []):
-        content = tab.get("content") or {}
-        for key in ("tibi", "proposal"):
-            if key not in content:
+        if re.search(r"resultat|result", tab.get("name") or "", re.I):
+            continue
+        for content in (tab.get("content") or {}).values():
+            if not isinstance(content, dict):
                 continue
-            for sec in content[key].get("contentSections", []):
-                title = clean(sec.get("sectionTitle"))
-                out += _split_headings([title], blocks_html(sec.get("sectionText")))
-                for sub in sec.get("subSections", []):
+            for sec in content.get("contentSections", []):
+                title = clean(sec.get("sectionTitle") or sec.get("title"))
+                out += _split_headings([title], blocks_html(sec.get("sectionText") or sec.get("ingress")))
+                for sub in sec.get("subSections") or sec.get("texts") or []:
                     out += _split_headings([title, clean(sub.get("title")) or title], blocks_html(sub.get("text")))
     if "descriptionText" in props:
         title = clean(props.get("descriptionTitle")) or "Description"

@@ -580,3 +580,7 @@ details.table-view summary { cursor: pointer; color: var(--accent); width: fit-c
 .freshness { margin-top: 40px; padding-top: 12px; border-top: 1px solid var(--grid); }
 .funding-profile .call-card { padding: 14px 0; }
 .funding-profile .call-card h3 { font-size: 17px; }
+.open-field { margin-top: 20px; }
+.open-field-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.open-field-list li { padding: 8px 0; border-bottom: 1px solid var(--grid); }
+.open-field-list .elig { margin-top: 4px; }

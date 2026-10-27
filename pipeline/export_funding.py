@@ -97,6 +97,10 @@ def main() -> None:
         m = matches_doc["calls"].get(c["id"])
         if m:
             out["aspects"], out["aspect_basis"], out["title_terms"] = m["aspects"], m["aspect_basis"], m["title_terms"]
+            if "open_eligibility" in m:  # open-field calls: offered to every researcher
+                out["open_eligibility"] = {k: v for k, v in m["open_eligibility"].items()
+                                           if k in public_ids and k not in excluded}
+                out["eligibility_evidence"] = m["eligibility_evidence"]
         out["history"] = history.get(c["id"], [])[-HISTORY_PER_CALL:]
         calls.append(out)
 

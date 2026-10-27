@@ -248,8 +248,14 @@ def is_active_paper(paper: dict) -> bool:
 # Public call pages, collected politely by collect_rcn.py (robots.txt allows
 # /utlysninger/; */Download is disallowed, so call PDFs are never fetched).
 RAW_RCN = DATA / "raw" / "rcn"          # local cache of the call pages
-RCN_LIST_URL = "https://www.forskningsradet.no/utlysninger/?timeframe={timeframe}"
-RCN_TIMEFRAMES = {0: "current", 1: "completed"}   # "Aktuelle" and "Gjennomførte"
+# Call lists read on every run (project owner, 2026-10-27): RCN's current calls in
+# Norwegian and English (the Norwegian list comes first, so its entry is kept when a
+# call is on both), plus the completed list for history and change tracking.
+RCN_LISTS = [
+    ("https://www.forskningsradet.no/utlysninger/", "current"),
+    ("https://www.forskningsradet.no/en/call-for-proposals/", "current"),
+    ("https://www.forskningsradet.no/utlysninger/?timeframe=1", "completed"),
+]
 RCN_SLEEP = 1.0                                   # seconds between requests
 USER_AGENT = "UiS-Researcher-Atlas/0.1 (+https://www.uis.no; research intelligence, weekly)"
 

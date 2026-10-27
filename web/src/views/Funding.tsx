@@ -1,11 +1,13 @@
 import { useMemo } from "preact/hooks";
 import type { Atlas } from "../data";
-import { callTitle, nextDeadline, pick, type Call, type Funding } from "../funding";
+import type { Researcher } from "../data";
+import { callTitle, nextDeadline, openFieldCallsFor, pick, type Call, type Eligibility, type Funding, type Match } from "../funding";
 import { useI18n } from "../i18n";
 import { links, replaceHash, type Route } from "../router";
-import { FundingGate, Freshness, StatusBadge, useFmt } from "../components/funding";
+import { CategoryBadge, EligibilityBadge, FundingGate, Freshness, StatusBadge, useFmt } from "../components/funding";
 
 const AMOUNTS = [1e6, 5e6, 10e6, 25e6];
+const ELIG_RANK = { no_restriction_found: 0, check: 1, partner_only: 2, likely_ineligible: 3 };
 const SORTS = ["deadline", "amount", "published", "relevance"] as const;
 
 export function FundingView({ atlas, route }: { atlas: Atlas; route: Route }) {
@@ -16,17 +18,35 @@ function FundingList({ atlas, data, route }: { atlas: Atlas; data: Funding; rout
   const { t, lang, num } = useI18n();
   const fmt = useFmt();
   const p = route.params;
-  const set = (key: string, value: string) => {
+  const setMany = (values: Record<string, string>) => {
     const next = new URLSearchParams(p);
-    if (value) next.set(key, value); else next.delete(key);
+    for (const [key, value] of Object.entries(values)) {
+      if (value) next.set(key, value); else next.delete(key);
+    }
     replaceHash("/funding", next);
     dispatchEvent(new HashChangeEvent("hashchange"));
   };
+  const set = (key: string, value: string) => setMany({ [key]: value });
   const status = p.get("st") ?? "current";
-  const sort = (p.get("sort") ?? "deadline") as typeof SORTS[number];
   const q = (p.get("q") ?? "").toLowerCase();
 
+  // A researcher chosen in the search box (?who=): their matched calls plus every
+  // call open to all fields, with their eligibility.
+  const byName = useMemo(() => new Map(atlas.researchers.map((r) => [r.name.toLowerCase(), r.scopus_id])), [atlas]);
+  const person = p.get("who") ? atlas.byId.get(p.get("who")!) ?? null : null;
+  const personMatches = useMemo(() => new Map((person ? data.byResearcher.get(person.scopus_id) ?? [] : [])
+    .map(({ call, match }) => [call.id, match])), [data, person]);
+  const personOpen = useMemo(() => new Map((person ? openFieldCallsFor(data, person.scopus_id) : [])
+    .map(({ call, eligibility }) => [call.id, eligibility])), [data, person]);
+  const sort = (p.get("sort") ?? (person ? "relevance" : "deadline")) as typeof SORTS[number];
+  const onSearch = (value: string) => {
+    const id = byName.get(value.trim().toLowerCase());
+    setMany(id ? { who: id, q: "" } : { q: value });
+  };
+
   const strong = (c: Call) => (data.matches[c.id] ?? []).filter((m) => m.category !== "low");
+  const personRank = (c: Call) => personMatches.has(c.id) ? 10 + personMatches.get(c.id)!.score
+    : personOpen.has(c.id) ? 5 - ELIG_RANK[personOpen.get(c.id)!.status] : 0;
   const optionsOf = (get: (c: Call) => string[]) =>
     [...new Set(data.calls.flatMap(get))].filter(Boolean).sort((a, b) => a.localeCompare(b, lang));
   const schemes = useMemo(() => optionsOf((c) => [pick<string>(c.fields.scheme.v, lang).value ?? ""]), [data, lang]);
@@ -49,12 +69,14 @@ function FundingList({ atlas, data, route }: { atlas: Atlas; data: Funding; rout
       if (!d || d.slice(0, 10) > p.get("before")!) return false;
     }
     if (p.get("mt") && !strong(c).length) return false;
+    if (person && !personMatches.has(c.id) && !personOpen.has(c.id)) return false;
     return true;
   });
   const far = "9999";
   shown.sort((a, b) => {
     if (sort === "amount") return (b.fields.max_amount.v ?? 0) - (a.fields.max_amount.v ?? 0);
     if (sort === "published") return (b.fields.published.v ?? "").localeCompare(a.fields.published.v ?? "");
+    if (sort === "relevance" && person) return personRank(b) - personRank(a);
     if (sort === "relevance") return strong(b).length - strong(a).length
       || (data.matches[b.id]?.[0]?.score ?? 0) - (data.matches[a.id]?.[0]?.score ?? 0);
     return (nextDeadline(a) ?? (a.fields.rolling.v ? "9000" : far)).localeCompare(nextDeadline(b) ?? (b.fields.rolling.v ? "9000" : far));
@@ -80,7 +102,11 @@ function FundingList({ atlas, data, route }: { atlas: Atlas; data: Funding; rout
       <div class="filters funding-filters" role="search">
         <label class="field grow">
           <span>{t("f.search")}</span>
-          <input type="search" value={p.get("q") ?? ""} onInput={(e) => set("q", (e.target as HTMLInputElement).value)} />
+          <input type="search" list="funding-people" value={p.get("q") ?? ""} placeholder={t("f.searchPlaceholder")}
+            onInput={(e) => onSearch((e.target as HTMLInputElement).value)} />
+          <datalist id="funding-people">
+            {atlas.researchers.map((r) => <option key={r.scopus_id} value={r.name} />)}
+          </datalist>
         </label>
         <label class="field">
           <span>{t("f.status")}</span>
@@ -105,6 +131,14 @@ function FundingList({ atlas, data, route }: { atlas: Atlas; data: Funding; rout
         </label>
       </div>
 
+      {person && (
+        <div class="notice">
+          <span>{t("f.forResearcher", { name: person.name })}</span>
+          <a href={links.profile(person.scopus_id)}>{t("r.profile")}</a>
+          <button type="button" class="btn" onClick={() => setMany({ who: "", sort: "" })}>{t("f.clearResearcher")}</button>
+        </div>
+      )}
+
       <div class="results-head">
         <p class="muted" role="status">{t("f.count", { n: num(shown.length) })}</p>
         <label class="field inline">
@@ -119,7 +153,8 @@ function FundingList({ atlas, data, route }: { atlas: Atlas; data: Funding; rout
         <p class="muted">{t("f.none")} <a href={links.funding()}>{t("f.reset")}</a></p>
       ) : (
         <ul class="call-list">
-          {shown.map((c) => <CallCard key={c.id} atlas={atlas} data={data} call={c} />)}
+          {shown.map((c) => <CallCard key={c.id} atlas={atlas} data={data} call={c}
+            person={person ? { r: person, match: personMatches.get(c.id), eligibility: personOpen.get(c.id) } : undefined} />)}
         </ul>
       )}
       <Freshness data={data} />
@@ -127,7 +162,30 @@ function FundingList({ atlas, data, route }: { atlas: Atlas; data: Funding; rout
   );
 }
 
-function CallCard({ atlas, data, call }: { atlas: Atlas; data: Funding; call: Call }) {
+/** What one researcher has to do with a call: a topic match, or an open-field call with eligibility. */
+function PersonFit({ person }: { person: { r: Researcher; match?: Match; eligibility?: Eligibility } }) {
+  const { t } = useI18n();
+  const atlasPaper = person.match?.papers[0];
+  return (
+    <div class="call-matches">
+      {person.match ? (
+        <>
+          <p><CategoryBadge m={person.match} /> <span class="small">{t("f.matchFor", { name: person.r.name })}</span></p>
+          {atlasPaper && atlasPaper.terms.length > 0 && <p class="small muted">{atlasPaper.terms.join(", ")}</p>}
+          <EligibilityBadge e={person.match.eligibility} />
+        </>
+      ) : person.eligibility ? (
+        <>
+          <p class="small"><strong>{t("f.openFieldShort")}</strong></p>
+          <EligibilityBadge e={person.eligibility} />
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function CallCard({ atlas, data, call, person }: { atlas: Atlas; data: Funding; call: Call;
+  person?: { r: Researcher; match?: Match; eligibility?: Eligibility } }) {
   const { t, lang, num } = useI18n();
   const fmt = useFmt();
   const f = call.fields;
@@ -161,7 +219,8 @@ function CallCard({ atlas, data, call }: { atlas: Atlas; data: Funding; call: Ca
         </dl>
         {themes.length > 0 && <div class="tags">{themes.map((x) => <span class="tag static" key={x}>{x}</span>)}</div>}
       </div>
-      {status !== "closed" && (
+      {person && <PersonFit person={person} />}
+      {!person && status !== "closed" && (
         <div class="call-matches">
           {high + medium > 0 ? (
             <>
@@ -174,7 +233,7 @@ function CallCard({ atlas, data, call }: { atlas: Atlas; data: Funding; call: Ca
                 })}
               </ul>
             </>
-          ) : <p class="muted small">{t("f.matchesNone")}</p>}
+          ) : <p class="muted small">{t(f.open_field?.v ? "f.openFieldShort" : "f.matchesNone")}</p>}
         </div>
       )}
     </li>
