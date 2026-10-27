@@ -2,9 +2,10 @@
 """
 Stage 1c – Collect funding calls from the Research Council of Norway (any network).
 
-Input:  www.forskningsradet.no/utlysninger/ (current and completed calls)
+Input:  the call lists in config.RCN_LISTS: current calls in Norwegian
+        (/utlysninger/) and English (/en/call-for-proposals/), plus completed calls
 Output: config.RAW_RCN/
-          list_<timeframe>.json   the call lists as published
+          list_<n>.json           the call lists as published (n = position in RCN_LISTS)
           calls/<id>.json         one file per call: listing entry + Norwegian and
                                   English page data, with fetch time
           sync_status.json        last attempt, last success, errors
@@ -63,7 +64,7 @@ def now() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
 
-def list_entries(props: dict, timeframe: int) -> list[dict]:
+def list_entries(props: dict, timeframe: str) -> list[dict]:
     out = []
     for group in props.get("groups", []):
         for p in group.get("proposals", []):
@@ -75,7 +76,7 @@ def list_entries(props: dict, timeframe: int) -> list[dict]:
                              for m in (p.get("metadata") or {}).get("items", [])},
                 "tags": (p.get("tags") or {}).get("list", []),
                 "text": rcn.clean(p.get("text")), "international": bool(p.get("isInternational")),
-                "timeframe": config.RCN_TIMEFRAMES[timeframe],
+                "timeframe": timeframe,
             })
     return out
 
@@ -91,20 +92,23 @@ def main() -> None:
     fetch = Fetcher()
 
     entries: dict[str, dict] = {}
-    for tf in config.RCN_TIMEFRAMES:
-        url = config.RCN_LIST_URL.format(timeframe=tf)
+    for n, (url, timeframe) in enumerate(config.RCN_LISTS):
         try:
             props = rcn.react_props(fetch.get(url), "ProposalListPage")
             if not props:
                 raise RuntimeError("call list format not recognised")
         except Exception as e:  # keep the last good data, record the problem
             status["errors"].append({"url": url, "error": str(e)})
-            print(f"List {tf}: {e}")
+            print(f"List {url}: {e}")
             continue
-        (config.RAW_RCN / f"list_{tf}.json").write_text(
-            json.dumps({"fetched": now(), "props": props}, ensure_ascii=False), encoding="utf-8")
-        for e in list_entries(props, tf):
-            entries.setdefault(e["id"], e)  # a call in both lists counts as current
+        (config.RAW_RCN / f"list_{n}.json").write_text(
+            json.dumps({"fetched": now(), "url": url, "props": props}, ensure_ascii=False), encoding="utf-8")
+        found = list_entries(props, timeframe)
+        print(f"List {url}: {len(found)} calls")
+        # First list wins: a call on the Norwegian and the English list keeps its
+        # Norwegian entry; a call on a current and the completed list counts as current.
+        for e in found:
+            entries.setdefault(e["id"], e)
     print(f"Lists: {len(entries)} calls")
 
     fetched = kept = 0

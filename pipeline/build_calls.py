@@ -238,7 +238,7 @@ def build_call(raw: dict) -> dict:
                          m="section")
     f["description"] = desc
     status = status_of(listing, meta_nb)
-    f["status"] = field(status, "explicit", "call list status", config.RCN_LIST_URL.format(timeframe=0),
+    f["status"] = field(status, "explicit", "call list status", config.RCN_LISTS[0][0],
                         listing["status"])
 
     deadlines: dict[str, list] = {}
