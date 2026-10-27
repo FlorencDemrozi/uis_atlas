@@ -1,0 +1,4 @@
+{
+  "_comment": "Manual corrections to extracted funding call fields (pipeline/build_calls.py). Keyed by call id, e.g. \"rcn-105571\": {\"fields\": {\"deadline\": {\"v\": \"2026-11-12T13:00\", \"note\": \"RCN page says ...\", \"url\": \"https://...\"}}}. Set \"exclude\": true to hide a call. Manual values are never overwritten.",
+  "calls": {}
+}
