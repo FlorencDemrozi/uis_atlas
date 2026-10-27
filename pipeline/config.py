@@ -230,3 +230,51 @@ UNCONFIRMED_MIN_RECENT_PUBLICATIONS = 3
 # ---- UiS employee directory ---------------------------------------------
 DIRECTORY_URL = "https://www.uis.no/{lang}/{path}"   # path: "sok/ansatte" (nb), "search/employees" (en)
 DIRECTORY_SLEEP = 1.0                               # seconds between requests: be polite
+
+# ---- Recent work (project owner, 2026-10-26) -----------------------------
+# Summaries, embeddings and funding matches use only papers from the last
+# ACTIVE_YEARS calendar years (in-press papers count too). Researchers without
+# such papers get no summary, vector or funding match.
+ACTIVE_YEARS = 5
+ACTIVE_FROM = REFERENCE_YEAR - ACTIVE_YEARS + 1
+
+
+def is_active_paper(paper: dict) -> bool:
+    year = str(paper.get("year") or "")
+    return year.isdigit() and int(year) >= ACTIVE_FROM
+
+
+# ---- Funding calls (Research Council of Norway) --------------------------
+# Public call pages, collected politely by collect_rcn.py (robots.txt allows
+# /utlysninger/; */Download is disallowed, so call PDFs are never fetched).
+RAW_RCN = DATA / "raw" / "rcn"          # local cache of the call pages
+RCN_LIST_URL = "https://www.forskningsradet.no/utlysninger/?timeframe={timeframe}"
+RCN_TIMEFRAMES = {0: "current", 1: "completed"}   # "Aktuelle" and "Gjennomførte"
+RCN_SLEEP = 1.0                                   # seconds between requests
+USER_AGENT = "UiS-Researcher-Atlas/0.1 (+https://www.uis.no; research intelligence, weekly)"
+
+CALLS = INTERIM / "calls.json"                    # structured calls (build_calls.py)
+CALLS_HISTORY = INTERIM / "calls_history.json"    # detected changes per call
+CALL_PROFILES = INTERIM / "call_profiles.json"    # AI call profiles (profile_calls.py)
+FUNDING_MATCHES = INTERIM / "funding_matches.json"
+FUNDING_OVERRIDES = CONFIG_DIR / "funding_overrides.json"
+
+# Researcher–call matching (match_funding.py). Initial values, not validated
+# probabilities: the score ranks researchers for one call and is never a chance
+# of being funded. Project experience is not scored yet (no project data).
+FUNDING_MATCH = {
+    "algorithm": "funding-match-1",
+    "weights": {"scope": 0.5, "coverage": 0.3, "evidence": 0.2},
+    "recency_half_life_years": 3,   # a paper from 3 years ago counts half
+    "similarity": (0.80, 0.86),     # cosine similarity (multilingual-e5-small) mapped to
+                                    # relevance: 0.80 or less -> 0, 0.86 or more -> 1.
+                                    # Absolute, so a call nobody fits gets no High match.
+    "keyword_weight": 0.2,          # share of paper relevance from distinctive title words
+    "keyword_max_share": 0.01,      # a title word in more than 1% of UiS papers is not distinctive
+    "relevant_paper": 0.5,          # relevance at which a paper counts as evidence
+    "categories": {"high": 0.6, "medium": 0.35},
+    "min_score": 0.25,
+    "max_matches_per_call": 30,
+    "collaborators_per_match": 3,
+    "max_aspects": 15,
+}
