@@ -153,6 +153,14 @@ def test_commercialisation_call_rolling_and_uis_only_partner():
     assert f["uis_can_apply"]["v"] is False  # project owner must be a company
 
 
+def test_open_field_call_is_recognised_from_its_text():
+    page = tibi_page("Forskerprosjekt for erfarne forskere (FRIPRO)", {"Målgrupper": "Forskningsorganisasjon"}, {}, [
+        ("Om utlysningen", [("Formål", "<p>Utlysningen er åpen for søknader innenfor alle fag- og forskningsområder.</p>")])])
+    f = build_calls.build_call(raw_call("7", page))["fields"]
+    assert f["open_field"]["v"] is True and "alle fag" in f["open_field"]["ev"]
+    assert build_calls.build_call(raw_call("2", COMMERCIAL))["fields"]["open_field"]["s"] == "not_specified"
+
+
 def test_international_call_flag():
     f = build_calls.build_call(raw_call("3", FUNDAMENTAL, international=True))["fields"]
     assert f["international"]["v"] is True and f["international"]["s"] == "explicit"
@@ -160,7 +168,8 @@ def test_international_call_flag():
 
 @pytest.mark.parametrize("status,timeframe,date,expected", [
     ("Søk nå", "current", "27. mai", "open"), ("Planlagt", "current", "Kommer", "planned"),
-    ("Se Resultat", "current", "Løpende", "closed"), ("Gjennomført", "completed", "1. mars", "closed"),
+    ("Se Resultat", "current", "Løpende", "open"),  # rolling FRIPRO: results of earlier rounds published
+    ("Se Resultat", "completed", "Løpende", "closed"), ("Gjennomført", "completed", "1. mars", "closed"),
 ])
 def test_status_mapping(status, timeframe, date, expected):
     listing = {"status": status, "timeframe": timeframe, "date": date}

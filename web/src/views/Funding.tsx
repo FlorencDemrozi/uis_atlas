@@ -174,7 +174,7 @@ function CallCard({ atlas, data, call }: { atlas: Atlas; data: Funding; call: Ca
                 })}
               </ul>
             </>
-          ) : <p class="muted small">{t("f.matchesNone")}</p>}
+          ) : <p class="muted small">{t(f.open_field?.v ? "f.openFieldShort" : "f.matchesNone")}</p>}
         </div>
       )}
     </li>

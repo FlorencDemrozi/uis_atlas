@@ -418,5 +418,8 @@
   "fld.documents": "Documents and links in the call",
   "fld.themes": "Thematic areas",
   "f.monthsExact": "{b} months",
-  "f.secondary": "secondary"
+  "f.secondary": "secondary",
+  "f.openField": "This call is open to all research fields, so researchers are not matched on topic. Any UiS researcher who meets the requirements can apply. The call says:",
+  "f.openFieldShort": "Open to all research fields",
+  "fld.open_field": "Open to all research fields"
 }

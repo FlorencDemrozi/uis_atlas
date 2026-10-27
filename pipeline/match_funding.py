@@ -235,6 +235,11 @@ def main() -> None:
     out_calls = {}
     active = [c for c in calls["calls"] if c["fields"]["status"]["v"] != "closed"]
     for call in active:
+        if call["fields"].get("open_field", {}).get("v"):
+            # Open to all fields (e.g. FRIPRO): no topic to match on; the site says so.
+            out_calls[call["id"]] = {"aspects": [], "aspect_basis": "open_field", "title_terms": [], "matches": []}
+            print(f"  {call['id']}: open to all fields – not matched")
+            continue
         profile = call_profiles.get(call["id"])
         scope, aspects = call_aspects(call, profile)
         queries = [scope] + [a["text"] for a in aspects]

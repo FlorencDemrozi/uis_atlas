@@ -418,5 +418,8 @@
   "fld.documents": "Dokumenter og lenker i utlysningen",
   "fld.themes": "Temaområder",
   "f.monthsExact": "{b} måneder",
-  "f.secondary": "sekundær"
+  "f.secondary": "sekundær",
+  "f.openField": "Utlysningen er åpen for alle fagområder, så forskere kobles ikke på tema. Alle UiS-forskere som oppfyller kravene, kan søke. Utlysningen sier:",
+  "f.openFieldShort": "Åpen for alle fagområder",
+  "fld.open_field": "Åpen for alle fagområder"
 }

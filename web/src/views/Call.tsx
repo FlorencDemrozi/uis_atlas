@@ -12,7 +12,7 @@ const GROUPS: [string, string[]][] = [
   ["financial", ["min_amount", "max_amount", "total_budget", "currency", "funding_rate", "eligible_costs",
     "funding_restrictions", "cofunding"]],
   ["project", ["min_duration_months", "max_duration_months", "earliest_start", "latest_start", "latest_end",
-    "orientation", "trl", "structural_requirements", "deliverables", "expected_impact"]],
+    "orientation", "open_field", "trl", "structural_requirements", "deliverables", "expected_impact"]],
   ["eligibility", ["target_groups", "uis_can_apply", "eligible_applicants", "pi_requirements", "career_stage",
     "nationality_residency", "partner_requirements", "international", "international_rules", "consortium_size",
     "mandatory_partners", "industry_public_participation", "application_limits", "subcontracting", "mobility"]],
@@ -207,7 +207,9 @@ function ResearchersSection({ atlas, data, call, matches }:
   return (
     <section class="section" id="sec-researchers" aria-labelledby="h-researchers">
       <h2 id="h-researchers">{t("f.sec.researchers")}</h2>
-      {closed ? <p class="muted">{t("f.closedNoMatch")}</p> : matches.length === 0 ? <p class="muted">{t("f.noMatches")}</p> : (
+      {closed ? <p class="muted">{t("f.closedNoMatch")}</p>
+        : call.fields.open_field?.v ? <p class="muted">{t("f.openField")}{call.fields.open_field.ev && <> <q>{call.fields.open_field.ev}</q></>}</p>
+        : matches.length === 0 ? <p class="muted">{t("f.noMatches")}</p> : (
         <>
           <p class="sub">{t("f.matchLede", { y: String(data.meta.papers_from_year) })}</p>
           <ol class="match-list">

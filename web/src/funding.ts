@@ -47,7 +47,7 @@ export interface Call {
   history: Change[];
   profile?: CallProfile;
   aspects?: Aspect[];
-  aspect_basis?: "ai_profile" | "call_text";
+  aspect_basis?: "ai_profile" | "call_text" | "open_field";
   title_terms?: string[];
 }
 
