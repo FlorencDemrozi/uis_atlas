@@ -280,6 +280,23 @@ def test_unverifiable_ai_facts_are_dropped_or_downgraded():
     assert out["fields"]["cofunding"]["status"] == "not_specified"  # invented quote -> not stored
 
 
+def test_ai_answer_is_normalised_to_allowed_values_and_known_fields():
+    out = profile_calls.normalise({
+        "disciplines": [{"path": ["A"], "level": "main"}],
+        "topics": [{"path": ["A"], "basis": "maybe", "evidence": ""}],
+        "competencies": [{"name": "x", "kind": "essential", "rationale": "", "evidence": ""}],
+        "fields": [{"key": "cofunding", "value": "50 %", "status": "explicit", "evidence": "q"},
+                   {"key": "cofunding", "value": "other", "status": "explicit", "evidence": "q"},
+                   {"key": "deadline", "value": "2030-01-01", "status": "explicit", "evidence": "q"}],
+    })
+    assert out["disciplines"][0]["level"] == "secondary" and out["topics"][0]["basis"] == "interpretation"
+    assert out["competencies"][0]["kind"] == "optional"
+    assert out["fields"]["cofunding"]["value"] == "50 %"           # first answer kept
+    assert "deadline" not in out["fields"]                          # not an AI field: ignored
+    assert set(out["fields"]) == set(profile_calls.AI_FIELDS)
+    assert profile_calls.schema()["properties"]["fields"]["type"] == "array"  # small grammar
+
+
 def test_ai_values_never_overwrite_stated_values():
     call = {"fields": {"deadline": build_calls.field("2026-05-27"),
                        "cofunding": build_calls.missing(),

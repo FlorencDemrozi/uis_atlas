@@ -26,7 +26,7 @@ import config
 import llm
 from build_calls import AI_ONLY_FIELDS
 
-PROMPT_VERSION = 1
+PROMPT_VERSION = 2
 
 # Text fields the model may also condense (next to the official passage).
 CONDENSE_FIELDS = ["funding_rate", "eligible_costs", "funding_restrictions", "eligible_applicants",
@@ -60,24 +60,46 @@ LIST = {"type": "array", "items": STR}
 
 
 def schema() -> dict:
+    """Kept small on purpose: the API rejects output schemas whose grammar gets too
+    large (one property per field plus enums was too much). Allowed values are
+    given in the prompt and enforced by normalise()."""
     obj = lambda props: {"type": "object", "properties": props, "required": list(props),
                          "additionalProperties": False}
-    field = obj({"value": STR, "status": {"type": "string", "enum": ["explicit", "inferred", "not_specified"]},
-                 "evidence": STR})
     return obj({
-        "disciplines": {"type": "array", "items": obj({
-            "path": LIST, "level": {"type": "string", "enum": ["primary", "secondary"]}})},
-        "topics": {"type": "array", "items": obj({
-            "path": LIST, "basis": {"type": "string", "enum": ["explicit", "interpretation"]}, "evidence": STR})},
+        "disciplines": {"type": "array", "items": obj({"path": LIST, "level": STR})},
+        "topics": {"type": "array", "items": obj({"path": LIST, "basis": STR, "evidence": STR})},
         "objectives": LIST, "challenges": LIST, "methods": LIST, "technologies": LIST,
         "application_domains": LIST, "expected_contributions": LIST, "interdisciplinary": LIST,
-        "competencies": {"type": "array", "items": obj({
-            "name": STR, "kind": {"type": "string", "enum": KINDS}, "rationale": STR, "evidence": STR})},
-        "interpretation": obj({
-            "problems": STR, "suitable_projects": STR, "competitive_teams": STR,
-            "explicit_directions": LIST, "plausible_directions": LIST}),
-        "fields": obj({k: field for k in AI_FIELDS}),
+        "competencies": {"type": "array", "items": obj({"name": STR, "kind": STR, "rationale": STR, "evidence": STR})},
+        "interpretation": obj({"problems": STR, "suitable_projects": STR, "competitive_teams": STR,
+                               "explicit_directions": LIST, "plausible_directions": LIST}),
+        "fields": {"type": "array", "items": obj({"key": STR, "value": STR, "status": STR, "evidence": STR})},
     })
+
+
+FORMAT = f"""
+Allowed values: disciplines[].level: "primary" or "secondary"; topics[].basis: \
+"explicit" or "interpretation"; competencies[].kind: {", ".join(f'"{k}"' for k in KINDS)}; \
+fields[].status: "explicit", "inferred" or "not_specified".
+"fields" lists only these keys, each at most once (leave out keys the call does not \
+address): {", ".join(AI_FIELDS)}."""
+
+
+def normalise(out: dict) -> dict:
+    """Enforce the allowed values and turn the field list into {key: field}."""
+    pick = lambda v, allowed, default: v if v in allowed else default
+    for d in out["disciplines"]:
+        d["level"] = pick(d["level"], ("primary", "secondary"), "secondary")
+    for t in out["topics"]:
+        t["basis"] = pick(t["basis"], ("explicit", "interpretation"), "interpretation")
+    out["competencies"] = [dict(c, kind=pick(c["kind"], KINDS, "optional")) for c in out["competencies"]]
+    fields = {k: {"value": "", "status": "not_specified", "evidence": ""} for k in AI_FIELDS}
+    for f in out["fields"]:
+        if f["key"] in fields and fields[f["key"]]["status"] == "not_specified":
+            status = pick(f["status"], ("explicit", "inferred", "not_specified"), "not_specified")
+            fields[f["key"]] = {"value": f["value"], "status": status, "evidence": f["evidence"]}
+    out["fields"] = fields
+    return out
 
 
 def call_text(call: dict) -> str:
@@ -137,7 +159,9 @@ def main() -> None:
         h = hashlib.sha256(f"{config.SUMMARY_MODEL}|{PROMPT_VERSION}|{text}".encode()).hexdigest()
         if cache.get(call["id"], {}).get("source_hash") == h:
             continue
-        out = llm.ask_json(cl, SYSTEM, text, schema(), effort="medium", max_tokens=16000)
+        out = llm.ask_json(cl, SYSTEM + FORMAT, text, schema(), effort="medium", max_tokens=16000)
+        if out:
+            out = normalise(out)
         if not out:
             print(f"  [{i}/{len(todo)}] {call['id']}: no usable answer (kept previous profile, if any)")
             continue
