@@ -127,24 +127,52 @@ def sentence_with(text: str, pattern: str) -> str | None:
 def eligibility(call: dict, r: dict) -> dict:
     """{"status", "reason", "evidence"} from conditions stated in the call text."""
     f = call["fields"]
-    text = "\n".join(filter(None, [lang_text(f["title"]["v"], "nb"), lang_text(f["title"]["v"], "en")]
-                         + [lang_text(f[k]["v"], lang) for k in ("pi_requirements", "eligible_applicants",
-                                                                  "description", "summary")
-                            for lang in ("nb", "en")]))
+    # The project-manager requirements come first, so the quoted evidence is the rule itself.
+    text = "\n".join(filter(None, [lang_text(f[k]["v"], lang) for k in ("pi_requirements", "eligible_applicants",
+                                                                       "description", "summary")
+                                   for lang in ("nb", "en")]
+                         + [lang_text(f["title"]["v"], "nb"), lang_text(f["title"]["v"], "en")]))
     kind = position_kind(r)
+    # Career age is estimated from the first publication year: the atlas has no PhD dates.
+    career = config.REFERENCE_YEAR - r["first_year"] if r.get("first_year") else None
     out = lambda status, reason, ev=None: {"status": status, "reason": reason, "evidence": ev}
     if f["uis_can_apply"]["v"] is False:
         return out("partner_only", "uis_not_applicant", f["uis_can_apply"]["ev"])
-    early = r"tidlig karriere|early[- ]career|unge forskertalent|young research talent"
-    if re.search(early, text, re.I):
-        ev = sentence_with(text, early)
+    # Career-stage rules. Numbers ("2–7 years since the doctorate") count only in
+    # the project-manager requirements and stage words only in the call title:
+    # FRIPRO texts mention their sister calls ("erfarne forskere, tidlig karriere"),
+    # which must not trigger the other call's rule.
+    pi = "\n".join(filter(None, [lang_text(f["pi_requirements"]["v"], lang) for lang in ("nb", "en")]))
+    title = "\n".join(filter(None, [lang_text(f["title"]["v"], lang) for lang in ("nb", "en")]))
+
+    def rule(numbers: str, words: str) -> str | None:
+        if re.search(numbers, pi, re.I):
+            return sentence_with(pi, numbers)
+        if re.search(words, title, re.I):
+            return sentence_with(title, words)
+        return None
+
+    # Upper limit on years since the doctorate (FRIPRO early career 2–7, mobility ≤ 7).
+    ev = rule(r"mellom (to|2) og (syv|sju|7) år|maks(imalt)? (syv|sju|7) år|between (two|2) and (seven|7) years|"
+              r"(at most|no more than|maximum( of)?) (seven|7) years",
+              r"tidlig karriere|early[- ]career|unge forskertalent|young research talent")
+    if ev:
         if kind in ("professor", "emeritus"):
             return out("likely_ineligible", "early_career_senior", ev)
-        if r.get("first_year") and r["first_year"] < config.REFERENCE_YEAR - 12:
+        if career is not None and career > 12:
             return out("check", "early_career_long_record", ev)
-    senior = r"erfarne forskere|experienced researchers|toppforsk"
-    if re.search(senior, text, re.I) and kind in ("phd", "postdoc"):
-        return out("likely_ineligible", "senior_call_junior", sentence_with(text, senior))
+    # Lower limit (FRIPRO experienced: at least six years since the doctorate).
+    ev = rule(r"minst (seks|6) år|at least (six|6) years",
+              r"erfarne forskere|experienced (researchers|scientists)|toppforsk|top researchers")
+    if ev:
+        if kind in ("phd", "postdoc"):
+            return out("likely_ineligible", "senior_call_junior", ev)
+        if career is not None and career < 6:
+            return out("check", "senior_call_short_record", ev)
+    # A submitted thesis is enough (FRIPRO mobility): PhD candidates should check.
+    thesis = r"levert doktorgradsavhandling|levert avhandling|submitted (your|the|their) (doctoral )?thesis"
+    if kind == "phd" and re.search(thesis, text, re.I):
+        return out("check", "thesis_submitted", sentence_with(text, thesis))
     doctorate = r"doktorgrad|doctoral degree|ph\.?\s?d\.?[- ]degree|doctorate"
     if kind == "phd" and re.search(doctorate, text, re.I):
         return out("likely_ineligible", "doctorate_required", sentence_with(text, doctorate))
@@ -236,9 +264,20 @@ def main() -> None:
     active = [c for c in calls["calls"] if c["fields"]["status"]["v"] != "closed"]
     for call in active:
         if call["fields"].get("open_field", {}).get("v"):
-            # Open to all fields (e.g. FRIPRO): no topic to match on; the site says so.
-            out_calls[call["id"]] = {"aspects": [], "aspect_basis": "open_field", "title_terms": [], "matches": []}
-            print(f"  {call['id']}: open to all fields – not matched")
+            # Open to all fields (e.g. FRIPRO): no topic to match on. Every researcher
+            # is offered the call, with eligibility from its stated rules. Only the
+            # exceptions are stored; everyone else is "no restriction found".
+            elig, evidence = {}, {}
+            for sid in rows_of:
+                e = eligibility(call, by_id[sid])
+                if e["status"] != "no_restriction_found":
+                    elig[sid] = [e["status"], e["reason"]]
+                    evidence.setdefault(e["reason"], e["evidence"])
+            out_calls[call["id"]] = {"aspects": [], "aspect_basis": "open_field", "title_terms": [], "matches": [],
+                                     "open_eligibility": elig, "eligibility_evidence": evidence}
+            n_out = sum(1 for s, _ in elig.values() if s == "likely_ineligible")
+            print(f"  {call['id']}: open to all fields – {len(rows_of) - n_out} researchers offered "
+                  f"({n_out} probably not eligible, {len(elig) - n_out} to check)")
             continue
         profile = call_profiles.get(call["id"])
         scope, aspects = call_aspects(call, profile)

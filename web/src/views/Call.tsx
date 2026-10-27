@@ -208,7 +208,7 @@ function ResearchersSection({ atlas, data, call, matches }:
     <section class="section" id="sec-researchers" aria-labelledby="h-researchers">
       <h2 id="h-researchers">{t("f.sec.researchers")}</h2>
       {closed ? <p class="muted">{t("f.closedNoMatch")}</p>
-        : call.fields.open_field?.v ? <p class="muted">{t("f.openField")}{call.fields.open_field.ev && <> <q>{call.fields.open_field.ev}</q></>}</p>
+        : call.fields.open_field?.v ? <OpenFieldSummary atlas={atlas} call={call} />
         : matches.length === 0 ? <p class="muted">{t("f.noMatches")}</p> : (
         <>
           <p class="sub">{t("f.matchLede", { y: String(data.meta.papers_from_year) })}</p>
@@ -221,6 +221,27 @@ function ResearchersSection({ atlas, data, call, matches }:
         </>
       )}
     </section>
+  );
+}
+
+/** Open-field calls: everyone is offered the call; counts by eligibility and the rules used. */
+function OpenFieldSummary({ atlas, call }: { atlas: Atlas; call: Call }) {
+  const { t, num } = useI18n();
+  const restricted = Object.values(call.open_eligibility ?? {});
+  const count = (s: string) => restricted.filter(([status]) => status === s).length;
+  const unlikely = count("likely_ineligible"), check = count("check") + count("partner_only");
+  const rules = Object.entries(call.eligibility_evidence ?? {}).filter(([reason, ev]) => ev && !reason.startsWith("position_"));
+  return (
+    <>
+      <p>{t("f.openField")}{call.fields.open_field.ev && <> <q>{call.fields.open_field.ev}</q></>}</p>
+      <p class="sub">{t("f.openFieldCounts", { a: num(atlas.researchers.length - unlikely - check), b: num(check), c: num(unlikely) })}</p>
+      {rules.length > 0 && (
+        <ul class="small">
+          {rules.map(([reason, ev]) => <li key={reason}>{t(`f.reason.${reason}`)} <q>{ev}</q></li>)}
+        </ul>
+      )}
+      <p class="small muted">{t("f.openFieldHow")}</p>
+    </>
   );
 }
 

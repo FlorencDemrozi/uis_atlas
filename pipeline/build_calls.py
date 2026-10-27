@@ -162,15 +162,25 @@ def uis_can_apply(groups: str | None, applicants: list[dict]) -> tuple[bool | No
     must be registered in the Register of Business Enterprises" -> no, even if
     research organisations are a target group as partners). Otherwise the target
     groups decide, with lower confidence."""
-    text = "\n".join(s["text"] for s in applicants).lower()
-    if text:
-        if re.search(r"forskningsorganisasjon|research organisation|universitet|universit(y|ies)", text):
-            return True, text[:400], "medium"
-        if re.search(r"foretaksregister|enhetsregister|register of business|bedrift|company|companies|"
-                     r"kommune|municipalit|offentlig virksomhet|public (sector )?(entity|enterprise)", text):
-            return False, text[:400], "medium"
+    # RCN's own target groups decide when research organisations are not among them.
+    if groups and not re.search(r"forskningsorganisasjon", groups, re.I):
+        return False, groups, "medium"
+    # Otherwise only sentences about who can apply / be project owner count; the
+    # requirement text also mentions research organisations as partners.
+    text = "\n".join(s["text"] for s in applicants)
+    owner = [x for x in re.split(r"(?<=[.!?])\s+|\n", text)
+             if re.search(r"prosjektansvarlig|project owner|kan søke|may apply|can apply|eligible to apply|søker må", x, re.I)]
+    # A sentence naming research organisations as possible applicants wins, even when
+    # it also names companies or municipalities ("either a research organisation or …").
+    for sentence in owner:
+        if re.search(r"forskningsorganisasjon|research organisation|universitet|universit(y|ies)", sentence, re.I):
+            return True, sentence.strip()[:400], "medium"
+    for sentence in owner:
+        if re.search(r"foretaksregister|enhetsregister|register of business|må være en bedrift|must be a (private )?company|"
+                     r"offentlig virksomhet|public (sector )?(entity|enterprise)|kommune|municipalit", sentence, re.I):
+            return False, sentence.strip()[:400], "medium"
     if groups:
-        return bool(re.search(r"forskningsorganisasjon", groups, re.I)), groups, "low"
+        return True, groups, "low"
     return None, None, "low"
 
 

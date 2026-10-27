@@ -49,6 +49,15 @@ export interface Call {
   aspects?: Aspect[];
   aspect_basis?: "ai_profile" | "call_text" | "open_field";
   title_terms?: string[];
+  /** Open-field calls: researchers with a restriction ([status, reason]); everyone else "no_restriction_found". */
+  open_eligibility?: Record<string, [Eligibility["status"], string]>;
+  eligibility_evidence?: Record<string, string | null>;
+}
+
+export interface Eligibility {
+  status: "no_restriction_found" | "check" | "likely_ineligible" | "partner_only";
+  reason: string;
+  evidence: string | null;
 }
 
 export interface Match {
@@ -59,8 +68,7 @@ export interface Match {
   papers: { eid: string; rel: number; terms: string[] }[];
   matched: { aspect: number; paper: string; rel: number }[];
   missing: number[];
-  eligibility: { status: "no_restriction_found" | "check" | "likely_ineligible" | "partner_only";
-    reason: string; evidence: string | null };
+  eligibility: Eligibility;
   role: string;
   collaborators: { id: string; fills: number[]; joint_papers: number; other_department: boolean }[];
 }
@@ -220,6 +228,20 @@ export function nextDeadline(c: Call, today = new Date().toISOString().slice(0, 
   const f = c.fields;
   const all = [f.preliminary_deadline?.v, f.deadline?.v, f.full_proposal_deadline?.v].filter((d): d is string => !!d);
   return all.filter((d) => d.slice(0, 10) >= today).sort()[0] ?? null;
+}
+
+const ELIG_ORDER = { no_restriction_found: 0, check: 1, partner_only: 2, likely_ineligible: 3 };
+
+/** Open (or planned) calls that accept every research field, with this researcher's
+ * eligibility, most likely eligible first. Closed calls are left out. */
+export function openFieldCallsFor(data: Funding, id: string): { call: Call; eligibility: Eligibility }[] {
+  return data.calls
+    .filter((c) => c.aspect_basis === "open_field" && c.fields.status.v !== "closed")
+    .map((call) => {
+      const [status, reason] = call.open_eligibility?.[id] ?? ["no_restriction_found", "none_found"];
+      return { call, eligibility: { status, reason, evidence: call.eligibility_evidence?.[reason] ?? null } };
+    })
+    .sort((a, b) => ELIG_ORDER[a.eligibility.status] - ELIG_ORDER[b.eligibility.status]);
 }
 
 export function isStale(iso: string | null | undefined, days = 8): boolean {

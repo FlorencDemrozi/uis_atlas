@@ -4,8 +4,42 @@ import { useI18n } from "../i18n";
 import { links } from "../router";
 import { BarList, ColumnChart } from "../components/charts";
 import { DeptLabel, Position, doiUrl } from "../components/common";
-import { CategoryBadge, FundingGate, MatchDetails, StatusBadge, useFmt } from "../components/funding";
-import { callTitle, nextDeadline, pick, useFunding } from "../funding";
+import { CategoryBadge, EligibilityBadge, FundingGate, MatchDetails, StatusBadge, useFmt } from "../components/funding";
+import { callTitle, nextDeadline, openFieldCallsFor, pick, useFunding, type Funding } from "../funding";
+
+/** Calls open to all research fields (e.g. FRIPRO), offered to everyone with their eligibility. */
+function OpenFieldCalls({ data, id }: { data: Funding; id: string }) {
+  const { t, lang } = useI18n();
+  const fmt = useFmt();
+  const all = openFieldCallsFor(data, id);
+  if (!all.length) return null;
+  const likely = all.filter((x) => x.eligibility.status !== "likely_ineligible");
+  const unlikely = all.filter((x) => x.eligibility.status === "likely_ineligible");
+  const row = ({ call, eligibility }: (typeof all)[number]) => {
+    const d = nextDeadline(call) ?? call.fields.deadline.v;
+    return (
+      <li key={call.id}>
+        <a href={links.call(call.id)}>{callTitle(call, lang)}</a>
+        <span class="muted small"> · {d ? fmt.date(d, true) : call.fields.rolling.v ? t("f.rolling") : t("f.noDeadline")}
+          {fmt.range(call) && ` · ${fmt.range(call)}`}</span>
+        <EligibilityBadge e={eligibility} />
+      </li>
+    );
+  };
+  return (
+    <div class="open-field">
+      <h3>{t("f.openFieldTitle")}</h3>
+      <p class="small muted">{t("f.openFieldSub")}</p>
+      <ul class="open-field-list">{likely.map(row)}</ul>
+      {unlikely.length > 0 && (
+        <details class="unspecified">
+          <summary>{t("f.openFieldIneligible", { n: unlikely.length })}</summary>
+          <ul class="open-field-list">{unlikely.map(row)}</ul>
+        </details>
+      )}
+    </div>
+  );
+}
 
 /** Funding calls that fit this researcher's recent work (password-protected data). */
 function ProfileFunding({ atlas, id, name }: { atlas: Atlas; id: string; name: string }) {
@@ -45,6 +79,7 @@ function ProfileFunding({ atlas, id, name }: { atlas: Atlas; id: string; name: s
                 })}
               </ul>
             )}
+            <OpenFieldCalls data={data} id={id} />
           </>
         );
       }}</FundingGate>

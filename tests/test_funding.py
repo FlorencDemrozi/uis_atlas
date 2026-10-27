@@ -217,6 +217,18 @@ def test_ineligible_researcher_with_strong_alignment_is_not_presented_as_eligibl
     assert match_funding.suggested_role("high", e, "professor") == "team_member"
 
 
+def test_sister_call_mentions_do_not_trigger_the_other_rule():
+    """FRIPRO 'experienced' mentions 'tidlig karriere' in a rule about ongoing projects."""
+    page = tibi_page("Forskerprosjekt for erfarne forskere (FRIPRO)", {"Målgrupper": "Forskningsorganisasjon"}, {}, [
+        ("Hvem kan delta i prosjektet?", [("Prosjektleder",
+          "<ul><li>Erfaring: Du må ha godkjent doktorgrad, og det må ha gått minst seks år.</li>"
+          "<li>Pågående prosjekt: gjelder toppforskere, erfarne forskere, tidlig karriere eller internasjonal mobilitet.</li></ul>")])])
+    call = build_calls.build_call(raw_call("8", page))
+    assert match_funding.eligibility(call, person("Professor", 2005))["status"] == "no_restriction_found"
+    junior = match_funding.eligibility(call, person("Postdoktor", 2021))
+    assert junior["status"] == "likely_ineligible" and "minst seks år" in junior["evidence"]
+
+
 def test_eligibility_partner_only_and_doctorate():
     commercial = build_calls.build_call(raw_call("2", COMMERCIAL))
     assert match_funding.eligibility(commercial, person("Førsteamanuensis"))["status"] == "partner_only"
