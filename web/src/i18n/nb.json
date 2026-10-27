@@ -432,5 +432,8 @@
   "f.openFieldCounts": "{a} UiS-forskere i atlaset har ingen begrensning funnet, {b} bør sjekke kravene, og {c} er trolig ikke kvalifisert som prosjektleder.",
   "f.openFieldHow": "Søk etter en forsker over utlysningslisten, eller åpne en profil, for å se én persons vurdering.",
   "f.reason.senior_call_short_record": "Utlysningen krever flere år siden disputas, og personens første publikasjon er under 6 år gammel – sjekk disputasdatoen.",
-  "f.reason.thesis_submitted": "Utlysningen godtar en levert (ikke disputert) avhandling – stipendiater bør sjekke om dette gjelder dem."
+  "f.reason.thesis_submitted": "Utlysningen godtar en levert (ikke disputert) avhandling – stipendiater bør sjekke om dette gjelder dem.",
+  "f.pickResearcher": "Flere forskere passer med «{q}» – velg én:",
+  "f.openFallback": "Ingen utlysningstitler eller forskere passer med «{q}». Viser utlysningene som er åpne for alle fagområder, som alle som oppfyller kravene kan søke på.",
+  "f.openFallbackPick": "Viser utlysningene som er åpne for alle fagområder til du velger en forsker."
 }

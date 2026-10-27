@@ -230,13 +230,18 @@ export function nextDeadline(c: Call, today = new Date().toISOString().slice(0, 
   return all.filter((d) => d.slice(0, 10) >= today).sort()[0] ?? null;
 }
 
-const ELIG_ORDER = { no_restriction_found: 0, check: 1, partner_only: 2, likely_ineligible: 3 };
+/** A call open to all research fields (offered to everyone, not topic-matched). */
+export function isOpenField(c: Call): boolean {
+  return c.aspect_basis === "open_field" || !!c.fields.open_field?.v;
+}
+
+const ELIG_ORDER ={ no_restriction_found: 0, check: 1, partner_only: 2, likely_ineligible: 3 };
 
 /** Open (or planned) calls that accept every research field, with this researcher's
  * eligibility, most likely eligible first. Closed calls are left out. */
 export function openFieldCallsFor(data: Funding, id: string): { call: Call; eligibility: Eligibility }[] {
   return data.calls
-    .filter((c) => c.aspect_basis === "open_field" && c.fields.status.v !== "closed")
+    .filter((c) => isOpenField(c) && c.fields.status.v !== "closed")
     .map((call) => {
       const [status, reason] = call.open_eligibility?.[id] ?? ["no_restriction_found", "none_found"];
       return { call, eligibility: { status, reason, evidence: call.eligibility_evidence?.[reason] ?? null } };

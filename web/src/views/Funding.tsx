@@ -1,12 +1,16 @@
 import { useMemo } from "preact/hooks";
 import type { Atlas } from "../data";
 import type { Researcher } from "../data";
-import { callTitle, nextDeadline, openFieldCallsFor, pick, type Call, type Eligibility, type Funding, type Match } from "../funding";
+import { callTitle, isOpenField, nextDeadline, openFieldCallsFor, pick, type Call, type Eligibility, type Funding,
+  type Match } from "../funding";
 import { useI18n } from "../i18n";
 import { links, replaceHash, type Route } from "../router";
 import { CategoryBadge, EligibilityBadge, FundingGate, Freshness, StatusBadge, useFmt } from "../components/funding";
 
 const AMOUNTS = [1e6, 5e6, 10e6, 25e6];
+/** Lower case without accents, so "tveteras" finds "Tveterås". */
+const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/ø/g, "o")
+  .replace(/æ/g, "ae").replace(/\s+/g, " ").trim();
 const ELIG_RANK = { no_restriction_found: 0, check: 1, partner_only: 2, likely_ineligible: 3 };
 const SORTS = ["deadline", "amount", "published", "relevance"] as const;
 
@@ -28,20 +32,29 @@ function FundingList({ atlas, data, route }: { atlas: Atlas; data: Funding; rout
   };
   const set = (key: string, value: string) => setMany({ [key]: value });
   const status = p.get("st") ?? "current";
-  const q = (p.get("q") ?? "").toLowerCase();
+  const q = norm(p.get("q") ?? "");
 
-  // A researcher chosen in the search box (?who=): their matched calls plus every
-  // call open to all fields, with their eligibility.
-  const byName = useMemo(() => new Map(atlas.researchers.map((r) => [r.name.toLowerCase(), r.scopus_id])), [atlas]);
-  const person = p.get("who") ? atlas.byId.get(p.get("who")!) ?? null : null;
+  // The search box takes call titles or a researcher's name (any part, accents
+  // ignored). A researcher – chosen (?who=) or the only name matching what was
+  // typed – gets their matched calls plus every call open to all fields, with
+  // their eligibility.
+  const byName = useMemo(() => new Map(atlas.researchers.map((r) => [norm(r.name), r.scopus_id])), [atlas]);
+  const titleHit = (c: Call) => norm(callTitle(c, "nb")).includes(q) || norm(callTitle(c, "en")).includes(q);
+  const anyTitleHit = !!q && data.calls.some(titleHit);
+  const peopleHits = q.length >= 3 && !anyTitleHit
+    ? atlas.researchers.filter((r) => norm(r.name).includes(q)).slice(0, 12) : [];
+  const chosen = p.get("who") ? atlas.byId.get(p.get("who")!) ?? null : null;
+  const person = chosen ?? (peopleHits.length === 1 ? peopleHits[0] : null);
+  // Nothing matched (no title, no single researcher): show the calls open to everyone.
+  const openFallback = !!q && !anyTitleHit && !person;
   const personMatches = useMemo(() => new Map((person ? data.byResearcher.get(person.scopus_id) ?? [] : [])
     .map(({ call, match }) => [call.id, match])), [data, person]);
   const personOpen = useMemo(() => new Map((person ? openFieldCallsFor(data, person.scopus_id) : [])
     .map(({ call, eligibility }) => [call.id, eligibility])), [data, person]);
   const sort = (p.get("sort") ?? (person ? "relevance" : "deadline")) as typeof SORTS[number];
   const onSearch = (value: string) => {
-    const id = byName.get(value.trim().toLowerCase());
-    setMany(id ? { who: id, q: "" } : { q: value });
+    const id = byName.get(norm(value));
+    setMany(id ? { who: id, q: "" } : { q: value, who: "" });
   };
 
   const strong = (c: Call) => (data.matches[c.id] ?? []).filter((m) => m.category !== "low");
@@ -57,7 +70,8 @@ function FundingList({ atlas, data, route }: { atlas: Atlas; data: Funding; rout
     const f = c.fields;
     const st = f.status.v as string;
     if (status === "current" ? st === "closed" : status !== "all" && st !== status) return false;
-    if (q && !callTitle(c, "nb").toLowerCase().includes(q) && !callTitle(c, "en").toLowerCase().includes(q)) return false;
+    if (q && anyTitleHit && !titleHit(c)) return false;
+    if (openFallback && !isOpenField(c)) return false;
     if (p.get("sch") && pick<string>(f.scheme.v, lang).value !== p.get("sch")) return false;
     if (p.get("th") && !(pick<string[]>(f.themes.v, lang).value ?? []).includes(p.get("th")!)) return false;
     if (p.get("ap") && !(pick<string[]>(f.target_groups.v, lang).value ?? []).includes(p.get("ap")!)) return false;
@@ -135,8 +149,21 @@ function FundingList({ atlas, data, route }: { atlas: Atlas; data: Funding; rout
         <div class="notice">
           <span>{t("f.forResearcher", { name: person.name })}</span>
           <a href={links.profile(person.scopus_id)}>{t("r.profile")}</a>
-          <button type="button" class="btn" onClick={() => setMany({ who: "", sort: "" })}>{t("f.clearResearcher")}</button>
+          <button type="button" class="btn" onClick={() => setMany({ who: "", q: "", sort: "" })}>{t("f.clearResearcher")}</button>
         </div>
+      )}
+      {!person && peopleHits.length > 1 && (
+        <div class="notice">
+          <span>{t("f.pickResearcher", { q: p.get("q") ?? "" })}</span>
+          {peopleHits.map((r) => (
+            <button type="button" class="chip-btn" key={r.scopus_id} onClick={() => setMany({ who: r.scopus_id, q: "" })}>
+              {r.name}
+            </button>
+          ))}
+        </div>
+      )}
+      {openFallback && (
+        <p class="notice">{t(peopleHits.length ? "f.openFallbackPick" : "f.openFallback", { q: p.get("q") ?? "" })}</p>
       )}
 
       <div class="results-head">
