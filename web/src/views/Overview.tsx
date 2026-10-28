@@ -41,7 +41,7 @@ export function OverviewView({ atlas }: { atlas: Atlas }) {
     <>
       <div class="page-head">
         <h1>{title}</h1>
-        <p>{t("ov.lede", {
+        <p>{t(meta.inclusion.confirmed.min ? "ov.lede" : "ov.ledeAllStaff", {
           from: String(meta.period.first_year),
           min: meta.inclusion.confirmed.min, since: String(meta.inclusion.confirmed.from),
           umin: meta.inclusion.unconfirmed.min, usince: String(meta.inclusion.unconfirmed.from),

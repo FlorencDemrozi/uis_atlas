@@ -19,8 +19,9 @@ Steps:
   for review.
 - Department: override, else directory, else Scopus affiliations.
 - Keep researchers with enough recent papers: confirmed staff need
-  config.MIN_RECENT_PUBLICATIONS in config.RECENT_YEARS years, others the
-  stricter config.UNCONFIRMED_* rule (overrides can force include/exclude).
+  config.MIN_RECENT_PUBLICATIONS in config.RECENT_YEARS years (0: all current
+  staff with a Scopus profile), others the stricter config.UNCONFIRMED_* rule
+  (overrides can force include/exclude).
 - Compute per researcher: faculty, department, position, paper ids (newest
   first), counts, citations, publications per year, keywords, UiS co-authors,
   collaborating departments, first/last active year.
@@ -402,8 +403,10 @@ def main() -> None:
     confirmed = sum(1 for p in included if p["_confirmed"])
     print(f"{len(atlas['authors'])} Scopus author IDs → {len(people)} people after "
           f"{len(res['merge_log'])} merges ({len(res['candidates'])} possible duplicates left for review).")
+    rule = (f"≥{config.MIN_RECENT_PUBLICATIONS} papers since {res['recent_from']}"
+            if config.MIN_RECENT_PUBLICATIONS else "all")
     print(f"Included: {len(included)} – {confirmed} confirmed in the employee directory "
-          f"(≥{config.MIN_RECENT_PUBLICATIONS} papers since {res['recent_from']}), "
+          f"({rule}), "
           f"{len(included) - confirmed} from Scopus only "
           f"(≥{config.UNCONFIRMED_MIN_RECENT_PUBLICATIONS} since {res['unconfirmed_from']}).\n")
     by_faculty = defaultdict(Counter)

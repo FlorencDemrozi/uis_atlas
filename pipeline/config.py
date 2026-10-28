@@ -219,11 +219,12 @@ RANKING = {
 # last RECENT_YEARS calendar years (REFERENCE_YEAR and the years before it).
 # Papers dated after REFERENCE_YEAR (in press) also count as recent.
 # People found in the UiS employee directory are confirmed current staff and
-# get this lower threshold (project owner, 2026-10-23). Everyone else may have
-# left UiS and needs the stricter UNCONFIRMED_* rule.
+# are always included, whatever their publication record (project owner,
+# 2026-10-28; MIN_RECENT_PUBLICATIONS = 0). Everyone else may have left UiS
+# and needs the stricter UNCONFIRMED_* rule.
 REFERENCE_YEAR = int(os.environ.get("ATLAS_REFERENCE_YEAR", date.today().year))
 RECENT_YEARS = 3
-MIN_RECENT_PUBLICATIONS = 1
+MIN_RECENT_PUBLICATIONS = 0
 UNCONFIRMED_RECENT_YEARS = 2
 UNCONFIRMED_MIN_RECENT_PUBLICATIONS = 3
 
@@ -281,6 +282,7 @@ FUNDING_MATCH = {
     "categories": {"high": 0.6, "medium": 0.35},
     "min_score": 0.25,
     "max_matches_per_call": 30,
+    "specialists_per_aspect": 3,    # best researchers per aspect, listed even beyond the top matches
     "collaborators_per_match": 3,
     "max_aspects": 15,
 }

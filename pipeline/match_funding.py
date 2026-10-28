@@ -8,10 +8,12 @@ Input:  config.CALLS, config.CALL_PROFILES (optional), config.PROFILES,
 Output: config.FUNDING_MATCHES
 
 Method (settings in config.FUNDING_MATCH; transparent and reproducible):
-1. Each call is split into "aspects": the competencies, methods and domains of
-   its AI profile when one exists, otherwise the thematic bullets and
-   paragraphs of the official call text. A "scope" text (title, summary,
-   themes) describes the call as a whole.
+1. Each call is split into "aspects": the research topics, technologies,
+   contributing expertise, competencies, methods and domains of its AI profile
+   when one exists (partner requirements and optional extras are not research
+   expertise and are left out), otherwise the thematic bullets and paragraphs
+   of the official call text. A "scope" text (title, summary, themes, and the
+   profile's disciplines and topics) describes the call as a whole.
 2. Every recent paper (last config.ACTIVE_YEARS years) is compared with the
    scope and each aspect (same embedding model as the search, "query:" prefix
    for the call). Similarities are turned into a relevance of 0–1 relative to
@@ -21,7 +23,9 @@ Method (settings in config.FUNDING_MATCH; transparent and reproducible):
          + weights.coverage × share of the call's aspects covered by a paper
          + weights.evidence × amount of relevant work (saturating with count)
    Category: High / Medium / Low by config thresholds. A ranking aid for one
-   call – not a probability of funding.
+   call – not a probability of funding. Besides the best overall matches, the
+   researchers who best cover each aspect are always listed ("specialists"),
+   so a technology expert is found for a call led by another field.
 4. Eligibility is checked separately, only from conditions stated in the call
    text, and shown with the sentence it rests on. It never raises a score.
 5. Collaborators: other UiS researchers whose papers cover aspects the matched
@@ -68,20 +72,37 @@ def lang_text(v, lang="en"):
     return v
 
 
+ASPECT_WEIGHTS = {"topic": 1.0, "core": 1.0, "scope": 1.0, "technology": 0.8, "expertise": 0.8,
+                  "complementary": 0.6}
+
+
 def call_aspects(call: dict, profile: dict | None) -> tuple[str, list[dict]]:
     f = call["fields"]
     title = lang_text(f["title"]["v"])
     themes = lang_text(f["themes"]["v"]) or []
-    scope = ". ".join(filter(None, [title, lang_text(f["summary"]["v"]), ", ".join(themes)]))
+    parts = [title, lang_text(f["summary"]["v"]), ", ".join(themes)]
     aspects = []
     if profile:
         p = profile["profile"]
+        # RCN calls rarely fill summary and themes; without the profile the scope is the title alone.
+        parts += [" > ".join(d["path"]) for d in p.get("disciplines", [])]
+        parts += [t["path"][-1] for t in p.get("topics", []) if t["path"]]
+        ai = lambda label, text, kind, evidence="": {"label": label, "text": text, "kind": kind,
+                                                      "source": "ai", "evidence": evidence}
+        for t in p.get("topics", []):
+            if t["path"]:
+                aspects.append(ai(t["path"][-1], " > ".join(t["path"]), "topic", t.get("evidence") or ""))
+        for x in p.get("technologies", []):
+            aspects.append(ai(x, x, "technology"))
+        for x in p.get("contributing_expertise", []):
+            aspects.append(ai(x, x, "expertise"))
         for c in p["competencies"]:
-            aspects.append({"label": c["name"], "text": f"{c['name']}: {c['rationale']}", "kind": c["kind"],
-                            "source": "ai", "evidence": c.get("evidence") or ""})
+            # Required partners (a company, a hospital) and optional extras are not research expertise.
+            if c["kind"] in ASPECT_WEIGHTS:
+                aspects.append(ai(c["name"], f"{c['name']}: {c['rationale']}", c["kind"], c.get("evidence") or ""))
         for key in ("methods", "application_domains"):
             for x in p[key]:
-                aspects.append({"label": x, "text": x, "kind": "complementary", "source": "ai", "evidence": ""})
+                aspects.append(ai(x, x, "complementary"))
     else:
         passage = lang_text(f["research_scope"]["v"]) or lang_text(f["description"]["v"]) or ""
         seen = set()
@@ -94,11 +115,13 @@ def call_aspects(call: dict, profile: dict | None) -> tuple[str, list[dict]]:
             label = " ".join(words[:14]) + ("…" if len(words) > 14 else "")
             aspects.append({"label": label, "text": text, "kind": "scope", "source": "call_text",
                             "evidence": text if len(words) <= 60 else ""})
-    weights = {"core": 1.0, "scope": 1.0, "complementary": 0.6, "mandatory_partner": 0.3, "optional": 0.3}
+    seen, unique = set(), []
     for a in aspects:
-        a["weight"] = weights[a["kind"]]
-    aspects.sort(key=lambda a: -a["weight"])
-    return scope, aspects[:CFG["max_aspects"]]
+        if a["label"].lower() not in seen:
+            seen.add(a["label"].lower())
+            unique.append(dict(a, weight=ASPECT_WEIGHTS[a["kind"]]))
+    unique.sort(key=lambda a: -a["weight"])
+    return ". ".join(filter(None, parts)), unique[:CFG["max_aspects"]]
 
 
 # ------------------------------------------------------------ researcher side
@@ -206,13 +229,14 @@ def relevance(sims: np.ndarray) -> np.ndarray:
 
 
 def title_terms(call: dict) -> list[str]:
-    """Distinctive words of the call title (both languages), e.g. 'quantum'."""
+    """Distinctive words of the call title, e.g. 'quantum'. The English title when there
+    is one: papers are mostly in English, so a Norwegian word ('helse') rarely matches."""
+    t = call["fields"]["title"]["v"]
     words = set()
-    for t in (call["fields"]["title"]["v"].get("nb"), call["fields"]["title"]["v"].get("en")):
-        for w in re.findall(r"[a-zæøåA-ZÆØÅ][\w-]{3,}", t or ""):
-            w = w.lower()
-            if w not in GENERIC and not w.isdigit():
-                words.add(w)
+    for w in re.findall(r"[a-zæøåA-ZÆØÅ][\w-]{3,}", t.get("en") or t.get("nb") or ""):
+        w = w.lower()
+        if w not in GENERIC and not w.isdigit():
+            words.add(w)
     return sorted(words)
 
 
@@ -295,7 +319,7 @@ def main() -> None:
         weighted = paper_rel * recency
         aw = np.array([a["weight"] for a in aspects]) if aspects else np.zeros(0)
 
-        scored = []
+        scored, every = [], {}
         for sid, rows in rows_of.items():
             w = np.sort(weighted[rows])[::-1]
             s_scope = float(w[:3].sum() / 3)
@@ -306,10 +330,20 @@ def main() -> None:
             s_cov = float((aw * covered).sum() / aw.sum()) if aspects else s_scope
             wts = CFG["weights"]
             score = wts["scope"] * s_scope + wts["coverage"] * s_cov + wts["evidence"] * s_evidence
+            every[sid] = (score, sid, s_scope, s_cov, s_evidence, covered, best_aspect, rows)
             if score >= CFG["min_score"] and n_rel > 0:
-                scored.append((score, sid, s_scope, s_cov, s_evidence, covered, best_aspect, rows))
+                scored.append(every[sid])
         scored.sort(key=lambda x: -x[0])
         scored = scored[:CFG["max_matches_per_call"]]
+        # Specialists: the researchers who best cover each aspect, listed even when their
+        # overall fit is lower (e.g. a sensor expert for a call led by health services research).
+        specialist_for = {}
+        for j in range(len(aspects)):
+            ranked = sorted((e for e in every.values() if e[5][j]), key=lambda e: -e[6][j])
+            for e in ranked[:CFG["specialists_per_aspect"]]:
+                specialist_for.setdefault(e[1], []).append(j)
+        listed = {e[1] for e in scored}
+        scored += sorted((every[sid] for sid in specialist_for if sid not in listed), key=lambda x: -x[0])
 
         matches = []
         for score, sid, s_scope, s_cov, s_ev, covered, best_aspect, rows in scored:
@@ -332,6 +366,7 @@ def main() -> None:
                            for k in top],
                 "matched": matched, "missing": missing,
                 "eligibility": elig, "role": suggested_role(cat, elig, position_kind(r)),
+                "specialist_for": specialist_for.get(sid, []),
                 "_covered": covered,
             })
 

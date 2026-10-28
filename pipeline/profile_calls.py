@@ -26,7 +26,7 @@ import config
 import llm
 from build_calls import AI_ONLY_FIELDS
 
-PROMPT_VERSION = 2
+PROMPT_VERSION = 3
 
 # Text fields the model may also condense (next to the official passage).
 CONDENSE_FIELDS = ["funding_rate", "eligible_costs", "funding_restrictions", "eligible_applicants",
@@ -53,7 +53,13 @@ add technologies the call's objectives do not support.
 - Competencies: "core" = directly needed for the scientific objectives; \
 "complementary" = would improve the project; "mandatory_partner" = required by \
 the call's conditions (e.g. a company or user partner); "optional" = useful, not essential.
-- Field values are short (one or two sentences) and factual."""
+- Field values are short (one or two sentences) and factual.
+- "contributing_expertise": 5–12 concrete research areas in which university \
+researchers could deliver the R&D a competitive project needs, e.g. "wearable \
+sensors and human activity recognition" or "machine learning on clinical data". \
+Broad calls (open to any innovation in a sector) often name only the sector and \
+example needs: list the scientific and technical fields that typically serve those \
+needs, consistent with the call's objectives. This is interpretation, not a requirement."""
 
 STR = {"type": "string"}
 LIST = {"type": "array", "items": STR}
@@ -70,6 +76,7 @@ def schema() -> dict:
         "topics": {"type": "array", "items": obj({"path": LIST, "basis": STR, "evidence": STR})},
         "objectives": LIST, "challenges": LIST, "methods": LIST, "technologies": LIST,
         "application_domains": LIST, "expected_contributions": LIST, "interdisciplinary": LIST,
+        "contributing_expertise": LIST,
         "competencies": {"type": "array", "items": obj({"name": STR, "kind": STR, "rationale": STR, "evidence": STR})},
         "interpretation": obj({"problems": STR, "suitable_projects": STR, "competitive_teams": STR,
                                "explicit_directions": LIST, "plausible_directions": LIST}),

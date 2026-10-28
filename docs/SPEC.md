@@ -27,7 +27,7 @@ Visitors are not expected to know UiS’s organisation or academic vocabulary. T
   - Faculty of Social Sciences: Media and Social Sciences; Social Studies; Psychology; NHS – Leadership and Service Innovation (assigned from Scopus affiliations only; not a unit in the employee directory)
   - Not included: national centres (Reading Centre, Learning Environment Centre, Knowledge Centre for Education), the Museum of Archaeology, central divisions.
 - **Current staff and departments:** the public UiS employee directory (www.uis.no/nb/sok/ansatte) is the source of who works where today; Scopus affiliations are the fallback.
-- **Inclusion:** staff found in the directory with ≥1 publication in the last 3 years; others (who may have left UiS) with ≥3 in the last 2 years (`config.py`).
+- **Inclusion:** everyone found in the directory who has a Scopus profile, whatever their publication record (project owner, 2026-10-28); others (who may have left UiS) with ≥3 publications in the last 2 years (`config.py`). Staff without a Scopus profile will come from a staff list (Excel, with start and contract dates) later.
 - **Period:** publications from 2020 onward (configurable via `ATLAS_FIRST_YEAR`).
 - **Source:** Scopus (Elsevier), UiS affiliation ID `60014497`, via the Scopus API.
 - Faculties and departments are configuration (`pipeline/config.py`, `web/src/org.ts`), not code.
@@ -83,6 +83,7 @@ The core feature. The goal is that the top 5 results for a reasonable query are 
    - Researcher semantic score = weighted combination of the best-matching papers (for example, the mean of the top 3 paper similarities) and the similarity to the researcher’s summary. A person with several relevant papers should outrank someone with one lucky hit.
    - **The same model and prefixes must be used offline and in the browser.** Add a test that checks this.
 2. **Keyword score.** BM25 over titles, keywords and topic tags (e.g. MiniSearch in the browser). This catches exact terms, acronyms and names (“CCS”, “LiDAR”, “FPSO”).
+   Query syntax: `"exact phrase"` (words adjacent and in order within one field; case and punctuation ignored), and `AND` / `OR` in capitals, AND binding tighter (`a AND b OR c` = `(a AND b) OR c`). Plain words without quotes or operators behave as before (any word may match, more matches rank higher).
 3. **Final score.** `0.7 × semantic + 0.3 × keyword`, both normalised to 0–1, plus a small recency boost for recent relevant work. Keep the weights in one config object so they can be tuned.
 
 ### 4.2 Explaining matches

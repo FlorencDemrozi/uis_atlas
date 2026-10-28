@@ -63,24 +63,34 @@ the page, `url` source page, `ev` evidence text, `c` confidence, `m` method
 ### AI call profiles (`profile_calls.py`)
 For open/planned calls the Claude API reads the call text and returns, in a fixed
 JSON schema: disciplines and topic paths, objectives, methods, technologies,
-domains, competencies (core / complementary / mandatory partner / optional), an
+domains, competencies (core / complementary / mandatory partner / optional),
+contributing expertise (the research areas that could deliver the R&D, an
+interpretation that matters for broad calls such as Pilot Helse), an
 interpretation (explicit vs. plausible directions) and values for the AI-only
 fields. Every "fact" must quote the call; quotes are checked against the text and
 unverifiable facts are dropped (fields) or downgraded to interpretation (topics).
 AI values are shown next to official values and never replace them.
 
 ### Matching (`match_funding.py`, settings in `config.FUNDING_MATCH`)
-1. The call is split into aspects: AI competencies/methods/domains if a profile
-   exists, else the thematic bullets of the call text (administrative sentences
-   removed). A scope text (title, summary, themes) describes the whole call.
+1. The call is split into aspects: AI topics, technologies, contributing
+   expertise, core/complementary competencies, methods and domains if a profile
+   exists (required partners and optional extras are not research expertise and
+   are left out), else the thematic bullets of the call text (administrative
+   sentences removed). A scope text (title, summary, themes, plus the profile's
+   disciplines and topics – RCN calls rarely fill summary and themes) describes
+   the whole call.
 2. Each recent paper (last 5 years; corrections, editorials and notes excluded) is
    compared with scope and aspects using the atlas embedding model. Cosine
    similarity is mapped to relevance on a fixed scale (0.80 → 0, 0.86 → 1), so a
-   call nobody fits produces no strong match. Distinctive title words that occur in
-   ≤1 % of UiS papers (e.g. "seafood", "quantum") add up to 20 %. Recency weight
+   call nobody fits produces no strong match. Distinctive words of the English
+   title (Norwegian if there is none) that occur in ≤1 % of UiS papers (e.g.
+   "seafood", "quantum") add up to 20 %. Recency weight
    halves every 3 years.
 3. Score = 0.5 scope alignment + 0.3 aspect coverage + 0.2 amount of evidence.
    High ≥ 0.6, Medium ≥ 0.35. A ranking aid, not a probability of funding.
+   Besides the top 30, the 3 researchers who best cover each aspect are always
+   listed ("among the best at UiS for …"), so e.g. a sensor expert is found for a
+   call led by health services research.
 4. Eligibility is separate and evidence-based: only conditions stated in the call
    (UiS not allowed as project owner → "only as R&D partner"; early-career call +
    professor; experienced-researcher call + PhD/postdoc; doctorate required + PhD

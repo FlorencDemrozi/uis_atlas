@@ -94,6 +94,7 @@ export function SearchView({ atlas, route }: { atlas: Atlas; route: Route }) {
           <span>{t("search.try")}</span>
           {examples(atlas.meta.has_vectors ? t("search.examples") : en["search.examples"]).map((ex) => <a class="chip-btn" key={ex} href={links.search(ex)}>{ex}</a>)}
         </div>
+        <p class="note">{t("search.syntax")}</p>
         {!atlas.meta.has_vectors && <p class="note">{t("search.keywordOnly")}</p>}
       </section>
 

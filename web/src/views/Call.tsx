@@ -150,6 +150,7 @@ function ScopeSection({ call }: { call: Call }) {
             {list("f.challenges", p.challenges)}
             {list("f.methods", p.methods)}
             {list("f.technologies", p.technologies)}
+            {list("f.expertise", p.contributing_expertise ?? [])}
             {list("f.domains", p.application_domains)}
             {list("f.contributions", p.expected_contributions)}
             {list("f.interdisciplinary", p.interdisciplinary)}

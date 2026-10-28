@@ -271,6 +271,8 @@ export function MatchDetails({ atlas, call, m, who = false }: { atlas: Atlas; ca
       </div>
       {aspects.length > 0 && (
         <div class="aspect-cover">
+          {(m.specialist_for?.length ?? 0) > 0 && <p class="small"><strong>{t("f.specialistFor")}:</strong>{" "}
+            {m.specialist_for!.map((j) => aspects[j]?.label).filter(Boolean).join(" · ")}</p>}
           {m.matched.length > 0 && <p class="small"><strong>{t("f.matchedAspects")}:</strong>{" "}
             {m.matched.map((x) => aspects[x.aspect]?.label).filter(Boolean).join(" · ")}</p>}
           {m.missing.length > 0 && <p class="small muted"><strong>{t("f.missingAspects")}:</strong>{" "}

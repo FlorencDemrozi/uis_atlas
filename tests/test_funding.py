@@ -262,8 +262,38 @@ def test_relevance_is_absolute():
 def test_title_terms_drop_generic_words():
     call = {"fields": {"title": {"v": {"nb": "Næringsrettet kvanteteknologi", "en": "Industry-oriented Quantum Technology"}}}}
     terms = match_funding.title_terms(call)
-    assert "quantum" in terms and "kvanteteknologi" in terms
+    assert "quantum" in terms
     assert "technology" not in terms and "industry" not in terms
+
+
+def test_title_terms_prefer_english_title():
+    # Papers are mostly in English: a Norwegian title word ("helse") rarely matches.
+    both = {"fields": {"title": {"v": {"nb": "Pilot Helse trinn 1", "en": "Pilot Health Phase 1"}}}}
+    assert "helse" not in match_funding.title_terms(both)
+    nb_only = {"fields": {"title": {"v": {"nb": "Kvanteteknologi", "en": None}}}}
+    assert match_funding.title_terms(nb_only) == ["kvanteteknologi"]
+
+
+def test_ai_profile_aspects_use_topics_and_skip_partner_requirements():
+    call = {"fields": {"title": {"v": {"en": "Pilot Health"}}, "summary": {"v": None}, "themes": {"v": None}}}
+    profile = {"profile": {
+        "disciplines": [{"path": ["Digital health"], "level": "primary"}],
+        "topics": [{"path": ["Digital health", "Remote care", "Home hospital"], "basis": "explicit", "evidence": "x"}],
+        "technologies": ["Digital follow-up solutions"],
+        "contributing_expertise": ["Wearable sensors and activity recognition"],
+        "competencies": [
+            {"name": "Health technology R&D", "kind": "core", "rationale": "r", "evidence": ""},
+            {"name": "Company partner", "kind": "mandatory_partner", "rationale": "r", "evidence": ""},
+            {"name": "Nice extra", "kind": "optional", "rationale": "r", "evidence": ""}],
+        "methods": ["Pilot testing"], "application_domains": ["Home hospital"],   # duplicate label
+    }}
+    scope, aspects = match_funding.call_aspects(call, profile)
+    assert scope.startswith("Pilot Health. Digital health") and "Home hospital" in scope
+    kinds = {a["label"]: a["kind"] for a in aspects}
+    assert kinds == {"Home hospital": "topic", "Health technology R&D": "core",
+                     "Digital follow-up solutions": "technology",
+                     "Wearable sensors and activity recognition": "expertise", "Pilot testing": "complementary"}
+    assert [a["weight"] for a in aspects] == sorted((a["weight"] for a in aspects), reverse=True)
 
 
 def test_corrections_and_editorials_are_not_evidence():

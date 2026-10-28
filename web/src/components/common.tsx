@@ -33,8 +33,10 @@ export function Position({ r }: { r: Researcher }) {
 export function Highlight({ text, terms }: { text: string; terms: string[] }) {
   const usable = terms.filter((t) => t.length > 1 && !STOPWORDS.has(t.toLowerCase()));
   if (!usable.length) return <>{text}</>;
-  const esc = usable.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).sort((a, b) => b.length - a.length);
-  const re = new RegExp(`(${esc.join("|")})`, "gi");
+  // A phrase ("computer science") also highlights "Computer-Science".
+  const esc = usable.sort((a, b) => b.length - a.length)
+    .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "[^\\p{L}\\p{N}]+"));
+  const re = new RegExp(`(${esc.join("|")})`, "giu");
   return <>{text.split(re).map((part, i) => (i % 2 ? <mark key={i}>{part}</mark> : part))}</>;
 }
 

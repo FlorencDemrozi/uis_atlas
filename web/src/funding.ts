@@ -29,6 +29,7 @@ export interface CallProfile {
   topics: { path: string[]; basis: "explicit" | "interpretation"; evidence: string }[];
   objectives: string[]; challenges: string[]; methods: string[]; technologies: string[];
   application_domains: string[]; expected_contributions: string[]; interdisciplinary: string[];
+  contributing_expertise?: string[];
   competencies: { name: string; kind: string; rationale: string; evidence: string; verified?: boolean }[];
   interpretation: { problems: string; suitable_projects: string; competitive_teams: string;
     explicit_directions: string[]; plausible_directions: string[] };
@@ -70,6 +71,7 @@ export interface Match {
   missing: number[];
   eligibility: Eligibility;
   role: string;
+  specialist_for?: number[];   // aspects this researcher covers among the best at UiS
   collaborators: { id: string; fills: number[]; joint_papers: number; other_department: boolean }[];
 }
 
