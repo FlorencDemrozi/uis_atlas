@@ -395,3 +395,14 @@ def test_funding_ui_strings_exist_in_both_languages():
     fields = {k for grp in re.findall(r'\["[a-z]+", \[([^\]]+)\]\]', (ROOT / "web/src/views/Call.tsx").read_text(encoding="utf-8"))
               for k in re.findall(r'"([a-z_]+)"', grp)}
     assert fields and all(f"fld.{k}" in en and f"fld.{k}" in nb for k in fields)
+
+
+def test_short_uis_record_does_not_flag_experienced_call():
+    """The first UiS paper is not the first paper: a researcher recruited from elsewhere
+    can have a short UiS record and still meet 'at least six years since the doctorate'."""
+    page = tibi_page("Forskerprosjekt for erfarne forskere (FRIPRO)", {"Målgrupper": "Forskningsorganisasjon"}, {}, [
+        ("Hvem kan delta i prosjektet?", [("Prosjektleder",
+          "<ul><li>Erfaring: Du må ha godkjent doktorgrad, og det må ha gått minst seks år.</li></ul>")])])
+    call = build_calls.build_call(raw_call("9", page))
+    recent = person("Professor", config.REFERENCE_YEAR - 2)
+    assert match_funding.eligibility(call, recent)["status"] == "no_restriction_found"

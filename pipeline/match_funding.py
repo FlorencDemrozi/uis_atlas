@@ -190,7 +190,9 @@ def eligibility(call: dict, r: dict) -> dict:
                                    for lang in ("nb", "en")]
                          + [lang_text(f["title"]["v"], "nb"), lang_text(f["title"]["v"], "en")]))
     kind = position_kind(r)
-    # Career age is estimated from the first publication year: the atlas has no PhD dates.
+    # Career age is estimated from the first UiS paper in the atlas: there are no PhD dates,
+    # and papers from before someone came to UiS are missing. Only upper limits are
+    # checked with it – a long record is certain, a short one says little.
     career = config.REFERENCE_YEAR - r["first_year"] if r.get("first_year") else None
     out = lambda status, reason, ev=None: {"status": status, "reason": reason, "evidence": ev}
     if call.get("source") == "eu":
@@ -241,8 +243,6 @@ def eligibility(call: dict, r: dict) -> dict:
     if ev:
         if kind in ("phd", "postdoc"):
             return out("likely_ineligible", "senior_call_junior", ev)
-        if career is not None and career < 6:
-            return out("check", "senior_call_short_record", ev)
     # A submitted thesis is enough (FRIPRO mobility): PhD candidates should check.
     thesis = r"levert doktorgradsavhandling|levert avhandling|submitted (your|the|their) (doctoral )?thesis"
     if kind == "phd" and re.search(thesis, text, re.I):
