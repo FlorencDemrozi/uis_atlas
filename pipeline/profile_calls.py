@@ -199,7 +199,7 @@ def main() -> None:
     todo = [c for c in calls if c["fields"]["status"]["v"] != "closed"
             and (c["source"] == "rcn" or eu_wanted(c, best, cache))]
     print(f"Call profiles: {sum(c['source'] == 'eu' for c in todo)} EU topics pass the pre-filter "
-          f"(best score ≥ {config.EU_PROFILE_MIN_SCORE} or profiled before).")
+          f"(best score >= {config.EU_PROFILE_MIN_SCORE} or profiled before).")
     made = 0
     for i, call in enumerate(todo, 1):
         text = call_text(call)
