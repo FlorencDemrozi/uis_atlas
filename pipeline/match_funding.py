@@ -357,7 +357,7 @@ def main() -> None:
         if call["fields"].get("institution_level", {}).get("v"):
             # Applied for by the institution (MSCA COFUND, Researchers' Night): no researcher matches.
             out_calls[call["id"]] = {"aspects": [], "aspect_basis": "institution_level", "title_terms": [],
-                                     "matches": [], "profile_key": None}
+                                     "matches": [], "profile_key": profile_key}
             print(f"  {call['id']}: institution-level call – not matched to researchers")
             continue
         if call["fields"].get("open_field", {}).get("v"):
@@ -373,7 +373,7 @@ def main() -> None:
             rule = eu.role_rule(call["fields"]["call_id"]["v"] or "") if call["source"] == "eu" else None
             out_calls[call["id"]] = {"aspects": [], "aspect_basis": "open_field", "title_terms": [], "matches": [],
                                      "open_eligibility": elig, "eligibility_evidence": evidence,
-                                     "open_role": rule[2] if rule else None, "profile_key": None}
+                                     "open_role": rule[2] if rule else None, "profile_key": profile_key}
             n_out = sum(1 for s, _ in elig.values() if s == "likely_ineligible")
             print(f"  {call['id']}: open to all fields – {len(rows_of) - n_out} researchers offered "
                   f"({n_out} probably not eligible, {len(elig) - n_out} to check)")
