@@ -3,12 +3,16 @@
 Stage 1 – Collect publications from Scopus for the UiS Researcher Atlas.
 
 Run on the UiS network (campus or VPN), or anywhere if SCOPUS_INSTTOKEN is set.
-Reads SCOPUS_API_KEY from .env (asks interactively if missing).
+Reads SCOPUS_API_KEY from .env (asks if missing; a scheduled run stops instead).
 
 Resumable: if it stops (weekly quota, network), run it again.
+Once the full search is complete, every later run refreshes the last
+config.SCOPUS_REFRESH_YEARS years (new papers, updated citation counts), so the
+weekly run keeps the data current. --no-refresh skips that (e.g. to resume phase 2).
 
 Phases:
-  1. Search  – all UiS publications since ATLAS_FIRST_YEAR (Scopus Search API, COMPLETE view)
+  1. Search  – all UiS publications since ATLAS_FIRST_YEAR (Scopus Search API, COMPLETE view);
+               afterwards a refresh of recent years on every run
   2. Details – full affiliation strings for a few papers per author, to find their
                department (Abstract Retrieval API, FULL view)
   2b. History – at least one affiliation per faculty author per period in
@@ -24,12 +28,13 @@ import json
 import sys
 import time
 from collections import Counter, defaultdict
-from datetime import datetime
+from datetime import date, datetime
 
 import requests
 
-from config import (AFID, HISTORY_PERIODS, RAW, RAW_ATLAS, RAW_DETAILS, RAW_DOCS,
-                    RAW_SEARCH_STATE, SCOPUS_API_KEY, SCOPUS_INSTTOKEN, SCOPUS_QUERY)
+from config import (AFID, FIRST_YEAR, HISTORY_PERIODS, RAW, RAW_ATLAS, RAW_DETAILS, RAW_DOCS,
+                    RAW_REFRESH, RAW_SEARCH_STATE, SCOPUS_API_KEY, SCOPUS_INSTTOKEN,
+                    SCOPUS_QUERY, SCOPUS_REFRESH_YEARS)
 from departments import current_department, match_dept
 
 QUERY = SCOPUS_QUERY
@@ -38,6 +43,9 @@ DOCS_FILE = RAW_DOCS
 SEARCH_STATE = RAW_SEARCH_STATE
 DETAILS_FILE = RAW_DETAILS
 FINAL_FILE = RAW_ATLAS
+REFRESH_FILE = RAW_REFRESH
+REFRESH_FROM = max(FIRST_YEAR, date.today().year - SCOPUS_REFRESH_YEARS + 1)
+REFRESH_QUERY = f"AF-ID({AFID}) AND PUBYEAR > {REFRESH_FROM - 1}"
 
 SEARCH_URL = "https://api.elsevier.com/content/search/scopus"
 ABSTRACT_URL = "https://api.elsevier.com/content/abstract/eid/{}"
@@ -62,6 +70,8 @@ def is_uis(afid, name):
 
 # ---------------------------------------------------------------- HTTP
 def make_session():
+    if not SCOPUS_API_KEY and not sys.stdin.isatty():   # scheduled run: never wait for input
+        sys.exit("SCOPUS_API_KEY is not set in .env.")
     key = SCOPUS_API_KEY or getpass.getpass("Scopus API key: ").strip()
     s = requests.Session()
     s.headers.update({"X-ELS-APIKey": key, "Accept": "application/json"})
@@ -100,7 +110,64 @@ def get(s, url, params):
 
 
 # ---------------------------------------------------------------- Phase 1: search
-def phase_search(s):
+def search(s, query, cursor_state, out_file, save):
+    """Page through a search, appending records to out_file. cursor_state holds
+    cursor/count/done; save() persists the state file after every page."""
+    with out_file.open("a", encoding="utf-8") as f:
+        while True:
+            data = get(s, SEARCH_URL, {"query": query, "view": "COMPLETE",
+                                       "count": 25, "cursor": cursor_state["cursor"]})
+            res = data.get("search-results", {})
+            entries = [e for e in as_list(res.get("entry")) if "error" not in e]
+            for e in entries:
+                f.write(json.dumps(e, ensure_ascii=False) + "\n")
+            f.flush()
+            cursor_state["count"] += len(entries)
+            nxt = res.get("cursor", {}).get("@next")
+            print(f"  {cursor_state['count']} / {res.get('opensearch:totalResults', '?')} publications")
+            if not entries or not nxt or nxt == cursor_state["cursor"]:
+                cursor_state["done"] = True
+                save()
+                return
+            cursor_state["cursor"] = nxt
+            save()
+
+
+def merge_refresh(docs_file, refresh_file):
+    """Fold a finished refresh into docs_file: refreshed records replace older copies
+    of the same EID and duplicates are dropped. Written to a temp file, then swapped
+    in, so an interruption never loses records. Returns (new EIDs, total EIDs)."""
+    docs = {}
+    with docs_file.open(encoding="utf-8") as f:
+        for line in f:
+            docs[json.loads(line).get("eid")] = line.rstrip("\n") + "\n"
+    known = set(docs)
+    with refresh_file.open(encoding="utf-8") as f:
+        for line in f:
+            docs[json.loads(line).get("eid")] = line.rstrip("\n") + "\n"
+    tmp = docs_file.with_suffix(".tmp")
+    with tmp.open("w", encoding="utf-8") as f:
+        f.writelines(docs.values())
+    tmp.replace(docs_file)
+    refresh_file.unlink()
+    return len(docs.keys() - known), len(docs)
+
+
+def phase_refresh(s, state):
+    ref = state.get("refresh")
+    if not ref or ref.get("done") or ref.get("query") != REFRESH_QUERY:
+        ref = state["refresh"] = {"cursor": "*", "done": False, "count": 0, "query": REFRESH_QUERY}
+        REFRESH_FILE.unlink(missing_ok=True)
+    print(f"Phase 1: refreshing recent publications: {REFRESH_QUERY}")
+    save = lambda: SEARCH_STATE.write_text(json.dumps(state))
+    search(s, REFRESH_QUERY, ref, REFRESH_FILE, save)
+    new, total = merge_refresh(DOCS_FILE, REFRESH_FILE)
+    ref["finished"] = datetime.now().isoformat(timespec="seconds")
+    save()
+    print(f"  Refresh complete: {new} new publications, {total} in total.")
+
+
+def phase_search(s, refresh=True):
     state = (json.loads(SEARCH_STATE.read_text()) if SEARCH_STATE.exists()
              else {"cursor": "*", "done": False, "count": 0, "query": QUERY})
     if state.get("query") != QUERY:
@@ -109,27 +176,12 @@ def phase_search(s):
         print("Search query changed – starting a new search (existing records are kept).")
         state = {"cursor": "*", "done": False, "count": 0, "query": QUERY}
     if state["done"]:
-        print(f"Phase 1 already complete ({state['count']} records).")
+        print(f"Phase 1: full search already complete ({state['count']} records).")
+        if refresh:
+            phase_refresh(s, state)
         return
     print(f"Phase 1: searching Scopus for: {QUERY}")
-    with DOCS_FILE.open("a", encoding="utf-8") as f:
-        while True:
-            data = get(s, SEARCH_URL, {"query": QUERY, "view": "COMPLETE",
-                                       "count": 25, "cursor": state["cursor"]})
-            res = data.get("search-results", {})
-            entries = [e for e in as_list(res.get("entry")) if "error" not in e]
-            for e in entries:
-                f.write(json.dumps(e, ensure_ascii=False) + "\n")
-            f.flush()
-            state["count"] += len(entries)
-            nxt = res.get("cursor", {}).get("@next")
-            print(f"  {state['count']} / {res.get('opensearch:totalResults', '?')} publications")
-            if not entries or not nxt or nxt == state["cursor"]:
-                state["done"] = True
-                SEARCH_STATE.write_text(json.dumps(state))
-                break
-            state["cursor"] = nxt
-            SEARCH_STATE.write_text(json.dumps(state))
+    search(s, QUERY, state, DOCS_FILE, lambda: SEARCH_STATE.write_text(json.dumps(state)))
 
 
 def load_docs():
@@ -344,7 +396,7 @@ if __name__ == "__main__":
         build(all_docs, load_details())
         sys.exit()
     session = make_session()
-    phase_search(session)
+    phase_search(session, refresh="--no-refresh" not in sys.argv)
     all_docs = load_docs()
     all_details = phase_details(session, all_docs)
     all_details = phase_history(session, all_docs, all_details)

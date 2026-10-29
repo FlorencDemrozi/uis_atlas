@@ -16,6 +16,11 @@ load_dotenv(ROOT / ".env")
 AFID = "60014497"  # University of Stavanger in Scopus
 FIRST_YEAR = int(os.environ.get("ATLAS_FIRST_YEAR", "2020"))
 SCOPUS_QUERY = f"AF-ID({AFID}) AND PUBYEAR > {FIRST_YEAR - 1}"
+# Once the full search is complete, every later run of collect_scopus.py searches
+# only the last SCOPUS_REFRESH_YEARS calendar years again: new papers, papers
+# indexed late and fresh citation counts for recent work (one weekly run costs a
+# few hundred Search API requests).
+SCOPUS_REFRESH_YEARS = 2
 INSTITUTION_NAME = "University of Stavanger"
 
 # Faculties and their departments (as of 2026-10-23, confirmed by the project owner).
@@ -178,6 +183,7 @@ CONFIG_DIR = ROOT / "config"
 
 RAW_DOCS = RAW / "docs.jsonl"
 RAW_SEARCH_STATE = RAW / "search_state.json"
+RAW_REFRESH = RAW / "refresh.jsonl"     # records of an unfinished refresh search
 RAW_DETAILS = RAW / "details.jsonl"
 RAW_ATLAS = RAW / "atlas_data.json"     # combined output of collect_scopus.py
 RAW_DIRECTORY = DATA / "raw" / "uis_directory"  # UiS employee directory: personal data, local only
@@ -188,6 +194,8 @@ MERGE_LOG = INTERIM / "merge_log.json"
 REVIEW_DIR = INTERIM / "review"         # CSVs for the project owner (local only)
 SUMMARIES = INTERIM / "summaries.json"
 EMBEDDINGS_DIR = INTERIM / "embeddings"
+
+LOGS = ROOT / "logs"                    # run_weekly.py logs (local only, not committed)
 
 EXCLUSIONS = CONFIG_DIR / "exclusions.json"
 OVERRIDES = CONFIG_DIR / "overrides.json"
