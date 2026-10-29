@@ -13,6 +13,8 @@ all JSON files, build the website. No database, no server process – just files
   3. npm run build in web/ -> web/dist/ (copy or serve that folder).
   4. Only with --publish: licence guard (tests/test_policy.py), then commit
      data/public/ and push, so the GitHub Pages workflow redeploys the site.
+  5. A short Telegram message (notify.py): finished or the step that stopped the run,
+     collectors with problems and counts. Skipped if Telegram is not set up in .env.
 
 Everything printed is also written to logs/weekly-<date>.log (local only).
 Exit code 0 only if everything after step 1 succeeded; collector problems are
@@ -28,12 +30,14 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+import notify
 from config import LOGS, ROOT
 
 HERE = Path(__file__).resolve().parent
 WEB = ROOT / "web"
 KEEP_LOGS = 26          # about half a year of weekly runs
 LOG = None              # open log file, set in main()
+FAILED: list[str] = []  # collectors that failed (old data used)
 
 
 def say(text: str) -> None:
@@ -102,7 +106,8 @@ def main() -> None:
     collectors = ["collect_directory.py", "collect_rcn.py", "collect_eu.py"]
     if not args.skip_scopus:
         collectors.insert(0, "collect_scopus.py")
-    failed = [c for c in collectors if not run([sys.executable, str(HERE / c)])]
+    FAILED[:] = [c for c in collectors if not run([sys.executable, str(HERE / c)])]
+    failed = FAILED
 
     if not run([sys.executable, str(HERE / "run_all.py")]):
         stop("Weekly update stopped: a processing stage failed (see above). The website was not rebuilt.")
@@ -116,10 +121,23 @@ def main() -> None:
     took = (datetime.now() - started).seconds // 60
     say(f"\nWeekly update finished in {took} min." + (f" Collectors with problems (old data used): "
                                                      f"{', '.join(failed)}." if failed else ""))
+    tell(f"UiS Atlas weekly update OK ({took} min)" + (" – with collector problems" if failed else ""))
+
+
+def tell(headline: str) -> None:
+    """Telegram message: headline, collectors with problems, counts, log file name."""
+    lines = [headline]
+    if FAILED:
+        lines.append("Collectors with problems (old data used): " + ", ".join(FAILED))
+    lines += notify.counts() + [f"Log: {Path(LOG.name).name}"]
+    error = notify.send("\n".join(lines))
+    if error:
+        say(error)
 
 
 def stop(message: str) -> None:
     say(message)
+    tell("UiS Atlas weekly update FAILED: " + message)
     sys.exit(1)
 
 

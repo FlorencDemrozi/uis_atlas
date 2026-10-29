@@ -66,6 +66,20 @@ cp .env.example .env && chmod 600 .env && nano .env
    cd ~/uis_atlas && ~/venvs/atlas/bin/python pipeline/run_weekly.py
    ```
 
+6. **Telegram message after each run (optional).** `run_weekly.py` sends one short
+   message: "OK" or the step that stopped the run, collectors with problems, and
+   counts (open calls, high/medium matches, AI profiles). No personal data, no keys.
+   1. In Telegram, open **@BotFather**, send `/newbot` and follow the steps. It
+      replies with a token like `123456789:AA…`: put it in `.env` as
+      `TELEGRAM_BOT_TOKEN`.
+   2. Open the new bot and send it any message (a bot can only write to people who
+      have written to it first). For a group, add the bot to the group instead.
+   3. Open `https://api.telegram.org/bot<token>/getUpdates` in a browser and copy
+      `"chat":{"id": …}` into `.env` as `TELEGRAM_CHAT_ID` (groups have a negative id).
+   4. Test: `~/venvs/atlas/bin/python pipeline/notify.py` should answer "Sent." and
+      the message arrives. Without the two settings nothing is sent; a message that
+      cannot be sent is noted in the log and never fails the run.
+
 ## Publishing the result: choose one
 
 **A. Push to GitHub Pages (current site).** Give the server push access with a
