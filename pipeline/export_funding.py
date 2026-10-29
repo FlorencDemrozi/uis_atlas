@@ -4,7 +4,8 @@ Stage 5c – Export the Funding Intelligence data for the website, encrypted.
 
 Input:  config.CALLS, config.CALLS_HISTORY, config.CALL_PROFILES (optional),
         config.FUNDING_MATCHES, config.PROFILES
-Output: data/public/funding.enc.json
+Output: data/public/funding.enc.json (index: every call and every match),
+        data/public/funding.detail-NN.enc.json (call details, in DETAIL_SHARDS files)
 
 The funding pages are only for people who know the password (project owner,
 2026-10-26). The site is static, so the data file itself is encrypted:
@@ -17,6 +18,11 @@ written and the previous file stays as it is.
 
 Contents: call records (fields with sources and evidence, change history,
 review flags), AI call profiles when present, and matches with paper ids.
+The index holds what the list, profile and match views need (INDEX_FIELDS) and
+all matches; the call page loads the rest – official text passages, documents,
+AI profile, history – from the call's detail shard. All files use the same salt
+and key (the password is typed once) with a new random IV each; no call or match
+is left out.
 Only fields allowed below are exported; no abstracts or raw Scopus data
 (DATA_POLICY §2) – papers are referenced by id and resolved against the public
 papers.json.
@@ -33,6 +39,17 @@ from datetime import datetime
 import config
 
 OUT = config.PUBLIC / "funding.enc.json"
+DETAIL_SHARDS = 16
+DETAIL_OUT = config.PUBLIC / "funding.detail-{:02d}.enc.json"
+# Fields read outside the call page (list, filters, profile, match details); every
+# other field goes to the detail shards.
+INDEX_FIELDS = {"call_id", "title", "summary", "status", "funder", "programme", "programme_part", "parent_call",
+                "scheme", "action_type", "url", "deadline", "preliminary_deadline", "full_proposal_deadline",
+                "cutoff_dates", "opening_date", "rolling", "published", "themes", "target_groups", "international",
+                "orientation", "open_field", "institution_level", "norway_eligible", "uis_can_apply", "min_amount",
+                "max_amount", "total_budget", "expected_grants", "currency", "min_duration_months",
+                "max_duration_months"}
+DETAIL_KEYS = ("profile", "history")
 ITERATIONS = 600_000
 CALL_KEYS = ["id", "source", "family", "listing_group", "tags", "fetched", "fields", "review", "listed"]
 SOURCES = {
@@ -82,10 +99,13 @@ def merge_ai(call: dict, profile: dict | None) -> None:
             current["ai"] = ai
 
 
-def encrypt(plain: bytes, password: str) -> dict:
+def derive_key(password: str, salt: bytes) -> bytes:
+    return hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, ITERATIONS, dklen=32)
+
+
+def encrypt(plain: bytes, key: bytes, salt: bytes) -> dict:
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-    salt, iv = secrets.token_bytes(16), secrets.token_bytes(12)
-    key = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, ITERATIONS, dklen=32)
+    iv = secrets.token_bytes(12)
     data = AESGCM(key).encrypt(iv, gzip.compress(plain), None)
     b64 = lambda b: base64.b64encode(b).decode("ascii")
     return {"format": "atlas-funding-1",
@@ -99,11 +119,27 @@ def check_policy(text: str) -> None:
             raise SystemExit(f"Licence check failed: funding export contains {bad}.")
 
 
-def main() -> None:
-    password = os.environ.get("ATLAS_FUNDING_PASSWORD")
-    if not password:
-        sys.exit("ATLAS_FUNDING_PASSWORD is not set in .env – funding data not exported "
-                 "(the previous funding.enc.json, if any, is unchanged).")
+def shard_of(call_id: str) -> int:
+    return int(hashlib.sha1(call_id.encode("utf-8")).hexdigest(), 16) % DETAIL_SHARDS
+
+
+def split(data: dict) -> tuple[dict, list[dict]]:
+    """(index, detail shards). A call's fields outside INDEX_FIELDS, its profile and
+    history go to shard call["d"]; the index keeps the rest and all matches."""
+    shards = [{} for _ in range(DETAIL_SHARDS)]
+    calls = []
+    for c in data["calls"]:
+        n = shard_of(c["id"])
+        detail = {"fields": {k: v for k, v in c["fields"].items() if k not in INDEX_FIELDS}}
+        detail |= {k: c[k] for k in DETAIL_KEYS if k in c}
+        shards[n][c["id"]] = detail
+        calls.append({k: v for k, v in c.items() if k not in DETAIL_KEYS}
+                     | {"fields": {k: v for k, v in c["fields"].items() if k in INDEX_FIELDS}, "d": n})
+    return dict(data, calls=calls, meta=dict(data["meta"], detail_shards=DETAIL_SHARDS)), shards
+
+
+def build() -> dict:
+    """The complete funding data (before splitting)."""
     calls_doc = json.loads(config.CALLS.read_text(encoding="utf-8"))
     history = json.loads(config.CALLS_HISTORY.read_text(encoding="utf-8")) if config.CALLS_HISTORY.exists() else {}
     profiles = (json.loads(config.CALL_PROFILES.read_text(encoding="utf-8"))
@@ -116,6 +152,8 @@ def main() -> None:
     for c in calls_doc["calls"]:
         out = slim({k: c.get(k) for k in CALL_KEYS})
         prof = profiles.get(c["id"])
+        if c["source"] == "eu" and c["fields"]["status"]["v"] == "closed":
+            prof = None  # kept for history only (slim): the profile is not used after closing
         merge_ai(out, prof)
         if prof:
             p = prof["profile"]
@@ -163,11 +201,28 @@ def main() -> None:
         "calls": calls,
         "matches": matches,
     }
-    plain = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
-    check_policy(plain)
-    OUT.write_text(json.dumps(encrypt(plain.encode("utf-8"), password)), encoding="utf-8")
-    print(f"Funding data: {len(calls)} calls, {sum(len(v) for v in matches.values())} matches -> {OUT.name} "
-          f"({OUT.stat().st_size / 1e6:.2f} MB encrypted, {len(plain) / 1e6:.2f} MB plain).")
+    return data
+
+
+def main() -> None:
+    password = os.environ.get("ATLAS_FUNDING_PASSWORD")
+    if not password:
+        sys.exit("ATLAS_FUNDING_PASSWORD is not set in .env – funding data not exported "
+                 "(the previous funding.enc.json, if any, is unchanged).")
+    data = build()
+    index, shards = split(data)
+    plains = [json.dumps(x, ensure_ascii=False, separators=(",", ":")) for x in [index] + shards]
+    for plain in plains:
+        check_policy(plain)
+    salt = secrets.token_bytes(16)
+    key = derive_key(password, salt)
+    files = [OUT] + [DETAIL_OUT.with_name(DETAIL_OUT.name.format(n)) for n in range(DETAIL_SHARDS)]
+    for path, plain in zip(files, plains):
+        path.write_text(json.dumps(encrypt(plain.encode("utf-8"), key, salt)), encoding="utf-8")
+    enc = sum(p.stat().st_size for p in files[1:]) / 1e6
+    print(f"Funding data: {len(index['calls'])} calls, {sum(len(v) for v in data['matches'].values())} matches -> "
+          f"{OUT.name} ({OUT.stat().st_size / 1e6:.2f} MB encrypted, {len(plains[0]) / 1e6:.2f} MB plain) "
+          f"+ {DETAIL_SHARDS} detail files ({enc:.2f} MB encrypted, {sum(map(len, plains[1:])) / 1e6:.2f} MB plain).")
 
 
 if __name__ == "__main__":

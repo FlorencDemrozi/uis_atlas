@@ -1,6 +1,6 @@
 import { useState } from "preact/hooks";
 import type { Atlas } from "../data";
-import { callTitle, isInstitutionLevel, pick, type Call, type Funding, type Match } from "../funding";
+import { callTitle, isInstitutionLevel, pick, useCallDetail, type Call, type Funding, type Match } from "../funding";
 import { useI18n } from "../i18n";
 import { links } from "../router";
 import { CategoryBadge, FieldList, Freshness, FundingGate, MatchDetails, SourceBadge, StatusBadge, useFmt } from "../components/funding";
@@ -32,9 +32,12 @@ function CallPage({ atlas, data, id }: { atlas: Atlas; data: Funding; id: string
   const { t, lang } = useI18n();
   const fmt = useFmt();
   const call = data.byId.get(id);
+  const detail = useCallDetail(data, call);
   if (!call) {
     return <div class="page-head"><h1>{t("f.notFound")}</h1><p><a href={links.funding()}>{t("f.back")}</a></p></div>;
   }
+  if (detail === "loading") return <p class="loading" role="status">{t("f.loadingCall")}</p>;
+  if (detail === "error") return <p class="muted">{t("f.errorCall")}</p>;
   const f = call.fields;
   const status = f.status.v as string;
   const matches = data.matches[call.id] ?? [];
@@ -60,6 +63,7 @@ function CallPage({ atlas, data, id }: { atlas: Atlas; data: Funding; id: string
           {url.nb && <a href={url.nb}>{t("f.official")}</a>}
           {url.en && <a href={url.en}>{t(call.source === "eu" ? "f.officialEu" : "f.officialEn")}</a>}
         </div>
+        {call.closed_by_date && <p class="warn small" role="note">{t("f.closedByDate")}</p>}
         {call.review.length > 0 && (
           <p class="warn small" role="note"><strong>{t("f.review")}:</strong> {t("f.reviewText")} ({call.review.join("; ")})</p>
         )}
@@ -98,9 +102,9 @@ function CallPage({ atlas, data, id }: { atlas: Atlas; data: Funding; id: string
 
       <section class="section" id="sec-history" aria-labelledby="h-history">
         <h2 id="h-history">{t("f.sec.history")}</h2>
-        {call.history.length <= 1 ? <p class="muted small">{t("f.noChanges")}</p> : (
+        {(call.history ?? []).length <= 1 ? <p class="muted small">{t("f.noChanges")}</p> : (
           <ul class="history">
-            {[...call.history].reverse().map((h, i) => (
+            {[...(call.history ?? [])].reverse().map((h, i) => (
               <li key={i}><span class="muted num">{fmt.date(h.date)}</span>{" "}
                 {h.field === "new" ? t("f.change.new") : h.field === "text" ? t("f.change.text")
                   : h.field === "unlisted" ? t("f.change.unlisted")

@@ -478,5 +478,8 @@
   "f.reason.erc_cog_window": "ERC Consolidator Grant: 7–12 år etter doktorgraden. Personen har publisert ved UiS i mer enn 16 år – sjekk doktorgradsdatoen.",
   "f.reason.erc_adg_record": "ERC Advanced Grant: krever betydelige forskningsresultater de siste 10 årene, og personen er postdoktor – sjekk kravene.",
   "f.reason.msca_supervisor": "UiS-ansatte deltar som veiledere, og personen er stipendiat.",
-  "f.reason.msca_supervisor_postdoc": "UiS-ansatte deltar som veiledere – sjekk om en postdoktor kan være veileder her."
+  "f.reason.msca_supervisor_postdoc": "UiS-ansatte deltar som veiledere – sjekk om en postdoktor kan være veileder her.",
+  "f.loadingCall": "Henter detaljene for utlysningen…",
+  "f.errorCall": "Detaljene for utlysningen kunne ikke hentes. Last inn siden på nytt; er dataene oppdatert i mellomtiden, må du kanskje skrive inn passordet igjen.",
+  "f.closedByDate": "Alle fristene for denne utlysningen er passert. Kilden viste den fortsatt som åpen eller planlagt ved siste ukentlige oppdatering, så den vises her som stengt."
 }

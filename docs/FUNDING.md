@@ -27,7 +27,7 @@ pass it on. To change it, set a new value in `.env` and re-run the export.
 | Match | `match_funding.py` | calls + paper embeddings (`embed.py`) → `data/interim/funding_matches.json` |
 | AI profile | `profile_calls.py` | open/planned RCN calls and pre-filtered EU topics → `data/interim/call_profiles.json` (needs `ANTHROPIC_API_KEY`; skipped otherwise) |
 | Match again | `match_funding.py --changed-profiles` | redoes only the calls whose AI profile changed |
-| Export | `export_funding.py` | all of the above → `data/public/funding.enc.json` (encrypted) |
+| Export | `export_funding.py` | all of the above → `data/public/funding.enc.json` + 16 `funding.detail-NN.enc.json` (encrypted) |
 
 `run_all.py` runs the processing stages; `run_weekly.py` runs collectors + processing
 + `npm run build` (see "Scheduled update").
@@ -140,8 +140,9 @@ horizon, erc, msca, eic, missions, partnerships, other_eu; RCN calls are `nfr`).
 - **Matching:** the same method as RCN calls, on the official topic text (or the AI
   profile, see Phase 2). Eligibility adds `eu_company_only`, `eu_restricted`,
   `eu_country_unknown`.
-- **Export:** closed EU topics carry only their identifying fields; empty keys and
-  source URLs equal to the topic page are left out and restored in the browser.
+- **Export:** closed EU topics carry only their identifying fields (and no AI
+  profile); empty keys and source URLs equal to the topic page are left out and
+  restored in the browser.
 
 ## EU funding – Phase 2, 2026-10-29
 - **AI topic profiles with a pre-filter.** Matching first runs on every topic's
@@ -184,10 +185,26 @@ Not done yet (later phases): other sources (COST, NordForsk, Eureka, ERA-LEARN, 
 CORDIS projects and external collaborators (Phase 4, from Scopus co-authors as
 decided – needs clearance under DATA_POLICY.md), consortium suggestions (Phase 5).
 
+## Export files and status in the browser (2026-10-29)
+- **Index and detail files.** `funding.enc.json` holds every call (open and closed,
+  RCN and EU) with the fields the list, filters, profiles and match details use
+  (`export_funding.INDEX_FIELDS`), and every match including Low. The rest of each
+  call – official text passages, documents, AI profile, change history – is in one
+  of 16 `funding.detail-NN.enc.json` files (by a hash of the call id), loaded when
+  a call page is opened. One salt and key for all files (the password is typed
+  once), a new random IV per file. Before the split the single file was 26 MB
+  plain / 3.9 MB encrypted.
+- **Closed by date.** The status comes from the weekly run. In the browser, a call
+  listed as open or planned whose deadlines (including all cut-offs) have all
+  passed is shown as closed at once, with a note on its page, and its matches are
+  no longer offered on profiles. Rolling calls and calls without a deadline are
+  left as they are.
+
 ## Scheduled update
 See `docs/DEPLOY.md`: weekly `run_weekly.py` on a UiS server (Task Scheduler),
 logging and optional publishing. A failing collector keeps the old data; a failing
-processing stage stops before the website is rebuilt.
+processing stage stops before the website is rebuilt. An optional Telegram message
+reports each run (`notify.py`).
 
 ## Not done yet (deferred by the project owner, 2026-10-26)
 External collaborators (e.g. via OpenAlex), suggested research teams, funding layer in

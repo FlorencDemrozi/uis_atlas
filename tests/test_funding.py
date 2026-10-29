@@ -365,7 +365,8 @@ def test_ai_values_never_overwrite_stated_values():
 # ---------------------------------------------------------- encrypted export
 def test_encryption_round_trip_and_password_not_in_file():
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-    blob = export_funding.encrypt(b'{"calls": []}', "Correct-Horse-1")
+    salt = b"0123456789abcdef"
+    blob = export_funding.encrypt(b'{"calls": []}', export_funding.derive_key("Correct-Horse-1", salt), salt)
     assert "Correct-Horse-1" not in json.dumps(blob)
     d = lambda k: base64.b64decode(blob[k] if k == "data" else blob["kdf"]["salt"] if k == "salt" else blob["cipher"]["iv"])
     key = hashlib.pbkdf2_hmac("sha256", b"Correct-Horse-1", d("salt"), blob["kdf"]["iterations"], dklen=32)
@@ -373,6 +374,25 @@ def test_encryption_round_trip_and_password_not_in_file():
     wrong = hashlib.pbkdf2_hmac("sha256", b"wrong", d("salt"), blob["kdf"]["iterations"], dklen=32)
     with pytest.raises(Exception):
         AESGCM(wrong).decrypt(d("iv"), d("data"), None)
+
+
+def test_split_keeps_every_call_field_and_match():
+    def field(v):
+        return {"v": v, "s": "explicit"}
+    calls = [{"id": f"eu-T{i}", "source": "eu", "fields": {"title": field({"en": f"T{i}"}), "status": field("open"),
+                                                         "research_scope": field({"en": "long text"}),
+                                                         "documents": field([])},
+              "profile": {"topics": []}, "history": [{"k": 1}], "aspects": [], "review": []} for i in range(40)]
+    data = {"meta": {}, "calls": calls, "matches": {"eu-T1": [{"id": "1", "score": 0.1}]}}
+    index, shards = export_funding.split(data)
+    assert len(shards) == export_funding.DETAIL_SHARDS and index["matches"] == data["matches"]
+    assert [c["id"] for c in index["calls"]] == [c["id"] for c in calls]
+    for orig, c in zip(calls, index["calls"]):
+        d = shards[c["d"]][c["id"]]
+        assert set(c["fields"]) == {"title", "status"} and set(d["fields"]) == {"research_scope", "documents"}
+        assert {**c["fields"], **d["fields"]} == orig["fields"]
+        assert d["profile"] == orig["profile"] and d["history"] == orig["history"] and "profile" not in c
+        assert c["aspects"] == [] and c["d"] == export_funding.shard_of(c["id"])
 
 
 def test_export_refuses_licensed_fields():
@@ -406,3 +426,32 @@ def test_short_uis_record_does_not_flag_experienced_call():
     call = build_calls.build_call(raw_call("9", page))
     recent = person("Professor", config.REFERENCE_YEAR - 2)
     assert match_funding.eligibility(call, recent)["status"] == "no_restriction_found"
+
+
+# ------------------------------------------------------------ notification
+def test_telegram_message_is_skipped_without_setup_and_never_raises(monkeypatch):
+    import notify
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
+    monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
+    assert notify.send("x") is None
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123:secret-token")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "42")
+    sent = {}
+
+    class Reply:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self, *a): return b'{"ok": true}'
+
+    def fake(url, body, timeout):
+        sent.update(url=url, body=body)
+        return Reply()
+    monkeypatch.setattr(notify.urllib.request, "urlopen", fake)
+    assert notify.send("Weekly update OK") is None
+    assert b"chat_id=42" in sent["body"] and b"Weekly+update+OK" in sent["body"]
+
+    def down(*a, **k):
+        raise OSError("https://api.telegram.org/bot123:secret-token/sendMessage unreachable")
+    monkeypatch.setattr(notify.urllib.request, "urlopen", down)
+    error = notify.send("x")
+    assert error and "secret-token" not in error  # the token is never logged

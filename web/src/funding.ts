@@ -1,9 +1,11 @@
 // Funding Intelligence data: loaded from public/data/funding.enc.json and decrypted
 // in the browser once the user types the password (pipeline/export_funding.py).
+// That index holds every call and match; a call's full details (official text,
+// AI profile, history) come from its detail shard when its page opens (loadDetail).
 // The password never appears in the code; only a key derived from it is kept for
 // the browser session (sessionStorage), so the pages stay open while navigating.
 import { createContext } from "preact";
-import { useCallback, useContext, useMemo, useState } from "preact/hooks";
+import { useCallback, useContext, useEffect, useMemo, useState } from "preact/hooks";
 
 export type FieldStatus = "explicit" | "inferred" | "not_specified";
 export type Method = "metadata" | "section" | "rule" | "manual" | "ai" | null;
@@ -50,7 +52,7 @@ export interface Call {
   fields: Record<string, Field<any>>;
   review: string[];
   listed: boolean;
-  history: Change[];
+  history?: Change[];  // from the detail shard
   profile?: CallProfile;
   aspects?: Aspect[];
   aspect_basis?: "ai_profile" | "call_text" | "open_field" | "institution_level";
@@ -60,6 +62,10 @@ export interface Call {
   eligibility_evidence?: Record<string, string | null>;
   /** ERC / MSCA: the role a UiS researcher takes (e.g. "supervisor" for MSCA fellowships). */
   open_role?: string;
+  /** Detail shard holding the call's other fields, profile and history. */
+  d?: number;
+  /** Listed as open or planned, but every deadline has passed (set in the browser, see closeByDate). */
+  closed_by_date?: boolean;
 }
 
 export interface Eligibility {
@@ -99,6 +105,7 @@ export interface FundingMeta {
   weights: Record<string, number>;
   categories: Record<string, number>;
   has_ai_profiles: boolean;
+  detail_shards?: number;
 }
 
 export interface Funding {
@@ -108,6 +115,9 @@ export interface Funding {
   matches: Record<string, Match[]>;
   /** Researcher id -> their call matches, best first. */
   byResearcher: Map<string, { call: Call; match: Match }[]>;
+  /** Key and salt of this export, to open the detail shards. */
+  key: Uint8Array<ArrayBuffer>;
+  salt: string;
 }
 
 interface EncryptedFile {
@@ -129,17 +139,29 @@ async function deriveKey(password: string, file: EncryptedFile): Promise<Uint8Ar
   return new Uint8Array(bits);
 }
 
-async function decrypt(file: EncryptedFile, raw: Uint8Array<ArrayBuffer>): Promise<Funding> {
+async function openFile<T>(file: EncryptedFile, raw: Uint8Array<ArrayBuffer>): Promise<T> {
   const key = await crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["decrypt"]);
   const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64(file.cipher.iv) }, key, b64(file.data));
   const stream = new Blob([plain]).stream().pipeThrough(new DecompressionStream("gzip"));
-  const data = JSON.parse(await new Response(stream).text()) as Omit<Funding, "byId" | "byResearcher">;
-  for (const c of data.calls) c.fields = restoreFields(c.fields);
+  return JSON.parse(await new Response(stream).text()) as T;
+}
+
+// Fields as exported (before restoreFields), so detail fields can be merged in later.
+const rawFields = new WeakMap<Call, Record<string, Partial<Field<any>>>>();
+
+async function decrypt(file: EncryptedFile, raw: Uint8Array<ArrayBuffer>): Promise<Funding> {
+  const data = await openFile<Omit<Funding, "byId" | "byResearcher" | "key" | "salt">>(file, raw);
+  const today = new Date().toISOString().slice(0, 10);
+  for (const c of data.calls) {
+    rawFields.set(c, c.fields as Record<string, Partial<Field<any>>>);
+    c.fields = restoreFields(c.fields);
+    closeByDate(c, today);
+  }
   const byId = new Map(data.calls.map((c) => [c.id, c]));
   const byResearcher = new Map<string, { call: Call; match: Match }[]>();
   for (const [cid, list] of Object.entries(data.matches)) {
     const call = byId.get(cid);
-    if (!call) continue;
+    if (!call || call.closed_by_date) continue;  // matches are only for open and planned calls
     for (const match of list) {
       const arr = byResearcher.get(match.id) ?? [];
       arr.push({ call, match });
@@ -147,7 +169,70 @@ async function decrypt(file: EncryptedFile, raw: Uint8Array<ArrayBuffer>): Promi
     }
   }
   for (const arr of byResearcher.values()) arr.sort((a, b) => b.match.score - a.match.score);
-  return { ...data, byId, byResearcher };
+  return { ...data, byId, byResearcher, key: raw, salt: file.kdf.salt };
+}
+
+/** The weekly pipeline sets the status; a call whose deadlines have all passed since
+ * then is shown as closed straight away. Rolling calls, calls without a deadline and
+ * calls with cut-offs still ahead stay as they are. */
+export function closeByDate(c: Call, today: string): void {
+  const f = c.fields;
+  if (f.status.v === "closed" || f.rolling.v) return;
+  const dates = [f.preliminary_deadline.v, f.deadline.v, f.full_proposal_deadline.v, ...(f.cutoff_dates.v ?? [])]
+    .filter((d): d is string => !!d).map((d) => d.slice(0, 10));
+  if (!dates.length || dates.some((d) => d >= today)) return;
+  c.fields.status = { ...f.status, v: "closed" };
+  c.closed_by_date = true;
+}
+
+// ------------------------------------------------------------ call details
+interface CallDetail { fields: Record<string, Partial<Field<any>>>; profile?: CallProfile; history?: Change[] }
+const shardFiles = new Map<string, Promise<Record<string, CallDetail>>>();
+
+/** Loads the call's detail shard (once per shard) and merges it into every call of that shard. */
+export async function loadDetail(data: Funding, call: Call): Promise<void> {
+  if (call.d == null || !rawFields.has(call)) return;
+  const name = "./data/funding.detail-" + String(call.d).padStart(2, "0") + ".enc.json";
+  if (!shardFiles.has(name)) {
+    shardFiles.set(name, fetch(name).then(async (res) => {
+      if (!res.ok) throw new Error(String(res.status));
+      const file = (await res.json()) as EncryptedFile;
+      if (file.kdf.salt !== data.salt) throw new Error("outdated");  // a newer export: reload the page
+      return openFile<Record<string, CallDetail>>(file, data.key);
+    }));
+  }
+  let shard: Record<string, CallDetail>;
+  try {
+    shard = await shardFiles.get(name)!;
+  } catch (e) {
+    shardFiles.delete(name);  // try again next time
+    throw e;
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  for (const [id, detail] of Object.entries(shard)) {
+    const c = data.byId.get(id);
+    const own = c && rawFields.get(c);
+    if (!c || !own) continue;
+    rawFields.delete(c);  // merged once
+    c.fields = restoreFields({ ...own, ...detail.fields });
+    closeByDate(c, today);
+    if (detail.profile) c.profile = detail.profile;
+    c.history = detail.history ?? [];
+  }
+}
+
+/** "ready" once the call's details are merged (at once for older single-file exports). */
+export function useCallDetail(data: Funding, call: Call | undefined): "loading" | "ready" | "error" {
+  const pending = !!call && call.d != null && rawFields.has(call);
+  const [state, setState] = useState<"loading" | "ready" | "error">(pending ? "loading" : "ready");
+  useEffect(() => {
+    if (!call || !pending) { setState("ready"); return; }
+    let live = true;
+    setState("loading");
+    loadDetail(data, call).then(() => { if (live) setState("ready"); }, () => { if (live) setState("error"); });
+    return () => { live = false; };
+  }, [data, call?.id]);
+  return state;
 }
 
 const NOT_SPECIFIED: Field<null> = { v: null, s: "not_specified", src: null, url: null, ev: null, c: null, m: null };

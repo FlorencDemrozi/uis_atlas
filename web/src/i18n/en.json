@@ -478,5 +478,8 @@
   "f.reason.erc_cog_window": "ERC Consolidator Grant: 7–12 years since the PhD. The person has published at UiS for more than 16 years – check the PhD date.",
   "f.reason.erc_adg_record": "ERC Advanced Grant: requires a track record of significant achievements over the last 10 years, and the person is a postdoc – check the requirements.",
   "f.reason.msca_supervisor": "UiS staff take part as supervisors, and the person is a PhD candidate.",
-  "f.reason.msca_supervisor_postdoc": "UiS staff take part as supervisors – check whether a postdoc can supervise here."
+  "f.reason.msca_supervisor_postdoc": "UiS staff take part as supervisors – check whether a postdoc can supervise here.",
+  "f.loadingCall": "Loading the call details…",
+  "f.errorCall": "The call details could not be loaded. Reload the page; if the data was updated in the meantime, you may need to type the password again.",
+  "f.closedByDate": "All deadlines of this call have passed. The source still listed it as open or planned at the last weekly update, so it is shown as closed here."
 }
