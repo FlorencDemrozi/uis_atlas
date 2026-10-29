@@ -342,7 +342,9 @@ def main() -> None:
     previous = {}
     if "--changed-profiles" in sys.argv and config.FUNDING_MATCHES.exists():
         prev = json.loads(config.FUNDING_MATCHES.read_text(encoding="utf-8"))
-        if (prev.get("researchers_from"), prev.get("calls_from"), prev.get("settings")) ==                 (profiles_doc.get("generated"), calls.get("generated"), CFG):
+        same_inputs = (profiles_doc.get("generated"), calls.get("generated"),
+                       json.loads(json.dumps(CFG)))  # as stored: tuples become lists in JSON
+        if (prev.get("researchers_from"), prev.get("calls_from"), prev.get("settings")) == same_inputs:
             previous = prev["calls"]
     reused = 0
     for call in active:
