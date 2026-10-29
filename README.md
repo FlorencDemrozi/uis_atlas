@@ -58,6 +58,7 @@ Then open the project in Claude Code and start with milestone 1 in `docs/SPEC.md
 `data/public/` and publishes it on every push to `main` (enable once under
 Settings → Pages → Source: GitHub Actions). To update the online data, rerun
 the pipeline locally, then commit and push `data/public/`.
+For the weekly update on a UiS server, see `docs/DEPLOY.md`.
 
 > **Status (2026-10-22):** the project owner decided to publish the test version
 > with real data before the UiS Library and data protection officer have

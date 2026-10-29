@@ -8,6 +8,9 @@ data/interim/*
 !data/raw/.gitkeep
 !data/interim/.gitkeep
 
+# Weekly run logs (may name people)
+logs/
+
 # Python
 __pycache__/
 *.pyc

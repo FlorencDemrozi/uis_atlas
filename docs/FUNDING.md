@@ -103,15 +103,8 @@ AI values are shown next to official values and never replace them.
 Not scored (no data yet): project experience, interdisciplinarity.
 
 ## Scheduled update
-Every Saturday 01:00 on the UiS server (Windows Task Scheduler example):
-
-```
-schtasks /Create /TN "UiS Atlas weekly" /SC WEEKLY /D SAT /ST 01:00 ^
-  /TR "C:\python-envs\.atlas\Scripts\python.exe C:\path\to\uis_atlas\pipeline\run_weekly.py"
-```
-
-Linux cron: `0 1 * * 6 /path/to/python /path/to/uis_atlas/pipeline/run_weekly.py`.
-The built site is in `web/dist/`. A failing collector keeps the old data; a failing
+See `docs/DEPLOY.md`: weekly `run_weekly.py` on a UiS server (Task Scheduler),
+logging and optional publishing. A failing collector keeps the old data; a failing
 processing stage stops before the website is rebuilt.
 
 ## Not done yet (deferred by the project owner, 2026-10-26)
