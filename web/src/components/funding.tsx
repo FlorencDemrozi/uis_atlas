@@ -1,7 +1,8 @@
 import type { ComponentChildren } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import type { Atlas } from "../data";
-import { callTitle, isStale, pick, useFunding, type Call, type Eligibility, type Field, type Funding, type Match } from "../funding";
+import { callTitle, familyOf, isStale, pick, useFunding, type Call, type Eligibility, type Field, type Funding,
+  type Match } from "../funding";
 import { useI18n } from "../i18n";
 import { links } from "../router";
 import { DeptLabel, Position, doiUrl } from "./common";
@@ -97,6 +98,13 @@ const DATE_FIELDS = new Set(["deadline", "preliminary_deadline", "full_proposal_
   "published", "updated", "earliest_start", "latest_start", "latest_end"]);
 const MONEY_FIELDS = new Set(["min_amount", "max_amount", "total_budget"]);
 
+/** Funding source / programme family (NFR, Horizon Europe, ERC, ...). */
+export function SourceBadge({ call }: { call: Call }) {
+  const { t } = useI18n();
+  const fam = familyOf(call);
+  return <span class={`source-badge ${call.source}`}>{t(`f.family.${fam}`)}</span>;
+}
+
 export function StatusBadge({ status }: { status: string }) {
   const { t } = useI18n();
   return <span class={`status-badge ${status}`}>{t(`f.status.${status}`)}</span>;
@@ -131,13 +139,16 @@ function LongText({ text }: { text: string }) {
   );
 }
 
-export function FieldValue({ name, f }: { name: string; f: Field<any> }) {
+export function FieldValue({ name, f, currency = "NOK" }: { name: string; f: Field<any>; currency?: string }) {
   const { t, lang } = useI18n();
   const fmt = useFmt();
   const v = f.v;
+  // A topic restricted to some countries: Norway's participation is to be checked.
+  if (name === "norway_eligible" && v == null && f.s === "inferred") return <strong>{t("f.norwayCheck")}</strong>;
   if (v == null || f.s === "not_specified") return <span class="muted">{t("f.notSpecified")}</span>;
+  if (name === "cutoff_dates") return <>{(v as string[]).map((d) => fmt.date(d)).join(" · ")}</>;
   if (DATE_FIELDS.has(name)) return <>{fmt.date(v, true)}</>;
-  if (MONEY_FIELDS.has(name)) return <>{fmt.money(v, "NOK")}</>;
+  if (MONEY_FIELDS.has(name)) return <>{fmt.money(v, currency)}</>;
   if (typeof v === "boolean") return <>{t(v ? "f.yes" : "f.no")}</>;
   if (typeof v === "number") return <>{v}</>;
   if (name === "orientation") return <>{t(`f.orient.${v}`)}</>;
@@ -152,8 +163,11 @@ export function FieldValue({ name, f }: { name: string; f: Field<any> }) {
     );
   }
   if (typeof v === "string") return <>{v}</>;
+  if (Array.isArray(v)) return <>{v.join(", ")}</>;
   if (name === "url") {
-    return <>{v.nb && <a href={v.nb}>{t("f.official")}</a>}{v.en && <> · <a href={v.en}>{t("f.officialEn")}</a></>}</>;
+    // EU topics have one (English) page on the EU portal.
+    const en = v.en && <a href={v.en}>{t(v.nb ? "f.officialEn" : "f.officialEu")}</a>;
+    return <>{v.nb && <a href={v.nb}>{t("f.official")}</a>}{v.nb && en && " · "}{en}</>;
   }
   const { value, fallback } = pick<any>(v, lang);
   if (value == null) return <span class="muted">{t("f.notSpecified")}</span>;
@@ -165,14 +179,14 @@ export function FieldValue({ name, f }: { name: string; f: Field<any> }) {
   );
 }
 
-export function FieldRow({ name, f }: { name: string; f: Field<any> }) {
+export function FieldRow({ name, f, currency }: { name: string; f: Field<any>; currency?: string }) {
   const { t } = useI18n();
   const missing = f.s === "not_specified";
   return (
     <div class={`field-row${missing ? " missing" : ""}`}>
       <dt>{t(`fld.${name}`)}</dt>
       <dd>
-        <FieldValue name={name} f={f} />
+        <FieldValue name={name} f={f} currency={currency} />
         {!missing && (
           <div class="field-meta">
             <MethodBadge f={f} />
@@ -196,15 +210,18 @@ export function FieldRow({ name, f }: { name: string; f: Field<any> }) {
 /** A group of fields; fields the call does not specify are folded away. */
 export function FieldList({ names, call }: { names: string[]; call: Call }) {
   const { t } = useI18n();
-  const present = names.filter((n) => call.fields[n] && call.fields[n].s !== "not_specified");
-  const absent = names.filter((n) => call.fields[n] && call.fields[n].s === "not_specified");
+  // Fields a source never has (e.g. RCN's "updated" on EU topics) are not listed at all.
+  const has = (n: string) => Object.prototype.hasOwnProperty.call(call.fields, n);
+  const present = names.filter((n) => has(n) && call.fields[n].s !== "not_specified");
+  const absent = names.filter((n) => has(n) && call.fields[n].s === "not_specified");
+  const currency = (call.fields.currency.v as string | null) ?? "NOK";
   return (
     <>
-      <dl class="fields">{present.map((n) => <FieldRow key={n} name={n} f={call.fields[n]} />)}</dl>
+      <dl class="fields">{present.map((n) => <FieldRow key={n} name={n} f={call.fields[n]} currency={currency} />)}</dl>
       {absent.length > 0 && (
         <details class="unspecified">
           <summary>{t("f.showUnspecified", { n: absent.length })}</summary>
-          <dl class="fields">{absent.map((n) => <FieldRow key={n} name={n} f={call.fields[n]} />)}</dl>
+          <dl class="fields">{absent.map((n) => <FieldRow key={n} name={n} f={call.fields[n]} currency={currency} />)}</dl>
         </details>
       )}
     </>
@@ -314,13 +331,17 @@ export function Freshness({ data }: { data: Funding }) {
   const fmt = useFmt();
   const { lock } = useFunding();
   const m = data.meta;
-  const ok = m.sync?.last_success ?? null;
+  const sources = m.sources ?? [];
   return (
     <div class="freshness small muted">
-      {isStale(ok) && <p class="warn" role="status">{t("f.stale", { date: fmt.date(ok) || "–" })}</p>}
-      {(m.sync?.errors?.length ?? 0) > 0 && <p class="warn">{t("f.syncErrors", { n: m.sync!.errors.length })}</p>}
-      <p>{t("f.freshness", { sync: fmt.date(ok) || "–", matched: fmt.date(m.matches_generated),
-        people: fmt.date(m.researchers_updated) || "–", algo: m.algorithm })}{" "}
+      {sources.map((s) => (
+        <div key={s.id}>
+          {isStale(s.last_success) && <p class="warn" role="status">{t("f.stale", { src: s.name, date: fmt.date(s.last_success) || "–" })}</p>}
+          {(s.errors?.length ?? 0) > 0 && <p class="warn">{t("f.syncErrors", { src: s.name, n: s.errors!.length })}</p>}
+        </div>
+      ))}
+      <p>{t("f.freshness", { sync: sources.map((s) => `${s.name} ${fmt.date(s.last_success) || "–"}`).join(", ") || "–",
+        matched: fmt.date(m.matches_generated), people: fmt.date(m.researchers_updated) || "–", algo: m.algorithm })}{" "}
         · <button type="button" class="linklike" onClick={lock}>{t("f.lock")}</button></p>
     </div>
   );

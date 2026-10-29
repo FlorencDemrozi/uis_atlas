@@ -36,9 +36,14 @@ export interface CallProfile {
   generated: string; model: string;
 }
 
+/** Funding source and programme family, for filters and badges (pipeline/eu.py FAMILIES). */
+export const FAMILIES = ["nfr", "horizon", "erc", "msca", "eic", "missions", "partnerships", "other_eu"] as const;
+export type Family = typeof FAMILIES[number];
+
 export interface Call {
   id: string;
-  source: string;
+  source: "rcn" | "eu";
+  family: Family;
   listing_group: string;
   tags: string[];
   fetched: string;
@@ -75,10 +80,14 @@ export interface Match {
   collaborators: { id: string; fills: number[]; joint_papers: number; other_department: boolean }[];
 }
 
+export interface SourceSync {
+  id: "rcn" | "eu"; name: string; url: string;
+  last_attempt: string | null; last_success: string | null; errors: { url: string; error: string }[] | null;
+}
+
 export interface FundingMeta {
   generated: string;
-  sources: { name: string; url: string }[];
-  sync: { last_attempt: string | null; last_success: string | null; errors: { url: string; error: string }[] } | null;
+  sources: SourceSync[];
   calls_extracted: string;
   profiles_generated: string | null;
   matches_generated: string;
@@ -123,6 +132,7 @@ async function decrypt(file: EncryptedFile, raw: Uint8Array<ArrayBuffer>): Promi
   const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64(file.cipher.iv) }, key, b64(file.data));
   const stream = new Blob([plain]).stream().pipeThrough(new DecompressionStream("gzip"));
   const data = JSON.parse(await new Response(stream).text()) as Omit<Funding, "byId" | "byResearcher">;
+  for (const c of data.calls) c.fields = restoreFields(c.fields);
   const byId = new Map(data.calls.map((c) => [c.id, c]));
   const byResearcher = new Map<string, { call: Call; match: Match }[]>();
   for (const [cid, list] of Object.entries(data.matches)) {
@@ -136,6 +146,20 @@ async function decrypt(file: EncryptedFile, raw: Uint8Array<ArrayBuffer>): Promi
   }
   for (const arr of byResearcher.values()) arr.sort((a, b) => b.match.score - a.match.score);
   return { ...data, byId, byResearcher };
+}
+
+const NOT_SPECIFIED: Field<null> = { v: null, s: "not_specified", src: null, url: null, ev: null, c: null, m: null };
+
+/** The export leaves out empty keys, a source URL equal to the call's own page and,
+ * for closed EU topics, most fields (pipeline/export_funding.py slim()). Put them
+ * back, and answer "not specified" for any field that is absent. */
+function restoreFields(fields: Record<string, Partial<Field<any>>>): Record<string, Field<any>> {
+  const page = fields.url?.v ? (fields.url.v.en ?? fields.url.v.nb ?? null) : null;
+  const out: Record<string, Field<any>> = {};
+  for (const [k, f] of Object.entries(fields)) {
+    out[k] = { ...NOT_SPECIFIED, v: null, url: page, ...f } as Field<any>;
+  }
+  return new Proxy(out, { get: (t, k: string) => t[k] ?? NOT_SPECIFIED });
 }
 
 export type FundingState =
@@ -249,6 +273,18 @@ export function openFieldCallsFor(data: Funding, id: string): { call: Call; elig
       return { call, eligibility: { status, reason, evidence: call.eligibility_evidence?.[reason] ?? null } };
     })
     .sort((a, b) => ELIG_ORDER[a.eligibility.status] - ELIG_ORDER[b.eligibility.status]);
+}
+
+/** Programme family of a call (older exports have none). */
+export function familyOf(c: Call): Family {
+  return c.family ?? (c.source === "rcn" ? "nfr" : "other_eu");
+}
+
+/** Indicative rate used only to compare EUR and NOK amounts in the amount filter. */
+export const EUR_NOK = 11.5;
+export function amountNok(n: number | null | undefined, currency: string | null | undefined): number | null {
+  if (n == null) return null;
+  return currency === "EUR" ? n * EUR_NOK : n;
 }
 
 export function isStale(iso: string | null | undefined, days = 8): boolean {

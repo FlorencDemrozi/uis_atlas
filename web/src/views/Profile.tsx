@@ -4,14 +4,16 @@ import { useI18n } from "../i18n";
 import { links } from "../router";
 import { BarList, ColumnChart } from "../components/charts";
 import { DeptLabel, Position, doiUrl } from "../components/common";
-import { CategoryBadge, EligibilityBadge, FundingGate, MatchDetails, StatusBadge, useFmt } from "../components/funding";
-import { callTitle, nextDeadline, openFieldCallsFor, pick, useFunding, type Funding } from "../funding";
+import { useState } from "preact/hooks";
+import { CategoryBadge, EligibilityBadge, FundingGate, MatchDetails, SourceBadge, StatusBadge, useFmt } from "../components/funding";
+import { FAMILIES, callTitle, familyOf, nextDeadline, openFieldCallsFor, pick, useFunding, type Call,
+  type Funding } from "../funding";
 
 /** Calls open to all research fields (e.g. FRIPRO), offered to everyone with their eligibility. */
-function OpenFieldCalls({ data, id }: { data: Funding; id: string }) {
+function OpenFieldCalls({ data, id, keep }: { data: Funding; id: string; keep: (c: Call) => boolean }) {
   const { t, lang } = useI18n();
   const fmt = useFmt();
-  const all = openFieldCallsFor(data, id);
+  const all = openFieldCallsFor(data, id).filter(({ call }) => keep(call));
   if (!all.length) return null;
   const likely = all.filter((x) => x.eligibility.status !== "likely_ineligible");
   const unlikely = all.filter((x) => x.eligibility.status === "likely_ineligible");
@@ -19,7 +21,7 @@ function OpenFieldCalls({ data, id }: { data: Funding; id: string }) {
     const d = nextDeadline(call) ?? call.fields.deadline.v;
     return (
       <li key={call.id}>
-        <a href={links.call(call.id)}>{callTitle(call, lang)}</a>
+        <a href={links.call(call.id)}>{callTitle(call, lang)}</a> <SourceBadge call={call} />
         <span class="muted small"> · {d ? fmt.date(d, true) : call.fields.rolling.v ? t("f.rolling") : t("f.noDeadline")}
           {fmt.range(call) && ` · ${fmt.range(call)}`}</span>
         <EligibilityBadge e={eligibility} />
@@ -46,18 +48,34 @@ function ProfileFunding({ atlas, id, name }: { atlas: Atlas; id: string; name: s
   const { t, lang } = useI18n();
   const fmt = useFmt();
   const { state } = useFunding();
+  const [fam, setFam] = useState("");
   if (state.status === "missing") return null;
+  // Source / programme filter: NFR, all EU, or one EU programme family.
+  const keep = (c: Call) => !fam || (fam === "eu" ? c.source === "eu" : familyOf(c) === fam);
   return (
     <section class="section funding-profile" aria-labelledby="h-funding">
       <h2 id="h-funding">{t("f.profileTitle")}</h2>
       <FundingGate compact>{(data) => {
         // Strong and medium matches; if there are none, the best weaker ones.
-        const all = data.byResearcher.get(id) ?? [];
+        const every = data.byResearcher.get(id) ?? [];
+        const all = every.filter(({ call }) => keep(call));
         const strong = all.filter(({ match }) => match.category !== "low");
         const items = strong.length ? strong : all.slice(0, 3);
+        const present = new Set([...every.map(({ call }) => familyOf(call)),
+          ...openFieldCallsFor(data, id).map(({ call }) => familyOf(call))]);
         return (
           <>
             <p class="sub">{t("f.profileSub", { name, y: String(data.meta.papers_from_year) })}</p>
+            {present.size > 1 && (
+              <label class="field inline">
+                <span>{t("f.family")}</span>
+                <select value={fam} onChange={(e) => setFam((e.target as HTMLSelectElement).value)}>
+                  <option value="">{t("f.any")}</option>
+                  {[...present].some((x) => x !== "nfr") && <option value="eu">{t("f.family.eu")}</option>}
+                  {FAMILIES.filter((x) => present.has(x)).map((x) => <option key={x} value={x}>{t(`f.family.${x}`)}</option>)}
+                </select>
+              </label>
+            )}
             {items.length === 0 ? <p class="muted small">{t("f.profileNone")}</p> : (
               <ul class="call-list compact">
                 {items.map(({ call, match }) => {
@@ -68,7 +86,8 @@ function ProfileFunding({ atlas, id, name }: { atlas: Atlas; id: string; name: s
                         <h3><a href={links.call(call.id)}>{callTitle(call, lang)}</a> <CategoryBadge m={match} /></h3>
                         <p class="meta-line">
                           <StatusBadge status={call.fields.status.v} />
-                          <span>{pick<string>(call.fields.funder.v, lang).value}</span>
+                          <SourceBadge call={call} />
+                          <span>{pick<string>((call.source === "eu" ? call.fields.programme : call.fields.funder).v, lang).value}</span>
                           <span>{t("f.deadline")}: {d ? fmt.date(d, true) : call.fields.rolling.v ? t("f.rolling") : t("f.noDeadline")}</span>
                           {fmt.range(call) && <span>{fmt.range(call)}</span>}
                         </p>
@@ -79,7 +98,7 @@ function ProfileFunding({ atlas, id, name }: { atlas: Atlas; id: string; name: s
                 })}
               </ul>
             )}
-            <OpenFieldCalls data={data} id={id} />
+            <OpenFieldCalls data={data} id={id} keep={keep} />
           </>
         );
       }}</FundingGate>

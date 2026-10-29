@@ -3,17 +3,21 @@ import type { Atlas } from "../data";
 import { callTitle, pick, type Call, type Funding, type Match } from "../funding";
 import { useI18n } from "../i18n";
 import { links } from "../router";
-import { CategoryBadge, FieldList, Freshness, FundingGate, MatchDetails, StatusBadge, useFmt } from "../components/funding";
+import { CategoryBadge, FieldList, Freshness, FundingGate, MatchDetails, SourceBadge, StatusBadge, useFmt } from "../components/funding";
 
-// The agreed field list, grouped as on the page (pipeline/build_calls.py).
+// The agreed field list, grouped as on the page (pipeline/build_calls.py, pipeline/eu.py).
+// EU topics add the hierarchy (programme part, call), stages and cut-offs, the number
+// of grants, the grant model and Norway's participation; fields a source never has are
+// not shown.
 const GROUPS: [string, string[]][] = [
-  ["overview", ["summary", "description", "status", "funder", "scheme", "programme", "opening_date", "deadline",
-    "preliminary_deadline", "full_proposal_deadline", "rolling", "published", "updated", "call_id"]],
-  ["financial", ["min_amount", "max_amount", "total_budget", "currency", "funding_rate", "eligible_costs",
-    "funding_restrictions", "cofunding"]],
+  ["overview", ["summary", "description", "status", "funder", "programme", "programme_part", "parent_call", "scheme",
+    "action_type", "opening_date", "deadline", "preliminary_deadline", "full_proposal_deadline", "deadline_model",
+    "cutoff_dates", "rolling", "published", "updated", "call_id"]],
+  ["financial", ["min_amount", "max_amount", "total_budget", "expected_grants", "currency", "funding_model",
+    "funding_rate", "eligible_costs", "funding_restrictions", "cofunding"]],
   ["project", ["min_duration_months", "max_duration_months", "earliest_start", "latest_start", "latest_end",
     "orientation", "open_field", "trl", "structural_requirements", "deliverables", "expected_impact"]],
-  ["eligibility", ["target_groups", "uis_can_apply", "eligible_applicants", "pi_requirements", "career_stage",
+  ["eligibility", ["norway_eligible", "target_groups", "uis_can_apply", "eligible_applicants", "pi_requirements", "career_stage",
     "nationality_residency", "partner_requirements", "international", "international_rules", "consortium_size",
     "mandatory_partners", "industry_public_participation", "application_limits", "subcontracting", "mobility"]],
   ["evaluation", ["evaluation_criteria", "evaluation_weights", "priorities", "procedure", "required_documents",
@@ -45,14 +49,16 @@ function CallPage({ atlas, data, id }: { atlas: Atlas; data: Funding; id: string
         <h1>{callTitle(call, lang)}</h1>
         <div class="meta-line">
           <StatusBadge status={status} />
-          <span>{pick<string>(f.funder.v, lang).value}</span>
+          <SourceBadge call={call} />
+          <span>{pick<string>((call.source === "eu" ? f.programme : f.funder).v, lang).value}</span>
           {f.scheme.v && <span>{pick<string>(f.scheme.v, lang).value}</span>}
+          {call.source === "eu" && <span class="num">{f.call_id.v}</span>}
           {f.deadline.v && <span>{t("f.deadline")}: <strong>{fmt.date(f.deadline.v, true)}</strong></span>}
           {!f.deadline.v && f.rolling.v && <span>{t("f.rolling")}</span>}
         </div>
         <div class="links">
           {url.nb && <a href={url.nb}>{t("f.official")}</a>}
-          {url.en && <a href={url.en}>{t("f.officialEn")}</a>}
+          {url.en && <a href={url.en}>{t(call.source === "eu" ? "f.officialEu" : "f.officialEn")}</a>}
         </div>
         {call.review.length > 0 && (
           <p class="warn small" role="note"><strong>{t("f.review")}:</strong> {t("f.reviewText")} ({call.review.join("; ")})</p>
@@ -86,7 +92,7 @@ function CallPage({ atlas, data, id }: { atlas: Atlas; data: Funding; id: string
       <section class="section" id="sec-sources" aria-labelledby="h-sources">
         <h2 id="h-sources">{t("f.sec.sources")}</h2>
         <FieldList names={["url", "documents", "themes"]} call={call} />
-        <p class="small muted">{t("f.docsNote")}</p>
+        <p class="small muted">{t(call.source === "eu" ? "f.docsNoteEu" : "f.docsNote")}</p>
         <p class="small muted">{t("f.extracted", { date: fmt.date(call.fetched, true) })}</p>
       </section>
 

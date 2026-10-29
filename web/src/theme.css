@@ -490,10 +490,16 @@ details.table-view summary { cursor: pointer; color: var(--accent); width: fit-c
 
 .funding-filters { margin-bottom: 16px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
 .funding-filters .grow { flex: 1 1 220px; }
+/* EU programme and scheme names are long: a select never grows past the panel. */
+.funding-filters .field { min-width: 0; max-width: 100%; }
+.funding-filters select { max-width: min(100%, 360px); text-overflow: ellipsis; }
 .funding-filters input[type="date"] { min-height: 36px; padding: 4px 8px; border: 1px solid var(--baseline); border-radius: 6px; background: var(--surface); }
 .field.inline { flex-direction: row; align-items: center; gap: 8px; }
 
-.status-badge, .src-badge, .cat-badge, .elig-badge, .review-flag {
+/* Funding source: outlined, so it never reads as a status. */
+.source-badge { color: var(--ink-2); border: 1px solid var(--baseline); background: transparent; }
+.source-badge.eu { color: var(--accent); border-color: var(--accent); }
+.status-badge, .src-badge, .cat-badge, .elig-badge, .review-flag, .source-badge {
   display: inline-block; font-size: 12px; font-weight: 600; line-height: 1.4; padding: 1px 8px; border-radius: 999px;
   white-space: nowrap; vertical-align: middle; }
 .status-badge.open { color: var(--good); background: var(--good-wash); }

@@ -1,11 +1,11 @@
 import { useMemo } from "preact/hooks";
 import type { Atlas } from "../data";
 import type { Researcher } from "../data";
-import { callTitle, isOpenField, nextDeadline, openFieldCallsFor, pick, type Call, type Eligibility, type Funding,
-  type Match } from "../funding";
+import { FAMILIES, amountNok, callTitle, familyOf, isOpenField, nextDeadline, openFieldCallsFor, pick, type Call,
+  type Eligibility, type Funding, type Match } from "../funding";
 import { useI18n } from "../i18n";
 import { links, replaceHash, type Route } from "../router";
-import { CategoryBadge, EligibilityBadge, FundingGate, Freshness, StatusBadge, useFmt } from "../components/funding";
+import { CategoryBadge, EligibilityBadge, FundingGate, Freshness, SourceBadge, StatusBadge, useFmt } from "../components/funding";
 
 const AMOUNTS = [1e6, 5e6, 10e6, 25e6];
 /** Lower case without accents, so "tveteras" finds "Tveterås". */
@@ -39,7 +39,9 @@ function FundingList({ atlas, data, route }: { atlas: Atlas; data: Funding; rout
   // typed – gets their matched calls plus every call open to all fields, with
   // their eligibility.
   const byName = useMemo(() => new Map(atlas.researchers.map((r) => [norm(r.name), r.scopus_id])), [atlas]);
-  const titleHit = (c: Call) => norm(callTitle(c, "nb")).includes(q) || norm(callTitle(c, "en")).includes(q);
+  // Titles in both languages, and EU topic identifiers ("HORIZON-CL5-2027").
+  const titleHit = (c: Call) => norm(callTitle(c, "nb")).includes(q) || norm(callTitle(c, "en")).includes(q)
+    || (c.source === "eu" && norm(String(c.fields.call_id.v ?? "")).includes(q));
   const anyTitleHit = !!q && data.calls.some(titleHit);
   const peopleHits = q.length >= 3 && !anyTitleHit
     ? atlas.researchers.filter((r) => norm(r.name).includes(q)).slice(0, 12) : [];
@@ -72,12 +74,13 @@ function FundingList({ atlas, data, route }: { atlas: Atlas; data: Funding; rout
     if (status === "current" ? st === "closed" : status !== "all" && st !== status) return false;
     if (q && anyTitleHit && !titleHit(c)) return false;
     if (openFallback && !isOpenField(c)) return false;
+    if (p.get("fam") && (p.get("fam") === "eu" ? c.source !== "eu" : familyOf(c) !== p.get("fam"))) return false;
     if (p.get("sch") && pick<string>(f.scheme.v, lang).value !== p.get("sch")) return false;
     if (p.get("th") && !(pick<string[]>(f.themes.v, lang).value ?? []).includes(p.get("th")!)) return false;
     if (p.get("ap") && !(pick<string[]>(f.target_groups.v, lang).value ?? []).includes(p.get("ap")!)) return false;
     if (p.get("intl") && String(!!f.international.v) !== (p.get("intl") === "yes" ? "true" : "false")) return false;
     if (p.get("or") && f.orientation.v !== p.get("or")) return false;
-    if (p.get("amt") && !((f.max_amount.v ?? 0) >= Number(p.get("amt")))) return false;
+    if (p.get("amt") && !((amountNok(f.max_amount.v, f.currency.v) ?? 0) >= Number(p.get("amt")))) return false;
     if (p.get("before")) {
       const d = nextDeadline(c);
       if (!d || d.slice(0, 10) > p.get("before")!) return false;
@@ -88,7 +91,8 @@ function FundingList({ atlas, data, route }: { atlas: Atlas; data: Funding; rout
   });
   const far = "9999";
   shown.sort((a, b) => {
-    if (sort === "amount") return (b.fields.max_amount.v ?? 0) - (a.fields.max_amount.v ?? 0);
+    if (sort === "amount") return (amountNok(b.fields.max_amount.v, b.fields.currency.v) ?? 0)
+      - (amountNok(a.fields.max_amount.v, a.fields.currency.v) ?? 0);
     if (sort === "published") return (b.fields.published.v ?? "").localeCompare(a.fields.published.v ?? "");
     if (sort === "relevance" && person) return personRank(b) - personRank(a);
     if (sort === "relevance") return strong(b).length - strong(a).length
@@ -96,8 +100,8 @@ function FundingList({ atlas, data, route }: { atlas: Atlas; data: Funding; rout
     return (nextDeadline(a) ?? (a.fields.rolling.v ? "9000" : far)).localeCompare(nextDeadline(b) ?? (b.fields.rolling.v ? "9000" : far));
   });
 
-  const select = (key: string, label: string, opts: [string, string][]) => (
-    <label class="field">
+  const select = (key: string, label: string, opts: [string, string][], help?: string) => (
+    <label class="field" title={help}>
       <span>{label}</span>
       <select value={p.get(key) ?? ""} onChange={(e) => set(key, (e.target as HTMLSelectElement).value)}>
         <option value="">{t("f.any")}</option>
@@ -128,13 +132,16 @@ function FundingList({ atlas, data, route }: { atlas: Atlas; data: Funding; rout
             {["current", "open", "planned", "closed", "all"].map((s) => <option key={s} value={s}>{t(`f.status.${s}`)}</option>)}
           </select>
         </label>
+        {select("fam", t("f.family"), [["eu", t("f.family.eu")],
+          ...FAMILIES.filter((x) => data.calls.some((c) => familyOf(c) === x)).map((x): [string, string] => [x, t(`f.family.${x}`)])])}
         {select("sch", t("f.scheme"), schemes.map((s) => [s, s]))}
         {select("th", t("f.theme"), themes.map((s) => [s, s]))}
         {select("ap", t("f.applicant"), applicants.map((s) => [s, s]))}
         {select("or", t("f.orientation"), ["fundamental", "applied", "innovation", "support", "centre_infrastructure"]
           .map((o) => [o, t(`f.orient.${o}`)]))}
         {select("intl", t("f.international"), [["yes", t("f.intlOnly")], ["no", t("f.nationalOnly")]])}
-        {select("amt", t("f.amount"), AMOUNTS.map((a) => [String(a), t("f.amountAtLeast", { n: fmt.money(a) })]))}
+        {select("amt", t("f.amount"), AMOUNTS.map((a) => [String(a), t("f.amountAtLeast", { n: fmt.money(a) })]),
+          t("f.amountNote"))}
         <label class="field">
           <span>{t("f.deadlineBefore")}</span>
           <input type="date" value={p.get("before") ?? ""} onInput={(e) => set("before", (e.target as HTMLInputElement).value)} />
@@ -231,18 +238,25 @@ function CallCard({ atlas, data, call, person }: { atlas: Atlas; data: Funding; 
         <h2><a href={links.call(call.id)}>{callTitle(call, lang)}</a></h2>
         <p class="meta-line">
           <StatusBadge status={status} />
-          <span>{pick<string>(f.funder.v, lang).value}</span>
+          <SourceBadge call={call} />
+          <span>{call.source === "eu" ? pick<string>(f.programme.v, lang).value : pick<string>(f.funder.v, lang).value}</span>
           {f.scheme.v && <span>{pick<string>(f.scheme.v, lang).value}</span>}
+          {call.source === "eu" && <span class="muted small num">{f.call_id.v}</span>}
           {call.review.length > 0 && <span class="review-flag" title={call.review.join("; ")}>{t("f.review")}</span>}
         </p>
         <dl class="call-facts">
           <div><dt>{pre ? t("f.preDeadline") : t("f.deadline")}</dt>
             <dd>{d ? fmt.date(d, true) : f.rolling.v ? t("f.rolling") : (f.deadline.v ? fmt.date(f.deadline.v, true) : t("f.noDeadline"))}</dd></div>
           {range && <div><dt>{t("f.funding")}</dt><dd>{range}
-            {f.total_budget.v && <span class="muted small"> · {t("f.budget", { n: fmt.money(f.total_budget.v) })}</span>}</dd></div>}
+            {f.total_budget.v && <span class="muted small"> · {t("f.budget", { n: fmt.money(f.total_budget.v, f.currency.v ?? "NOK") })}</span>}</dd></div>}
+          {!range && f.total_budget.v && <div><dt>{t("f.funding")}</dt>
+            <dd>{t("f.budget", { n: fmt.money(f.total_budget.v, f.currency.v ?? "NOK") })}</dd></div>}
+          {f.expected_grants.v && <div><dt>{t("fld.expected_grants")}</dt><dd>{f.expected_grants.v}</dd></div>}
           {months && <div><dt>{t("f.duration")}</dt><dd>{months}</dd></div>}
           {groups.length > 0 && <div><dt>{t("f.applicant")}</dt><dd>{groups.join(", ")}
-            {f.uis_can_apply.v === false && <span class="muted small"> · {t("f.uisPartner")}</span>}</dd></div>}
+            {f.uis_can_apply.v === false && call.source === "rcn" && <span class="muted small"> · {t("f.uisPartner")}</span>}</dd></div>}
+          {call.source === "eu" && f.norway_eligible.s !== "not_specified" && f.norway_eligible.v !== true && (
+            <div><dt>{t("fld.norway_eligible")}</dt><dd>{t("f.norwayCheck")}</dd></div>)}
         </dl>
         {themes.length > 0 && <div class="tags">{themes.map((x) => <span class="tag static" key={x}>{x}</span>)}</div>}
       </div>
