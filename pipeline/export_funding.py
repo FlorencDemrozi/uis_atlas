@@ -34,7 +34,34 @@ import config
 
 OUT = config.PUBLIC / "funding.enc.json"
 ITERATIONS = 600_000
-CALL_KEYS = ["id", "source", "listing_group", "tags", "fetched", "fields", "review", "listed"]
+CALL_KEYS = ["id", "source", "family", "listing_group", "tags", "fetched", "fields", "review", "listed"]
+SOURCES = {
+    "rcn": {"name": "Research Council of Norway", "url": "https://www.forskningsradet.no/utlysninger/"},
+    "eu": {"name": "EU Funding & Tenders Portal",
+           "url": "https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/calls-for-proposals"},
+}
+
+
+# Closed EU topics are kept for history only (about a thousand at any time): just
+# what identifies them is exported, the portal link gives the rest. The website
+# treats absent fields as "not specified".
+CLOSED_EU_FIELDS = {"call_id", "title", "funder", "programme", "programme_part", "parent_call", "scheme",
+                    "action_type", "status", "deadline", "preliminary_deadline", "full_proposal_deadline",
+                    "opening_date", "total_budget", "min_amount", "max_amount", "expected_grants", "currency",
+                    "url", "themes"}
+
+
+def slim(call: dict) -> dict:
+    """Keeps the file small: closed EU topics as above, and in every field the empty
+    keys and a source URL equal to the call's own page are left out (web/src/funding.ts
+    puts them back when the file is opened)."""
+    if call["source"] == "eu" and call["fields"]["status"]["v"] == "closed":
+        call["fields"] = {k: v for k, v in call["fields"].items() if k in CLOSED_EU_FIELDS}
+    page = call["fields"].get("url", {}).get("v") or {}
+    page = page.get("en") or page.get("nb") if isinstance(page, dict) else None
+    call["fields"] = {k: {x: y for x, y in v.items() if y is not None and not (x == "url" and y == page)}
+                      for k, v in call["fields"].items()}
+    return call
 HISTORY_PER_CALL = 15
 
 
@@ -51,7 +78,7 @@ def merge_ai(call: dict, profile: dict | None) -> None:
         if current is None or current["s"] == "not_specified":
             call["fields"][key] = {"v": {"en": fv["value"]}, "s": fv["status"], "src": "AI reading of the call text",
                                    "url": url, "ev": fv["evidence"] or None, "c": "medium", "m": "ai"}
-        elif current["m"] == "section":
+        elif current.get("m") == "section":   # slim() drops empty keys
             current["ai"] = ai
 
 
@@ -87,7 +114,7 @@ def main() -> None:
 
     calls = []
     for c in calls_doc["calls"]:
-        out = {k: c.get(k) for k in CALL_KEYS}
+        out = slim({k: c.get(k) for k in CALL_KEYS})
         prof = profiles.get(c["id"])
         merge_ai(out, prof)
         if prof:
@@ -119,8 +146,8 @@ def main() -> None:
     data = {
         "meta": {
             "generated": datetime.now().isoformat(timespec="seconds"),
-            "sources": [{"name": "Research Council of Norway", "url": "https://www.forskningsradet.no/utlysninger/"}],
-            "sync": calls_doc.get("sync"),
+            "sources": [dict(SOURCES[src], id=src, **(st or {})) for src, st in (calls_doc.get("sync") or {}).items()
+                        if src in SOURCES],
             "calls_extracted": calls_doc["generated"],
             "profiles_generated": max(profiles_meta) if profiles_meta else None,
             "matches_generated": matches_doc["generated"],

@@ -109,7 +109,9 @@ def call_aspects(call: dict, profile: dict | None) -> tuple[str, list[dict]]:
         for line in passage.split("\n"):
             text = line.lstrip("• ").strip()
             words = text.split()
-            if not 5 <= len(words) <= 120 or NOISE.search(text) or text.lower() in seen:
+            # A line ending in ":" only introduces a list ("Projects should address the issues below:").
+            if (not 5 <= len(words) <= 120 or NOISE.search(text) or text.lower() in seen
+                    or text.endswith(":")):
                 continue
             seen.add(text.lower())
             label = " ".join(words[:14]) + ("…" if len(words) > 14 else "")
@@ -159,6 +161,15 @@ def eligibility(call: dict, r: dict) -> dict:
     # Career age is estimated from the first publication year: the atlas has no PhD dates.
     career = config.REFERENCE_YEAR - r["first_year"] if r.get("first_year") else None
     out = lambda status, reason, ev=None: {"status": status, "reason": reason, "evidence": ev}
+    if call.get("source") == "eu":
+        # EU topics: can a Norwegian university take part at all? (eu.py, with its basis)
+        norway = f.get("norway_eligible") or {}
+        if f["uis_can_apply"]["v"] is False:
+            return out("likely_ineligible", "eu_company_only", f["uis_can_apply"]["ev"])
+        if norway.get("s") == "inferred" and norway.get("v") is None:
+            return out("check", "eu_restricted", norway.get("ev"))
+        if norway.get("s", "not_specified") == "not_specified":
+            return out("check", "eu_country_unknown")
     if f["uis_can_apply"]["v"] is False:
         return out("partner_only", "uis_not_applicant", f["uis_can_apply"]["ev"])
     # Career-stage rules. Numbers ("2–7 years since the doctorate") count only in

@@ -268,6 +268,23 @@ RCN_LISTS = [
 RCN_SLEEP = 1.0                                   # seconds between requests
 USER_AGENT = "UiS-Researcher-Atlas/0.1 (+https://www.uis.no; research intelligence, weekly)"
 
+# ---- EU funding (European Commission Funding & Tenders Portal) -----------
+# Official public search API (the portal's own, key "SEDIA") for the topic list,
+# and the portal's per-topic JSON for the full text. Every programme in the portal
+# is imported (project owner, 2026-10-29): calls for proposals (type 1) and cascade
+# calls run by EU-funded projects (type 2). Procurement tenders (type 8) are not
+# research funding and are left out.
+RAW_EU = DATA / "raw" / "eu"                      # local cache of topic records
+EU_SEARCH_URL = "https://api.tech.ec.europa.eu/search-api/prod/rest/search"
+EU_TOPIC_URL = "https://ec.europa.eu/info/funding-tenders/opportunities/data/topicDetails/{}.json"
+EU_PORTAL_URL = ("https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/"
+                 "topic-details/{}")
+EU_TYPES = ["1", "2"]
+EU_STATUS = {"31094501": "planned", "31094502": "open", "31094503": "closed"}
+EU_CLOSED_MONTHS = 6          # closed topics kept for history: deadline within this many months
+EU_DETAIL_MAX_AGE_DAYS = 28   # refetch an unchanged open topic's text at least this often
+EU_SLEEP = 0.5                # seconds between requests
+
 CALLS = INTERIM / "calls.json"                    # structured calls (build_calls.py)
 CALLS_HISTORY = INTERIM / "calls_history.json"    # detected changes per call
 CALL_PROFILES = INTERIM / "call_profiles.json"    # AI call profiles (profile_calls.py)

@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
-Stage 2c – Turn the collected RCN pages into structured funding call records.
+Stage 2c – Turn the collected RCN pages and EU topics into structured funding call
+records (one list, one field model; "source" says where a record comes from).
 
 Input:  config.RAW_RCN/calls/*.json, config.RAW_RCN/sync_status.json,
-        config/funding_overrides.json (manual corrections)
+        config.RAW_EU/topics/*.json, config.RAW_EU/sync_status.json (EU topics are
+        built by eu.py), config/funding_overrides.json (manual corrections)
 Output: config.CALLS          one record per call (see below)
         config.CALLS_HISTORY  append-only list of detected changes per call
 
@@ -26,7 +28,9 @@ import re
 from datetime import date, datetime
 
 import config
+import eu
 import rcn
+from callfields import doc_links, field, missing
 
 CALLS_DIR = config.RAW_RCN / "calls"
 FUNDER = {"nb": "Norges forskningsråd", "en": "Research Council of Norway"}
@@ -96,15 +100,8 @@ OPEN_FIELD = re.compile(r"alle fag|alle forskningsområder|alle fagområder|all 
                         r"all (academic )?(fields|disciplines)|uavhengig av fag", re.I)
 
 CHANGE_KEYS = ["status", "deadline", "preliminary_deadline", "full_proposal_deadline", "opening_date",
-               "min_amount", "max_amount", "total_budget", "target_groups", "updated"]
-
-
-def field(v, s="explicit", src=None, url=None, ev=None, c="high", m="metadata") -> dict:
-    return {"v": v, "s": s, "src": src, "url": url, "ev": ev, "c": c, "m": m}
-
-
-def missing() -> dict:
-    return field(None, "not_specified", c=None, m=None)
+               "min_amount", "max_amount", "total_budget", "target_groups", "updated", "cutoff_dates",
+               "expected_grants", "norway_eligible"]
 
 
 def deadline_kind(label: str) -> str | None:
@@ -192,25 +189,6 @@ def passage(sec_nb: list[dict], sec_en: list[dict], keys: list[str], url_nb: str
     src = " > ".join((en or nb)[0]["path"])
     return field({"nb": text(nb), "en": text(en)}, "explicit", src, url_en if en else url_nb,
                  None, "high", "section")
-
-
-def doc_links(secs: list[dict]) -> list[dict]:
-    out, seen = [], set()
-    for s in secs:
-        for link in s["links"]:
-            url = link["url"]
-            if (not url or url in seen or url.startswith("mailto:") or "/Download" in url
-                    or not link["text"]):
-                continue
-            seen.add(url)
-            t = (link["text"] + " " + url).lower()
-            kind = ("template" if re.search(r"mal\b|template|skjema", t)
-                    else "faq" if re.search(r"faq|spørsmål og svar|questions", t)
-                    else "guidelines" if re.search(r"retningslinj|guideline|veiled|guide|krav|regler", t)
-                    else "projects" if "prosjektbanken" in t
-                    else "other")
-            out.append({"text": link["text"], "url": url, "kind": kind, "src": " > ".join(s["path"])})
-    return out
 
 
 def build_call(raw: dict) -> dict:
@@ -374,7 +352,7 @@ def build_call(raw: dict) -> dict:
 
     text_all = "\n".join(s["text"] for s in (sec_en or sec_nb))
     return {
-        "id": cid, "source": "rcn", "listing_group": listing["group"], "tags": listing["tags"],
+        "id": cid, "source": "rcn", "family": "nfr", "listing_group": listing["group"], "tags": listing["tags"],
         "fetched": raw["fetched"], "fields": f, "review": review,
         "sections": {"nb": sec_nb, "en": sec_en},
         "content_hash": hashlib.sha1(text_all.encode("utf-8")).hexdigest(),
@@ -398,19 +376,28 @@ def main() -> None:
     old = {c["id"]: c for c in json.loads(config.CALLS.read_text(encoding="utf-8"))["calls"]} \
         if config.CALLS.exists() else {}
     history = json.loads(config.CALLS_HISTORY.read_text(encoding="utf-8")) if config.CALLS_HISTORY.exists() else {}
-    status = (json.loads((config.RAW_RCN / "sync_status.json").read_text(encoding="utf-8"))
-              if (config.RAW_RCN / "sync_status.json").exists() else {})
+    read = lambda path: json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    status = read(config.RAW_RCN / "sync_status.json")
+    eu_status = read(config.RAW_EU / "sync_status.json")
     listed = set(status.get("calls_listed", []))
+    eu_listed = set(eu_status.get("topics_listed", []))
     today = datetime.now().isoformat(timespec="seconds")
 
+    # (raw id, is listed, build function) per record. EU topics no longer listed
+    # (closed longer ago than config.EU_CLOSED_MONTHS) are left out.
+    records = [(raw, raw["id"] in listed if listed else True, build_call)
+               for raw in map(read, sorted((config.RAW_RCN / "calls").glob("*.json")))]
+    eu_raw = [read(p) for p in sorted((config.RAW_EU / "topics").glob("*.json"))]
+    names = eu.programme_names(eu_raw)
+    records += [(raw, True, lambda r: eu.build_topic(r, names)) for raw in eu_raw if raw["id"] in eu_listed]
+
     calls = []
-    for path in sorted((config.RAW_RCN / "calls").glob("*.json")):
-        raw = json.loads(path.read_text(encoding="utf-8"))
-        call = build_call(raw)
+    for raw, is_listed, build in records:
+        call = build(raw)
         if overrides.get(call["id"], {}).get("exclude"):
             continue
         apply_overrides(call, overrides)
-        call["listed"] = raw["id"] in listed if listed else True
+        call["listed"] = is_listed
         prev = old.get(call["id"])
         changes = history.setdefault(call["id"], [])
         if prev is None:
@@ -428,11 +415,15 @@ def main() -> None:
         calls.append(call)
 
     config.CALLS.write_text(json.dumps({
-        "generated": today, "sync": {k: status.get(k) for k in ("last_attempt", "last_success", "errors")},
+        "generated": today,
+        "sync": {src: {k: st.get(k) for k in ("last_attempt", "last_success", "errors")}
+                 for src, st in (("rcn", status), ("eu", eu_status)) if st},
         "calls": calls}, ensure_ascii=False), encoding="utf-8")
     config.CALLS_HISTORY.write_text(json.dumps(history, ensure_ascii=False, indent=1), encoding="utf-8")
-    n_status = {s: sum(c["fields"]["status"]["v"] == s for c in calls) for s in ("open", "planned", "closed")}
-    print(f"Calls: {len(calls)} ({n_status}); {sum(bool(c['review']) for c in calls)} flagged for review.")
+    for src in ("rcn", "eu"):
+        mine = [c for c in calls if c["source"] == src]
+        n_status = {s: sum(c["fields"]["status"]["v"] == s for c in mine) for s in ("open", "planned", "closed")}
+        print(f"{src.upper()}: {len(mine)} ({n_status}); {sum(bool(c['review']) for c in mine)} flagged for review.")
 
 
 if __name__ == "__main__":

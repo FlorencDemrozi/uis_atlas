@@ -159,7 +159,9 @@ def main() -> None:
         return
     calls = json.loads(config.CALLS.read_text(encoding="utf-8"))["calls"]
     cache = json.loads(config.CALL_PROFILES.read_text(encoding="utf-8")) if config.CALL_PROFILES.exists() else {}
-    todo = [c for c in calls if c["fields"]["status"]["v"] != "closed"]
+    # EU topics are profiled only after an embedding pre-filter (project owner,
+    # 2026-10-29; not built yet), so for now they are matched on their official text.
+    todo = [c for c in calls if c["fields"]["status"]["v"] != "closed" and c["source"] == "rcn"]
     made = 0
     for i, call in enumerate(todo, 1):
         text = call_text(call)
