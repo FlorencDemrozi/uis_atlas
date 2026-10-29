@@ -3,15 +3,18 @@
 Fixtures in tests/fixtures/eu/ are real topic records as stored by collect_eu.py
 (public data from the European Commission's portal, recorded 2026-10-29).
 """
+import copy
 import json
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pipeline"))
 import collect_eu  # noqa: E402
+import config  # noqa: E402
 import eu  # noqa: E402
 import export_funding  # noqa: E402
 import match_funding  # noqa: E402
+import profile_calls  # noqa: E402
 
 FIX = Path(__file__).resolve().parent / "fixtures" / "eu"
 TODAY = "2026-10-29"
@@ -116,3 +119,44 @@ def test_export_slims_closed_eu_topics_and_drops_repeated_urls():
     current = export_funding.slim({k: v for k, v in build("HORIZON-CL5-2027-07-D3-32").items()
                                    if k in export_funding.CALL_KEYS})
     assert "research_scope" in current["fields"] and current["family"] == "horizon"
+
+
+def test_erc_and_msca_role_rules():
+    cog, pf = build("ERC-2027-COG"), build("HORIZON-MSCA-2027-PF-01-01")
+    assert cog["fields"]["pi_requirements"]["s"] == "inferred" and "7 and up to 12" in v(cog, "pi_requirements")["en"]
+    ref = config.REFERENCE_YEAR
+    who = lambda position, years: {"position": {"nb": position}, "first_year": ref - years}
+    phd = match_funding.eligibility(cog, who("Stipendiat", 4))
+    assert (phd["status"], phd["reason"]) == ("likely_ineligible", "erc_doctorate") and "Consolidator" in phd["evidence"]
+    assert match_funding.eligibility(cog, who("Førsteamanuensis", 11))["status"] == "no_restriction_found"
+    # Career age is only an estimate (first publication, not PhD date): never more than "check".
+    e = match_funding.eligibility(cog, who("Førsteamanuensis", 25))
+    assert (e["status"], e["reason"]) == ("check", "erc_cog_window")
+    # A short UiS record says little (earlier papers may be from elsewhere): no flag.
+    assert match_funding.eligibility(cog, who("Førsteamanuensis", 4))["status"] == "no_restriction_found"
+    assert match_funding.eligibility(pf, who("Stipendiat", 3))["reason"] == "msca_supervisor"
+    assert match_funding.eligibility(pf, who("Postdoktor", 6))["status"] == "check"
+    assert match_funding.eligibility(pf, who("Professor", 20))["status"] == "no_restriction_found"
+    assert eu.role_rule("HORIZON-MSCA-2027-PF-01-01")[2] == "supervisor"
+    assert eu.role_rule("HORIZON-MSCA-2027-SE-01-01")[2] == "secondment"
+    assert eu.role_rule("HORIZON-CL5-2027-07-D3-32") is None
+
+
+def test_cofund_is_institution_level():
+    raw = copy.deepcopy(RAW["HORIZON-MSCA-2027-PF-01-01"])
+    raw["id"] = raw["details"]["identifier"] = "HORIZON-MSCA-2027-COFUND-01-01"
+    c = eu.build_topic(raw, NAMES, TODAY)
+    assert v(c, "institution_level") is True and "COFUND" in c["fields"]["institution_level"]["ev"]
+    assert v(build("HORIZON-MSCA-2027-PF-01-01"), "institution_level") is None
+
+
+def test_eu_profile_prefilter():
+    topic = build("HORIZON-CL5-2027-07-D3-32")
+    cid = topic["id"]
+    low, high = config.EU_PROFILE_MIN_SCORE - 0.1, config.EU_PROFILE_MIN_SCORE
+    assert profile_calls.eu_wanted(topic, {cid: high}, {})
+    assert not profile_calls.eu_wanted(topic, {cid: low}, {})
+    assert profile_calls.eu_wanted(topic, {cid: low}, {cid: {}})  # keeps its profile while open
+    assert not profile_calls.eu_wanted(build("ERC-2027-COG"), {"eu-ERC-2027-COG": 1.0}, {})  # open to all fields
+    assert not profile_calls.eu_wanted(build("HORIZON-EIC-2026-ACCELERATOR-01"),
+                                       {"eu-HORIZON-EIC-2026-ACCELERATOR-01": 1.0}, {})  # company only

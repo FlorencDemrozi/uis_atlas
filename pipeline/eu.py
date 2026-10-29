@@ -65,6 +65,38 @@ OPEN_RULES = [
 ]
 # EIC Accelerator funds companies (SMEs, small mid-caps); a university cannot apply.
 COMPANY_ONLY = re.compile(r"^HORIZON-EIC-\d{4}-ACCELERATOR")
+# Calls an institution applies for as a whole (co-funded fellowship programmes,
+# European Researchers' Night): listed, but not matched to individual researchers.
+INSTITUTION_LEVEL = [
+    (r"^HORIZON-MSCA-\d{4}-COFUND-", "MSCA COFUND co-funds a doctoral or fellowship programme run by an "
+                                     "institution: the institution applies, not an individual researcher."),
+    (r"^HORIZON-MSCA-\d{4}-CITIZENS-", "European Researchers' Night: public outreach events organised by an "
+                                       "institution, not a research project."),
+]
+ERC_WP = "https://erc.europa.eu/manage-your-project/documents-and-forms"
+MSCA_WP = "https://marie-sklodowska-curie-actions.ec.europa.eu/actions"
+# Who takes part, and in which role, for the bottom-up ERC and MSCA actions (programme
+# rules from the ERC and MSCA work programmes; topic texts rarely restate them).
+# (identifier pattern, rule text, source, role offered to UiS researchers)
+ROLE_RULES = [
+    (r"^ERC-\d{4}-STG$", "ERC Starting Grant: the principal investigator is 2–7 years past the PhD on "
+                         "1 January of the call year (extensions possible, e.g. for parental leave).",
+     ERC_WP, "pi_candidate"),
+    (r"^ERC-\d{4}-COG$", "ERC Consolidator Grant: the principal investigator is more than 7 and up to 12 years "
+                         "past the PhD on 1 January of the call year (extensions possible, e.g. for parental leave).",
+     ERC_WP, "pi_candidate"),
+    (r"^ERC-\d{4}-ADG$", "ERC Advanced Grant: the principal investigator has a track record of significant "
+                         "research achievements in the last 10 years.", ERC_WP, "pi_candidate"),
+    (r"^ERC-\d{4}-SYG$", "ERC Synergy Grant: two to four principal investigators, each with a doctorate.",
+     ERC_WP, "pi_candidate"),
+    (r"^HORIZON-MSCA-\d{4}-PF-", "MSCA Postdoctoral Fellowship: the fellow (a researcher with a PhD, at most "
+                                 "8 years after it) applies with a host organisation; UiS staff take part as "
+                                 "the fellow's supervisor.", MSCA_WP, "supervisor"),
+    (r"^HORIZON-MSCA-\d{4}-DN-", "MSCA Doctoral Network: the network recruits doctoral candidates; UiS staff take "
+                                 "part as supervisors in the consortium.", MSCA_WP, "supervisor"),
+    (r"^HORIZON-MSCA-\d{4}-SE-", "MSCA Staff Exchanges: research, technical and administrative staff at any career "
+                                 "stage are seconded between partner organisations.", MSCA_WP, "secondment"),
+]
 
 # Short codes of the type of action, from the portal's typeOfAction label.
 ACTION_CODE = re.compile(r"^(?:HORIZON|DIGITAL|EURATOM|EDF|LIFE|CEF|CERV|CREA|ERASMUS|EU4H|SMP|ESF|ISF|JUST|"
@@ -197,6 +229,11 @@ def division_path(topic: dict) -> list[str]:
     if all(d.get("abbreviation") for d in divs):
         divs.sort(key=lambda d: d["abbreviation"].count(".") + len(d["abbreviation"]) / 1000)
     return [d["description"] for d in divs if d["description"] != prog]
+
+
+def role_rule(identifier: str) -> tuple[str, str, str] | None:
+    """(rule text, source, role offered) for ERC / MSCA actions, else None."""
+    return next(((text, src, role) for pat, text, src, role in ROLE_RULES if re.search(pat, identifier, re.I)), None)
 
 
 def family_of(identifier: str) -> str:
@@ -393,7 +430,12 @@ def build_topic(raw: dict, names: dict[str, str], today: str | None = None) -> d
     for key in ("international_rules", "partner_requirements"):
         f[key] = section_field(pick_sections(cond, CONDITION_FIELDS, key), url)
     f["eligible_applicants"] = missing()
-    f["pi_requirements"] = missing()
+    role = role_rule(ident)
+    f["pi_requirements"] = (field({"en": role[0]}, "inferred", "programme rule", role[1], role[0], "high", "rule")
+                            if role else missing())
+    inst = next((basis for pat, basis in INSTITUTION_LEVEL if re.search(pat, ident, re.I)), None)
+    f["institution_level"] = (field(True, "inferred", "programme rule", url, inst, "high", "rule")
+                              if inst else missing())
     f["consortium_size"] = (field({"en": rule[0]}, "inferred", "Horizon Europe General Annex B", HORIZON_ANNEXES,
                                   f"standard rule for {codes[0]} actions unless the topic conditions say otherwise",
                                   "medium", "rule") if rule else missing())

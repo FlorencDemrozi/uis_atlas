@@ -128,6 +128,8 @@ def main() -> None:
                 out["open_eligibility"] = {k: v for k, v in m["open_eligibility"].items()
                                            if k in public_ids and k not in excluded}
                 out["eligibility_evidence"] = m["eligibility_evidence"]
+            if m.get("open_role"):  # ERC / MSCA: the role a UiS researcher takes
+                out["open_role"] = m["open_role"]
         out["history"] = history.get(c["id"], [])[-HISTORY_PER_CALL:]
         calls.append(out)
 

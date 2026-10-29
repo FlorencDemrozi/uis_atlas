@@ -35,12 +35,14 @@ Method (settings in config.FUNDING_MATCH; transparent and reproducible):
 import json
 import math
 import re
+import sys
 from datetime import datetime
 
 import numpy as np
 
 import config
 import embed
+import eu
 
 CFG = config.FUNDING_MATCH
 # Administrative sentences say nothing about the science and are not used as aspects.
@@ -149,6 +151,36 @@ def sentence_with(text: str, pattern: str) -> str | None:
     return None
 
 
+# ERC career limits, in years since the first UiS paper in the atlas. The atlas has no
+# PhD dates, the first paper often comes before the PhD, and people recruited from
+# elsewhere have earlier papers we do not hold. So only upper limits are checked (a
+# long UiS record is certain; a short one says little), with wide margins over the
+# official windows (eu.ROLE_RULES), and they only ever lead to "check".
+ERC_STG_MAX_YEARS = 12
+ERC_COG_MAX_YEARS = 16
+
+
+def eu_role_eligibility(ident: str, kind: str | None, career: int | None) -> tuple[str, str] | None:
+    """(status, reason) from the ERC / MSCA role rules, or None if nothing applies.
+    Only the position (PhD candidate) is certain enough for "likely_ineligible"."""
+    if re.match(r"ERC-", ident, re.I):
+        if kind == "phd":
+            return "likely_ineligible", "erc_doctorate"
+        if re.search(r"-STG$", ident, re.I) and (kind in ("professor", "emeritus")
+                                                  or (career is not None and career > ERC_STG_MAX_YEARS)):
+            return "check", "erc_stg_window"
+        if re.search(r"-COG$", ident, re.I) and career is not None and career > ERC_COG_MAX_YEARS:
+            return "check", "erc_cog_window"
+        if re.search(r"-ADG$", ident, re.I) and kind == "postdoc":
+            return "check", "erc_adg_record"
+    elif re.match(r"HORIZON-MSCA-\d{4}-(PF|DN)-", ident, re.I):
+        if kind == "phd":
+            return "likely_ineligible", "msca_supervisor"
+        if kind == "postdoc":
+            return "check", "msca_supervisor_postdoc"
+    return None
+
+
 def eligibility(call: dict, r: dict) -> dict:
     """{"status", "reason", "evidence"} from conditions stated in the call text."""
     f = call["fields"]
@@ -170,6 +202,14 @@ def eligibility(call: dict, r: dict) -> dict:
             return out("check", "eu_restricted", norway.get("ev"))
         if norway.get("s", "not_specified") == "not_specified":
             return out("check", "eu_country_unknown")
+        rule = eu.role_rule(f["call_id"]["v"])
+        if rule:
+            e = eu_role_eligibility(f["call_id"]["v"], kind, career)
+            if e:
+                return out(e[0], e[1], rule[0])
+            if kind in ("emeritus", "external", "adjunct"):
+                return out("check", f"position_{kind}", (r.get("position") or {}).get("nb"))
+            return out("no_restriction_found", "none_found")
     if f["uis_can_apply"]["v"] is False:
         return out("partner_only", "uis_not_applicant", f["uis_can_apply"]["ev"])
     # Career-stage rules. Numbers ("2–7 years since the doctorate") count only in
@@ -297,7 +337,27 @@ def main() -> None:
     model = embed.load_model()
     out_calls = {}
     active = [c for c in calls["calls"] if c["fields"]["status"]["v"] != "closed"]
+    # --changed-profiles (second pass in run_all.py, after profile_calls.py): reuse the
+    # previous result of every call whose AI profile did not change.
+    previous = {}
+    if "--changed-profiles" in sys.argv and config.FUNDING_MATCHES.exists():
+        prev = json.loads(config.FUNDING_MATCHES.read_text(encoding="utf-8"))
+        if (prev.get("researchers_from"), prev.get("calls_from"), prev.get("settings")) ==                 (profiles_doc.get("generated"), calls.get("generated"), CFG):
+            previous = prev["calls"]
+    reused = 0
     for call in active:
+        profile = call_profiles.get(call["id"])
+        profile_key = profile["source_hash"] if profile else None
+        if call["id"] in previous and previous[call["id"]].get("profile_key") == profile_key:
+            out_calls[call["id"]] = previous[call["id"]]
+            reused += 1
+            continue
+        if call["fields"].get("institution_level", {}).get("v"):
+            # Applied for by the institution (MSCA COFUND, Researchers' Night): no researcher matches.
+            out_calls[call["id"]] = {"aspects": [], "aspect_basis": "institution_level", "title_terms": [],
+                                     "matches": [], "profile_key": None}
+            print(f"  {call['id']}: institution-level call – not matched to researchers")
+            continue
         if call["fields"].get("open_field", {}).get("v"):
             # Open to all fields (e.g. FRIPRO): no topic to match on. Every researcher
             # is offered the call, with eligibility from its stated rules. Only the
@@ -308,13 +368,14 @@ def main() -> None:
                 if e["status"] != "no_restriction_found":
                     elig[sid] = [e["status"], e["reason"]]
                     evidence.setdefault(e["reason"], e["evidence"])
+            rule = eu.role_rule(call["fields"]["call_id"]["v"] or "") if call["source"] == "eu" else None
             out_calls[call["id"]] = {"aspects": [], "aspect_basis": "open_field", "title_terms": [], "matches": [],
-                                     "open_eligibility": elig, "eligibility_evidence": evidence}
+                                     "open_eligibility": elig, "eligibility_evidence": evidence,
+                                     "open_role": rule[2] if rule else None, "profile_key": None}
             n_out = sum(1 for s, _ in elig.values() if s == "likely_ineligible")
             print(f"  {call['id']}: open to all fields – {len(rows_of) - n_out} researchers offered "
                   f"({n_out} probably not eligible, {len(elig) - n_out} to check)")
             continue
-        profile = call_profiles.get(call["id"])
         scope, aspects = call_aspects(call, profile)
         queries = [scope] + [a["text"] for a in aspects]
         Q = embed.encode(model, queries, config.QUERY_PREFIX)
@@ -411,15 +472,18 @@ def main() -> None:
         out_calls[call["id"]] = {
             "aspects": [{k: a[k] for k in ("label", "kind", "source", "evidence")} for a in aspects],
             "aspect_basis": "ai_profile" if profile else "call_text", "title_terms": terms,
-            "matches": matches,
+            "matches": matches, "profile_key": profile_key,
         }
         n = sum(m["category"] != "low" for m in matches)
         print(f"  {call['id']}: {len(matches)} matches ({n} high/medium), {len(aspects)} aspects")
+    if previous:
+        print(f"Reused {reused} calls whose AI profile did not change.")
 
     config.FUNDING_MATCHES.write_text(json.dumps({
         "generated": datetime.now().isoformat(timespec="seconds"),
         "algorithm": CFG["algorithm"], "settings": CFG,
-        "researchers_from": profiles_doc.get("generated"), "papers_from_year": config.ACTIVE_FROM,
+        "researchers_from": profiles_doc.get("generated"), "calls_from": calls.get("generated"),
+        "papers_from_year": config.ACTIVE_FROM,
         "calls": out_calls}, ensure_ascii=False), encoding="utf-8")
     print(f"Matched {len(out_calls)} open/planned calls against {len(rows_of)} researchers.")
 

@@ -3,7 +3,7 @@
 Stage 3c – Call Intelligence Profiles: what each open or planned call asks for
 scientifically, read from the official call text by the Claude API (offline).
 
-Input:  config.CALLS
+Input:  config.CALLS, config.FUNDING_MATCHES (pre-filter for EU topics)
 Output: config.CALL_PROFILES  ({call_id: {"source_hash", "model", "generated", "profile"}})
 
 The profile separates facts from interpretation:
@@ -14,7 +14,10 @@ The profile separates facts from interpretation:
   deadlines, amounts or URLs is asked of the model – those come from
   build_calls.py.
 - "interpretation" is labelled AI-generated on the site.
-Cached by a hash of the call text; closed calls are skipped. Without
+Cached by a hash of the call text; closed calls are skipped. EU topics are
+profiled only when matching on their official text found a researcher scoring at
+least config.EU_PROFILE_MIN_SCORE (or they already have a profile); topics open to
+all fields, institution-level and company-only topics never are. Without
 ANTHROPIC_API_KEY the stage does nothing and matching uses the call text only.
 """
 import hashlib
@@ -27,6 +30,7 @@ import llm
 from build_calls import AI_ONLY_FIELDS
 
 PROMPT_VERSION = 3
+EU_PROMPT_VERSION = 1  # separate, so a change to the EU prompt does not redo the RCN profiles
 
 # Text fields the model may also condense (next to the official passage).
 CONDENSE_FIELDS = ["funding_rate", "eligible_costs", "funding_restrictions", "eligible_applicants",
@@ -35,7 +39,7 @@ AI_FIELDS = AI_ONLY_FIELDS + CONDENSE_FIELDS
 KINDS = ["core", "complementary", "mandatory_partner", "optional"]
 
 SYSTEM = """You analyse research funding calls for a university's research office. \
-You read one call from the Research Council of Norway and describe, in English, \
+You read one call from {funder} and describe, in English, \
 what scientific expertise a competitive proposal needs.
 
 Rules:
@@ -59,7 +63,18 @@ researchers could deliver the R&D a competitive project needs, e.g. "wearable \
 sensors and human activity recognition" or "machine learning on clinical data". \
 Broad calls (open to any innovation in a sector) often name only the sector and \
 example needs: list the scientific and technical fields that typically serve those \
-needs, consistent with the call's objectives. This is interpretation, not a requirement."""
+needs, consistent with the call's objectives. This is interpretation, not a requirement.{note}"""
+
+# (who issued the call, extra rule) per source; the RCN prompt is unchanged from version 3.
+FUNDERS = {
+    "rcn": ("the Research Council of Norway", ""),
+    "eu": ("an EU funding programme (one topic from the Funding & Tenders Portal)",
+           "\n- EU topics: the scientific content is in \"Expected outcome\" and \"Scope\". The topic "
+           "conditions (eligibility, award criteria, legal set-up) are largely standard programme text: use "
+           "them for the fields, not for topics or competencies. Obligations such as open-source licences, "
+           "standardisation feedback, dissemination or cooperation with other EU projects are not research "
+           "topics: leave them out of topics, technologies and competencies."),
+}
 
 STR = {"type": "string"}
 LIST = {"type": "array", "items": STR}
@@ -111,15 +126,17 @@ def normalise(out: dict) -> dict:
 
 def call_text(call: dict) -> str:
     f = call["fields"]
-    lang = "en" if call["sections"]["en"] else "nb"
+    lang = "en" if call["sections"]["en"] or call["source"] == "eu" else "nb"  # EU topics are English only
     title = f["title"]["v"].get(lang) or f["title"]["v"]["nb"]
     lines = [f"Title: {title}"]
     if f["summary"]["v"]:
         lines.append(f"Summary: {f['summary']['v'].get(lang) or f['summary']['v'].get('nb')}")
-    for key in ("scheme", "programme", "themes", "target_groups"):
-        v = f[key]["v"]
+    # programme_part, parent_call and action_type exist only for EU topics.
+    for key in ("scheme", "programme", "programme_part", "parent_call", "action_type", "themes", "target_groups"):
+        v = f.get(key, {}).get("v")
         if v:
-            v = v.get(lang) or v.get("nb")
+            if isinstance(v, dict):
+                v = v.get(lang) or v.get("nb")
             lines.append(f"{key.replace('_', ' ').title()}: {', '.join(v) if isinstance(v, list) else v}")
     for s in call["sections"][lang]:
         lines.append(f"\n## {' > '.join(s['path'])}\n{s['text']}")
@@ -152,6 +169,25 @@ def verify(profile: dict, source: str) -> dict:
     return profile
 
 
+def best_scores() -> dict[str, float]:
+    """Best researcher score per call from the last matching run ({} if there is none)."""
+    if not config.FUNDING_MATCHES.exists():
+        return {}
+    calls = json.loads(config.FUNDING_MATCHES.read_text(encoding="utf-8"))["calls"]
+    return {cid: max((m["score"] for m in c["matches"]), default=0.0) for cid, c in calls.items()}
+
+
+def eu_wanted(call: dict, best: dict[str, float], cache: dict) -> bool:
+    """Pre-filter: an EU topic is profiled when someone at UiS fits it well on its official
+    text, or it was profiled before (so a small score change does not drop the profile).
+    Topics open to all fields, institution-level and company-only topics are not."""
+    f = call["fields"]
+    if (f.get("open_field", {}).get("v") or f.get("institution_level", {}).get("v")
+            or f["uis_can_apply"]["v"] is False or not call["sections"]["en"]):  # no topic text to read
+        return False
+    return call["id"] in cache or best.get(call["id"], 0.0) >= config.EU_PROFILE_MIN_SCORE
+
+
 def main() -> None:
     cl = llm.client()
     if cl is None:
@@ -159,16 +195,21 @@ def main() -> None:
         return
     calls = json.loads(config.CALLS.read_text(encoding="utf-8"))["calls"]
     cache = json.loads(config.CALL_PROFILES.read_text(encoding="utf-8")) if config.CALL_PROFILES.exists() else {}
-    # EU topics are profiled only after an embedding pre-filter (project owner,
-    # 2026-10-29; not built yet), so for now they are matched on their official text.
-    todo = [c for c in calls if c["fields"]["status"]["v"] != "closed" and c["source"] == "rcn"]
+    best = best_scores()
+    todo = [c for c in calls if c["fields"]["status"]["v"] != "closed"
+            and (c["source"] == "rcn" or eu_wanted(c, best, cache))]
+    print(f"Call profiles: {sum(c['source'] == 'eu' for c in todo)} EU topics pass the pre-filter "
+          f"(best score ≥ {config.EU_PROFILE_MIN_SCORE} or profiled before).")
     made = 0
     for i, call in enumerate(todo, 1):
         text = call_text(call)
-        h = hashlib.sha256(f"{config.SUMMARY_MODEL}|{PROMPT_VERSION}|{text}".encode()).hexdigest()
+        version = PROMPT_VERSION if call["source"] == "rcn" else f"eu{EU_PROMPT_VERSION}"
+        h = hashlib.sha256(f"{config.SUMMARY_MODEL}|{version}|{text}".encode()).hexdigest()
         if cache.get(call["id"], {}).get("source_hash") == h:
             continue
-        out = llm.ask_json(cl, SYSTEM + FORMAT, text, schema(), effort="medium", max_tokens=16000)
+        funder, note = FUNDERS[call["source"]]
+        out = llm.ask_json(cl, SYSTEM.format(funder=funder, note=note) + FORMAT, text, schema(),
+                           effort="medium", max_tokens=16000)
         if out:
             out = normalise(out)
         if not out:

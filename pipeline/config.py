@@ -294,6 +294,11 @@ FUNDING_OVERRIDES = CONFIG_DIR / "funding_overrides.json"
 # Researcher–call matching (match_funding.py). Initial values, not validated
 # probabilities: the score ranks researchers for one call and is never a chance
 # of being funded. Project experience is not scored yet (no project data).
+# EU topics get an AI profile (profile_calls.py) only when their best researcher score
+# from matching on the official text reaches this value (project owner, 2026-10-29:
+# about 150 of ~430 open topics). A topic keeps its profile while it stays open.
+EU_PROFILE_MIN_SCORE = 0.5
+
 FUNDING_MATCH = {
     "algorithm": "funding-match-1",
     "weights": {"scope": 0.5, "coverage": 0.3, "evidence": 0.2},

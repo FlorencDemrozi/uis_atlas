@@ -9,12 +9,16 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 STAGES = [
     "build_profiles.py", "summarize.py", "embed.py", "export_public.py",          # researchers
-    "build_calls.py", "profile_calls.py", "match_funding.py", "export_funding.py",  # funding calls
+    # funding calls: matching on the official text first, so profile_calls.py can pick the
+    # EU topics worth an AI profile; the second pass redoes only calls whose profile changed.
+    "build_calls.py", "match_funding.py", "profile_calls.py", "match_funding.py --changed-profiles",
+    "export_funding.py",
 ]
 
 for stage in STAGES:
     print(f"\n=== {stage} ===")
-    result = subprocess.run([sys.executable, str(HERE / stage)])
+    script, *args = stage.split()
+    result = subprocess.run([sys.executable, str(HERE / script), *args])
     if result.returncode != 0:
         sys.exit(f"Stopped: {stage} failed.")
 print("\nPipeline complete. Public data is in data/public/.")
