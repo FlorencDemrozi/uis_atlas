@@ -102,6 +102,49 @@ AI values are shown next to official values and never replace them.
 
 Not scored (no data yet): project experience, interdisciplinarity.
 
+## EU funding (Funding & Tenders Portal) – Phase 1, 2026-10-29
+EU topics live in the same records, matching, export and pages as RCN calls
+(`source: "eu"`, id `eu-<official topic identifier>`, `family` for the filters:
+horizon, erc, msca, eic, missions, partnerships, other_eu; RCN calls are `nfr`).
+
+- **Collect** (`collect_eu.py` → `data/raw/eu/`): the portal's public search API
+  (no key) lists open and forthcoming topics of every programme (calls for proposals
+  and cascade calls; procurement tenders are left out) plus topics closed in the last
+  6 months. Pages are sorted on a unique key (deadline, identifier) – the index returns
+  duplicates and gaps otherwise. Each topic's JSON page is fetched only when its
+  checksum or status changes, or after 28 days; closed topics once. About 1 450
+  topics; a first run takes ~15 min, a weekly run a few minutes.
+- **Structure** (`eu.py`, called by `build_calls.py`): the hierarchy Programme →
+  programme part → Call → Topic; type of action (RIA/IA/CSA/ERC/MSCA-…); opening
+  date, deadlines (single, two-stage, cut-offs, continuous); budget per topic, EU
+  contribution per project, number of grants (from the portal's budget overview, euro);
+  grant model; the official text under its headings (Expected outcome, Scope; the
+  conditions: eligible countries, other eligibility, award criteria, procedure, legal
+  set-up, specific conditions) and the linked documents.
+- **Rules (inferred, with basis):** Norway's participation per programme (Horizon
+  Europe: associated country; Digital Europe, EU4Health, Erasmus+, Creative Europe:
+  EEA) – every other programme is "not determined" and shown as *check*; topics whose
+  conditions restrict participation (e.g. Article 12(5)/22(5)) are *check* with the
+  sentence; standard Horizon Europe consortium and funding-rate rules for RIA/IA/CSA
+  (General Annexes B and D) are labelled as standard unless the topic says otherwise;
+  EIC Accelerator = company funding (UiS cannot apply); ERC StG/CoG/AdG/SyG, MSCA
+  PF/DN/SE and EIC Pathfinder Open are open to all fields (offered to every
+  researcher with eligibility, like FRIPRO).
+- **Status:** the portal lists hundreds of old topics as open or forthcoming after
+  all their deadlines. Those are stored as closed ("inferred: all deadlines have
+  passed") with a review note; cancelled topics are closed too.
+- **Matching:** the same method as RCN calls, on the official topic text. AI topic
+  profiles for EU topics come in Phase 2, only for topics that pass an embedding
+  pre-filter (project owner's choice); `profile_calls.py` skips EU topics until then.
+  Eligibility adds `eu_company_only`, `eu_restricted`, `eu_country_unknown`.
+- **Export:** closed EU topics carry only their identifying fields; empty keys and
+  source URLs equal to the topic page are left out and restored in the browser.
+
+Not done yet (later phases): AI profiles with pre-filter and ERC/MSCA role rules
+(Phase 2), other sources (COST, NordForsk, Eureka, ERA-LEARN, Interreg; Phase 3),
+CORDIS projects and external collaborators (Phase 4, from Scopus co-authors as
+decided – needs clearance under DATA_POLICY.md), consortium suggestions (Phase 5).
+
 ## Scheduled update
 See `docs/DEPLOY.md`: weekly `run_weekly.py` on a UiS server (Task Scheduler),
 logging and optional publishing. A failing collector keeps the old data; a failing
