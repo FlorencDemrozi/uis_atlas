@@ -86,9 +86,13 @@ def call_aspects(call: dict, profile: dict | None) -> tuple[str, list[dict]]:
     aspects = []
     if profile:
         p = profile["profile"]
-        # RCN calls rarely fill summary and themes; without the profile the scope is the title alone.
-        parts += [" > ".join(d["path"]) for d in p.get("disciplines", [])]
-        parts += [t["path"][-1] for t in p.get("topics", []) if t["path"]]
+        # RCN calls rarely fill summary and themes; without the profile the scope is the title
+        # alone. EU topics have a full official summary: their scope stays official text, since
+        # broad profile disciplines ("Machine learning") lifted too many general matches
+        # (project owner, 2026-10-29).
+        if call.get("source") != "eu":
+            parts += [" > ".join(d["path"]) for d in p.get("disciplines", [])]
+            parts += [t["path"][-1] for t in p.get("topics", []) if t["path"]]
         ai = lambda label, text, kind, evidence="": {"label": label, "text": text, "kind": kind,
                                                       "source": "ai", "evidence": evidence}
         for t in p.get("topics", []):

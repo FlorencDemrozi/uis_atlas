@@ -160,3 +160,15 @@ def test_eu_profile_prefilter():
     assert not profile_calls.eu_wanted(build("ERC-2027-COG"), {"eu-ERC-2027-COG": 1.0}, {})  # open to all fields
     assert not profile_calls.eu_wanted(build("HORIZON-EIC-2026-ACCELERATOR-01"),
                                        {"eu-HORIZON-EIC-2026-ACCELERATOR-01": 1.0}, {})  # company only
+
+
+def test_eu_scope_stays_official_text_with_a_profile():
+    topic = build("HORIZON-CL5-2027-07-D3-32")
+    profile = {"profile": {"disciplines": [{"path": ["Machine learning"], "level": "primary"}],
+                           "topics": [{"path": ["Machine learning", "Diffusion models"], "basis": "explicit",
+                                       "evidence": ""}],
+                           "technologies": [], "contributing_expertise": [], "competencies": [],
+                           "methods": [], "application_domains": []}}
+    scope, aspects = match_funding.call_aspects(topic, profile)
+    assert scope == match_funding.call_aspects(topic, None)[0] and "Machine learning" not in scope
+    assert [a["label"] for a in aspects] == ["Diffusion models"]

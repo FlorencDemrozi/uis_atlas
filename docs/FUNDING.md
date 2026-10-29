@@ -155,6 +155,12 @@ horizon, erc, msca, eic, missions, partnerships, other_eu; RCN calls are `nfr`).
   it does not redo the RCN profiles. The same quote checks apply. `run_all.py` then
   runs `match_funding.py --changed-profiles`, which reuses every call whose profile
   did not change (a full matching pass takes ~3.5 min).
+- **Scoring with EU profiles:** the profile supplies the aspects, but the scope of
+  an EU topic stays its official text (title, summary, programme part). With the
+  profile's disciplines in the scope as for RCN calls, the 149 profiled topics had
+  on average 4.4 High / 24.5 High+Medium matches, many from general
+  machine-learning work; with the official scope 2.5 / 14.0 (RCN with profiles:
+  1.5 / 9.8). Project owner's choice, 2026-10-29.
 - **ERC / MSCA role rules** (`eu.ROLE_RULES`, shown as the inferred
   "project manager requirements" with the work programme as source, and
   `match_funding.eu_role_eligibility`):
