@@ -24,8 +24,9 @@ pass it on. To change it, set a new value in `.env` and re-run the export.
 |---|---|---|
 | Collect | `collect_rcn.py` | forskningsradet.no call lists (current + completed) and each call page (nb + en) → `data/raw/rcn/` |
 | Structure | `build_calls.py` | raw pages → `data/interim/calls.json`, `calls_history.json` |
-| AI profile | `profile_calls.py` | open/planned calls → `data/interim/call_profiles.json` (needs `ANTHROPIC_API_KEY`; skipped otherwise) |
 | Match | `match_funding.py` | calls + paper embeddings (`embed.py`) → `data/interim/funding_matches.json` |
+| AI profile | `profile_calls.py` | open/planned RCN calls and pre-filtered EU topics → `data/interim/call_profiles.json` (needs `ANTHROPIC_API_KEY`; skipped otherwise) |
+| Match again | `match_funding.py --changed-profiles` | redoes only the calls whose AI profile changed |
 | Export | `export_funding.py` | all of the above → `data/public/funding.enc.json` (encrypted) |
 
 `run_all.py` runs the processing stages; `run_weekly.py` runs collectors + processing
@@ -133,15 +134,44 @@ horizon, erc, msca, eic, missions, partnerships, other_eu; RCN calls are `nfr`).
 - **Status:** the portal lists hundreds of old topics as open or forthcoming after
   all their deadlines. Those are stored as closed ("inferred: all deadlines have
   passed") with a review note; cancelled topics are closed too.
-- **Matching:** the same method as RCN calls, on the official topic text. AI topic
-  profiles for EU topics come in Phase 2, only for topics that pass an embedding
-  pre-filter (project owner's choice); `profile_calls.py` skips EU topics until then.
-  Eligibility adds `eu_company_only`, `eu_restricted`, `eu_country_unknown`.
+- **Matching:** the same method as RCN calls, on the official topic text (or the AI
+  profile, see Phase 2). Eligibility adds `eu_company_only`, `eu_restricted`,
+  `eu_country_unknown`.
 - **Export:** closed EU topics carry only their identifying fields; empty keys and
   source URLs equal to the topic page are left out and restored in the browser.
 
-Not done yet (later phases): AI profiles with pre-filter and ERC/MSCA role rules
-(Phase 2), other sources (COST, NordForsk, Eureka, ERA-LEARN, Interreg; Phase 3),
+## EU funding – Phase 2, 2026-10-29
+- **AI topic profiles with a pre-filter.** Matching first runs on every topic's
+  official text. `profile_calls.py` then profiles an EU topic only if its best
+  researcher score reaches `config.EU_PROFILE_MIN_SCORE` (0.5, about 150 of ~430 open
+  topics), or if it already has a profile (kept while the topic is open, so a small
+  score change does not drop it). Never profiled: topics open to all fields,
+  institution-level and company-only topics, and topics without text. The EU prompt
+  is the RCN prompt with one extra rule (the science is in Expected outcome and
+  Scope; the conditions are standard text) and its own version number, so changing
+  it does not redo the RCN profiles. The same quote checks apply. `run_all.py` then
+  runs `match_funding.py --changed-profiles`, which reuses every call whose profile
+  did not change (a full matching pass takes ~3.5 min).
+- **ERC / MSCA role rules** (`eu.ROLE_RULES`, shown as the inferred
+  "project manager requirements" with the work programme as source, and
+  `match_funding.eu_role_eligibility`):
+  - ERC: PhD candidates → probably not eligible (a doctorate is required). StG
+    (2–7 years after the PhD) and CoG (7–12) are checked against the years since
+    the first UiS paper in the atlas, only as upper limits with wide margins (StG
+    > 12 or a professor; CoG > 16), and AdG flags postdocs; all of these give only
+    *check*. Lower limits are not checked: the atlas has no PhD dates and holds
+    only UiS papers, so people recruited from elsewhere look more junior than they
+    are.
+  - MSCA PF and DN: UiS staff take part as **supervisor/host**; PhD candidates →
+    probably not eligible, postdocs → *check*. MSCA SE: **staff exchange**, no
+    career restriction.
+  - The role is stored per call (`open_role`) and shown on the call page and in the
+    profile's list of calls open to all fields.
+- **Institution-level calls** (MSCA COFUND, European Researchers' Night): field
+  `institution_level` with its basis; listed with a note to contact the research
+  office, not matched or offered to researchers.
+
+Not done yet (later phases): other sources (COST, NordForsk, Eureka, ERA-LEARN, Interreg; Phase 3),
 CORDIS projects and external collaborators (Phase 4, from Scopus co-authors as
 decided – needs clearance under DATA_POLICY.md), consortium suggestions (Phase 5).
 

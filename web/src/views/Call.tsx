@@ -1,6 +1,6 @@
 import { useState } from "preact/hooks";
 import type { Atlas } from "../data";
-import { callTitle, pick, type Call, type Funding, type Match } from "../funding";
+import { callTitle, isInstitutionLevel, pick, type Call, type Funding, type Match } from "../funding";
 import { useI18n } from "../i18n";
 import { links } from "../router";
 import { CategoryBadge, FieldList, Freshness, FundingGate, MatchDetails, SourceBadge, StatusBadge, useFmt } from "../components/funding";
@@ -16,7 +16,7 @@ const GROUPS: [string, string[]][] = [
   ["financial", ["min_amount", "max_amount", "total_budget", "expected_grants", "currency", "funding_model",
     "funding_rate", "eligible_costs", "funding_restrictions", "cofunding"]],
   ["project", ["min_duration_months", "max_duration_months", "earliest_start", "latest_start", "latest_end",
-    "orientation", "open_field", "trl", "structural_requirements", "deliverables", "expected_impact"]],
+    "orientation", "open_field", "institution_level", "trl", "structural_requirements", "deliverables", "expected_impact"]],
   ["eligibility", ["norway_eligible", "target_groups", "uis_can_apply", "eligible_applicants", "pi_requirements", "career_stage",
     "nationality_residency", "partner_requirements", "international", "international_rules", "consortium_size",
     "mandatory_partners", "industry_public_participation", "application_limits", "subcontracting", "mobility"]],
@@ -215,6 +215,7 @@ function ResearchersSection({ atlas, data, call, matches }:
     <section class="section" id="sec-researchers" aria-labelledby="h-researchers">
       <h2 id="h-researchers">{t("f.sec.researchers")}</h2>
       {closed ? <p class="muted">{t("f.closedNoMatch")}</p>
+        : isInstitutionLevel(call) ? <p>{t("f.institutionLevel")}{call.fields.institution_level?.ev && <> <q>{call.fields.institution_level.ev}</q></>}</p>
         : call.fields.open_field?.v ? <OpenFieldSummary atlas={atlas} call={call} />
         : matches.length === 0 ? <p class="muted">{t("f.noMatches")}</p> : (
         <>
@@ -241,6 +242,7 @@ function OpenFieldSummary({ atlas, call }: { atlas: Atlas; call: Call }) {
   return (
     <>
       <p>{t("f.openField")}{call.fields.open_field.ev && <> <q>{call.fields.open_field.ev}</q></>}</p>
+      {call.open_role && <p><strong>{t("f.openRole")}:</strong> {t(`f.role.${call.open_role}`)}</p>}
       <p class="sub">{t("f.openFieldCounts", { a: num(atlas.researchers.length - unlikely - check), b: num(check), c: num(unlikely) })}</p>
       {rules.length > 0 && (
         <ul class="small">

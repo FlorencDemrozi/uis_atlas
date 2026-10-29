@@ -1,7 +1,7 @@
 import { useMemo } from "preact/hooks";
 import type { Atlas } from "../data";
 import type { Researcher } from "../data";
-import { FAMILIES, amountNok, callTitle, familyOf, isOpenField, nextDeadline, openFieldCallsFor, pick, type Call,
+import { FAMILIES, amountNok, callTitle, familyOf, isInstitutionLevel, isOpenField, nextDeadline, openFieldCallsFor, pick, type Call,
   type Eligibility, type Funding, type Match } from "../funding";
 import { useI18n } from "../i18n";
 import { links, replaceHash, type Route } from "../router";
@@ -274,7 +274,7 @@ function CallCard({ atlas, data, call, person }: { atlas: Atlas; data: Funding; 
                 })}
               </ul>
             </>
-          ) : <p class="muted small">{t(f.open_field?.v ? "f.openFieldShort" : "f.matchesNone")}</p>}
+          ) : <p class="muted small">{t(isInstitutionLevel(call) ? "f.institutionShort" : f.open_field?.v ? "f.openFieldShort" : "f.matchesNone")}</p>}
         </div>
       )}
     </li>

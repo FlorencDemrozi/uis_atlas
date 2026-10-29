@@ -467,5 +467,17 @@
   "fld.norway_eligible": "Norske organisasjoner kan delta",
   "f.reason.eu_company_only": "Finansiering for bedrifter (f.eks. EIC Accelerator): UiS kan ikke søke; et UiS-avleggerselskap eller oppstartsselskap kan.",
   "f.reason.eu_restricted": "Temaet begrenser deltakelse til enkelte land – sjekk om norske organisasjoner er med.",
-  "f.reason.eu_country_unknown": "Norges deltakelse i dette EU-programmet er ikke avklart – sjekk hvilke land programmet er åpent for."
+  "f.reason.eu_country_unknown": "Norges deltakelse i dette EU-programmet er ikke avklart – sjekk hvilke land programmet er åpent for.",
+  "f.role.supervisor": "Veileder / vertskap for stipendiaten eller doktorgradskandidatene",
+  "f.role.secondment": "Deltaker i personalutveksling (utplassering)",
+  "f.openRole": "Rolle for UiS-forskere",
+  "f.institutionLevel": "Institusjonen søker denne utlysningen samlet, så den matches ikke mot enkeltforskere. Kontakt forskningsadministrasjonen om UiS bør delta.",
+  "f.institutionShort": "Utlysning for institusjonen",
+  "fld.institution_level": "Utlysning for institusjonen",
+  "f.reason.erc_doctorate": "Prosjektleder i ERC må ha doktorgrad, og personen er stipendiat.",
+  "f.reason.erc_stg_window": "ERC Starting Grant: 2–7 år etter doktorgraden. Personen har en senior stilling eller har publisert i mer enn 12 år – sjekk doktorgradsdatoen.",
+  "f.reason.erc_cog_window": "ERC Consolidator Grant: 7–12 år etter doktorgraden. Personen har publisert ved UiS i mer enn 16 år – sjekk doktorgradsdatoen.",
+  "f.reason.erc_adg_record": "ERC Advanced Grant: krever betydelige forskningsresultater de siste 10 årene, og personen er postdoktor – sjekk kravene.",
+  "f.reason.msca_supervisor": "UiS-ansatte deltar som veiledere, og personen er stipendiat.",
+  "f.reason.msca_supervisor_postdoc": "UiS-ansatte deltar som veiledere – sjekk om en postdoktor kan være veileder her."
 }

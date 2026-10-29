@@ -53,11 +53,13 @@ export interface Call {
   history: Change[];
   profile?: CallProfile;
   aspects?: Aspect[];
-  aspect_basis?: "ai_profile" | "call_text" | "open_field";
+  aspect_basis?: "ai_profile" | "call_text" | "open_field" | "institution_level";
   title_terms?: string[];
   /** Open-field calls: researchers with a restriction ([status, reason]); everyone else "no_restriction_found". */
   open_eligibility?: Record<string, [Eligibility["status"], string]>;
   eligibility_evidence?: Record<string, string | null>;
+  /** ERC / MSCA: the role a UiS researcher takes (e.g. "supervisor" for MSCA fellowships). */
+  open_role?: string;
 }
 
 export interface Eligibility {
@@ -258,7 +260,12 @@ export function nextDeadline(c: Call, today = new Date().toISOString().slice(0, 
 
 /** A call open to all research fields (offered to everyone, not topic-matched). */
 export function isOpenField(c: Call): boolean {
-  return c.aspect_basis === "open_field" || !!c.fields.open_field?.v;
+  return !isInstitutionLevel(c) && (c.aspect_basis === "open_field" || !!c.fields.open_field?.v);
+}
+
+/** A call the institution applies for as a whole (MSCA COFUND, Researchers' Night): not offered to researchers. */
+export function isInstitutionLevel(c: Call): boolean {
+  return c.aspect_basis === "institution_level" || !!c.fields.institution_level?.v;
 }
 
 const ELIG_ORDER ={ no_restriction_found: 0, check: 1, partner_only: 2, likely_ineligible: 3 };

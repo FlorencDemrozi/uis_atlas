@@ -25,6 +25,7 @@ function OpenFieldCalls({ data, id, keep }: { data: Funding; id: string; keep: (
         <span class="muted small"> · {d ? fmt.date(d, true) : call.fields.rolling.v ? t("f.rolling") : t("f.noDeadline")}
           {fmt.range(call) && ` · ${fmt.range(call)}`}</span>
         <EligibilityBadge e={eligibility} />
+        {call.open_role && <span class="muted small"> · {t(`f.role.${call.open_role}`)}</span>}
       </li>
     );
   };
