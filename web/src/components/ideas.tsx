@@ -40,7 +40,9 @@ export function IdeaSearch({ data }: { data: Funding }) {
 
   return (
     <details class="idea-search" open={state.status !== "idle"}>
-      <summary><strong>{t("idea.title")}</strong> <span class="muted small">{t("idea.teaser")}</span></summary>
+      <summary><strong>{t("idea.title")}</strong> <span class="badge beta">{t("idea.beta")}</span>{" "}
+        <span class="muted small">{t("idea.teaser")}</span></summary>
+      <p class="warn small" role="note">{t("idea.betaNote")}</p>
       <form onSubmit={run}>
         <label class="field grow">
           <span>{t("idea.label")}</span>

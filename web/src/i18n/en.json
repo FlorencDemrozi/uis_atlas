@@ -96,7 +96,6 @@
   "footer.prototypeText": "Test version under development. Data use and researcher profiles are awaiting confirmation from the UiS Library and data protection officer.",
   "footer.source": "Source: Scopus (Elsevier), publications since {from}, retrieved {date}. Departments and positions: UiS employee directory.",
   "footer.summaries": "Researcher overviews are generated automatically from publications and describe research only. Researchers can request corrections or opt out.",
-  "footer.designedBy": "Atlas designed at the Department of Electrical Engineering and Computer Science (IDE) by",
   "footer.designerRole": "Professor in Biomedical Sensing Systems, University of Stavanger.",
   "net.whole": "Whole network",
   "net.trail": "Exploration path",
@@ -496,5 +495,14 @@
   "idea.closest.aspect": "Closest aspect",
   "idea.closest.direction": "Closest example direction (AI)",
   "idea.openField": "In addition, {n} open calls accept any research topic (e.g. FRIPRO, ERC, MSCA): see the list below.",
-  "idea.tool": "For a checked answer – which calls really fit, why, with quotes from the call – ask the person responsible for the atlas to run the idea through the AI review tool (pipeline/idea_match.py)."
+  "idea.tool": "For a checked answer – which calls really fit, why, with quotes from the call – ask the person responsible for the atlas to run the idea through the AI review tool (pipeline/idea_match.py).",
+  "footer.designedWith": "Atlas designed with",
+  "footer.and": "and",
+  "footer.designedAt": "at the Department of Electrical Engineering and Computer Science (IDE) by",
+  "footer.love": "love",
+  "footer.coffee": "coffee",
+  "idea.beta": "Beta",
+  "idea.betaNote": "Beta version: this feature is still being tested and its results are not yet accurate. Use it to get ideas of where to look, and always check the calls themselves.",
+  "p.pubsHint": "With UiS affiliation, since {y} (earlier affiliations not yet included)",
+  "p.citationsHint": "For these publications (Scopus)"
 }

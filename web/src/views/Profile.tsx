@@ -163,11 +163,11 @@ export function ProfileView({ atlas, id }: { atlas: Atlas; id: string }) {
 
       <div class="tiles" style={{ marginTop: "24px" }}>
         <div class="tile"><div class="label">{t("ov.publications")}</div><div class="value">{num(r.n_publications)}</div>
-          <div class="hint">{t("ov.since", { y: String(atlas.meta.period.first_year) })}</div></div>
+          <div class="hint">{t("p.pubsHint", { y: String(atlas.meta.period.first_year) })}</div></div>
         <div class="tile"><div class="label">{t("p.recent")}</div><div class="value">{num(recent)}</div>
           <div class="hint">{t("ov.since", { y: String(atlas.meta.period.recent_from) })}</div></div>
         <div class="tile"><div class="label">{t("ov.citations")}</div><div class="value">{num(r.citations)}</div>
-          <div class="hint">{t("ov.citationsHint")}</div></div>
+          <div class="hint">{t("p.citationsHint")}</div></div>
         <div class="tile"><div class="label">{t("p.coauthors")}</div><div class="value">{num(r.top_coauthors.length)}</div>
           <div class="hint">{t("p.coauthorsHint")}</div></div>
       </div>

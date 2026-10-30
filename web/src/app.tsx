@@ -126,7 +126,9 @@ function Footer({ atlas }: { atlas: Atlas | null }) {
         <p><span class="badge">{t("footer.prototype")}</span> {t("footer.prototypeText")}</p>
         {meta && <p>{t("footer.source", { from: String(meta.period.first_year), date: meta.generated.slice(0, 10) })}</p>}
         <p>{t("footer.summaries")}</p>
-        <p class="credit">{t("footer.designedBy")}{" "}
+        <p class="credit">{t("footer.designedWith")}{" "}
+          <span role="img" aria-label={t("footer.love")}>❤️</span> {t("footer.and")}{" "}
+          <span role="img" aria-label={t("footer.coffee")}>☕</span> {t("footer.designedAt")}{" "}
           <a href="https://florencdemrozi.github.io/">Florenc Demrozi</a>, {t("footer.designerRole")}
         </p>
       </div>

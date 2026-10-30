@@ -96,7 +96,6 @@
   "footer.prototypeText": "Testversjon under utvikling. Bruken av data og forskerprofilene venter på godkjenning fra Universitetsbiblioteket og personvernombudet.",
   "footer.source": "Kilde: Scopus (Elsevier), publikasjoner siden {from}, hentet {date}. Institutter og stillinger: UiS’ ansattkatalog.",
   "footer.summaries": "Forskersammendragene er generert automatisk fra publikasjoner og beskriver kun forskning. Forskere kan be om retting eller reservere seg.",
-  "footer.designedBy": "Atlaset er utformet ved Institutt for data- og elektroteknologi (IDE) av",
   "footer.designerRole": "professor i biomedisinske sensorsystemer, Universitetet i Stavanger.",
   "net.whole": "Hele nettverket",
   "net.trail": "Utforskingssti",
@@ -496,5 +495,14 @@
   "idea.closest.aspect": "Nærmeste aspekt",
   "idea.closest.direction": "Nærmeste eksempelretning (KI)",
   "idea.openField": "I tillegg tar {n} åpne utlysninger imot alle forskningstemaer (f.eks. FRIPRO, ERC, MSCA): se listen nedenfor.",
-  "idea.tool": "For et kontrollert svar – hvilke utlysninger som virkelig passer, hvorfor, med sitater fra utlysningen – be den som har ansvar for atlaset om å kjøre ideen gjennom KI-vurderingen (pipeline/idea_match.py)."
+  "idea.tool": "For et kontrollert svar – hvilke utlysninger som virkelig passer, hvorfor, med sitater fra utlysningen – be den som har ansvar for atlaset om å kjøre ideen gjennom KI-vurderingen (pipeline/idea_match.py).",
+  "footer.designedWith": "Atlaset er utformet med",
+  "footer.and": "og",
+  "footer.designedAt": "ved Institutt for data- og elektroteknologi (IDE) av",
+  "footer.love": "kjærlighet",
+  "footer.coffee": "kaffe",
+  "idea.beta": "Beta",
+  "idea.betaNote": "Betaversjon: funksjonen testes fortsatt, og resultatene er ennå ikke presise. Bruk den til å få ideer om hvor du kan lete, og sjekk alltid utlysningene selv.",
+  "p.pubsHint": "Med UiS-tilknytning, siden {y} (tidligere arbeidssteder er ennå ikke med)",
+  "p.citationsHint": "For disse publikasjonene (Scopus)"
 }
