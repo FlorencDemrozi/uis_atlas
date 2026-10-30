@@ -106,6 +106,7 @@ export interface FundingMeta {
   categories: Record<string, number>;
   has_ai_profiles: boolean;
   detail_shards?: number;
+  has_ideas?: boolean;
 }
 
 export interface Funding {
@@ -185,6 +186,15 @@ export function closeByDate(c: Call, today: string): void {
   c.closed_by_date = true;
 }
 
+/** Another file of the same export (detail shard, idea vectors), opened with the key already typed. */
+export async function fetchEncrypted<T>(data: Funding, name: string): Promise<T> {
+  const res = await fetch(name);
+  if (!res.ok) throw new Error(String(res.status));
+  const file = (await res.json()) as EncryptedFile;
+  if (file.kdf.salt !== data.salt) throw new Error("outdated");  // a newer export: reload the page
+  return openFile<T>(file, data.key);
+}
+
 // ------------------------------------------------------------ call details
 interface CallDetail { fields: Record<string, Partial<Field<any>>>; profile?: CallProfile; history?: Change[] }
 const shardFiles = new Map<string, Promise<Record<string, CallDetail>>>();
@@ -193,14 +203,7 @@ const shardFiles = new Map<string, Promise<Record<string, CallDetail>>>();
 export async function loadDetail(data: Funding, call: Call): Promise<void> {
   if (call.d == null || !rawFields.has(call)) return;
   const name = "./data/funding.detail-" + String(call.d).padStart(2, "0") + ".enc.json";
-  if (!shardFiles.has(name)) {
-    shardFiles.set(name, fetch(name).then(async (res) => {
-      if (!res.ok) throw new Error(String(res.status));
-      const file = (await res.json()) as EncryptedFile;
-      if (file.kdf.salt !== data.salt) throw new Error("outdated");  // a newer export: reload the page
-      return openFile<Record<string, CallDetail>>(file, data.key);
-    }));
-  }
+  if (!shardFiles.has(name)) shardFiles.set(name, fetchEncrypted<Record<string, CallDetail>>(data, name));
   let shard: Record<string, CallDetail>;
   try {
     shard = await shardFiles.get(name)!;

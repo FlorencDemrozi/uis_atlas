@@ -6,6 +6,7 @@ import { FAMILIES, amountNok, callTitle, familyOf, isInstitutionLevel, isOpenFie
 import { useI18n } from "../i18n";
 import { links, replaceHash, type Route } from "../router";
 import { CategoryBadge, EligibilityBadge, FundingGate, Freshness, SourceBadge, StatusBadge, useFmt } from "../components/funding";
+import { IdeaSearch } from "../components/ideas";
 
 const AMOUNTS = [1e6, 5e6, 10e6, 25e6];
 /** Lower case without accents, so "tveteras" finds "Tveterås". */
@@ -116,6 +117,8 @@ function FundingList({ atlas, data, route }: { atlas: Atlas; data: Funding; rout
         <h1>{t("f.title")}</h1>
         <p>{t("f.lede", { years: String(new Date().getFullYear() - data.meta.papers_from_year + 1) })}</p>
       </div>
+
+      <IdeaSearch data={data} />
 
       <div class="filters funding-filters" role="search">
         <label class="field grow">
