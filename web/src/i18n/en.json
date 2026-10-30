@@ -474,8 +474,8 @@
   "fld.institution_level": "Institution-level call",
   "f.reason.erc_doctorate": "ERC principal investigators must hold a doctorate, and the person is a PhD candidate.",
   "f.reason.erc_stg_window": "ERC Starting Grant: 2–7 years since the PhD. The person holds a senior position or has published for more than 12 years – check the PhD date.",
-  "f.reason.erc_cog_window": "ERC Consolidator Grant: 7–12 years since the PhD. The person has published at UiS for more than 16 years – check the PhD date.",
-  "f.reason.erc_adg_record": "ERC Advanced Grant: requires a track record of significant achievements over the last 10 years, and the person is a postdoc – check the requirements.",
+  "f.reason.erc_cog_window": "ERC Consolidator Grant: 7–12 years since the PhD. The person's first publication is less than 7 or more than 16 years old – check the PhD date.",
+  "f.reason.erc_adg_record": "ERC Advanced Grant: requires a track record of significant achievements over the last 10 years; the person is a postdoc or first published less than 10 years ago – check the requirements.",
   "f.reason.msca_supervisor": "UiS staff take part as supervisors, and the person is a PhD candidate.",
   "f.reason.msca_supervisor_postdoc": "UiS staff take part as supervisors – check whether a postdoc can supervise here.",
   "f.loadingCall": "Loading the call details…",
@@ -504,5 +504,10 @@
   "idea.beta": "Beta",
   "idea.betaNote": "Beta version: this feature is still being tested and its results are not yet accurate. Use it to get ideas of where to look, and always check the calls themselves.",
   "p.pubsHint": "With UiS affiliation, since {y} (earlier affiliations not yet included)",
-  "p.citationsHint": "For these publications (Scopus)"
+  "p.citationsHint": "For these publications (Scopus)",
+  "p.pubsHintAll": "Since {y}, all affiliations – {u} with UiS affiliation",
+  "p.hIndex": "h-index (Scopus)",
+  "p.scopusHint": "Scopus profile: {d} documents, {c} citations (all years)",
+  "p.otherAff": "other affiliation",
+  "f.reason.senior_call_short_record": "The call requires several years since the doctorate, and the person's first publication is less than 6 years old – check the PhD date."
 }

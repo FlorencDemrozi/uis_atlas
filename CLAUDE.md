@@ -26,6 +26,7 @@ You are helping build the **UiS Researcher Atlas**: a public dashboard where any
 
 - `pipeline/collect_scopus.py` — **done and tested in principle**; collects publications and department information from Scopus. Run: `python pipeline/collect_scopus.py`.
 - `pipeline/collect_directory.py` — current staff from the public UiS employee directory (any network).
+- `pipeline/collect_scopus_authors.py` — the atlas researchers' publications at other affiliations (since `ATLAS_FIRST_YEAR`) and their Scopus author metrics (documents, citations, h-index); merged by `collect_scopus.py --build-only`. Profiles count all affiliations and show how many are UiS papers; directory-unconfirmed people are still included on UiS papers only.
 - `build_profiles.py`, `export_public.py` and the website (search, overview, network, profile; faculty/department picker) are implemented for all six faculties.
 - `summarize.py` (needs `ANTHROPIC_API_KEY`) and `embed.py` are implemented; both use only papers from the last 5 years (`config.ACTIVE_YEARS`). Vectors stay local (not published).
 - Funding Intelligence (RCN calls and EU Funding & Tenders topics via `collect_eu.py`/`eu.py`, matching, internal collaborators; password protected): `collect_rcn.py`, `build_calls.py`, `profile_calls.py`, `match_funding.py`, `export_funding.py`, web views `Funding`/`Call` and the profile section. See `docs/FUNDING.md`. `run_weekly.py` runs everything incl. the web build (optional Telegram message).
@@ -44,6 +45,7 @@ pip install -r requirements.txt
 Copy-Item .env.example .env                           # then fill in keys
 python pipeline/collect_scopus.py                     # stage 1 (UiS network)
 python pipeline/collect_scopus.py --build-only        # rebuild stage 1 output offline (after mapping changes)
+python pipeline/collect_scopus_authors.py             # stage 1e: researchers' papers at other affiliations + Scopus metrics (UiS network)
 python pipeline/collect_directory.py                  # stage 1b (UiS employee directory)
 python pipeline/collect_rcn.py                        # stage 1c (RCN funding calls, any network)
 python pipeline/collect_eu.py                         # stage 1d (EU funding topics, any network)

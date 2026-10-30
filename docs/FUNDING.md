@@ -100,7 +100,11 @@ AI values are shown next to official values and never replace them.
    found", never "eligible". Suggested roles respect eligibility. Career age is
    the years since the first UiS paper in the atlas (no PhD dates; papers from
    before UiS are missing), so it is only used for upper limits (early-career call
-   + more than 12 years → "check"); a short UiS record is never flagged.
+   + more than 12 years → "check"). Lower limits (experienced call: under 6 years;
+   ERC CoG under 7, AdG under 10) are checked only for researchers whose full
+   publication history has been collected (`collect_scopus_authors.py`, 2026-10-30):
+   then the first paper anywhere since 2000 is known, and as it usually precedes
+   the PhD, a short record really means a short career.
 5. Internal collaborators: UiS researchers whose papers cover aspects the matched
    researcher lacks; existing co-authors (shared papers) and other departments are
    preferred. Always labelled as suggestions.

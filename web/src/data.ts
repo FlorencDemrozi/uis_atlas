@@ -12,6 +12,12 @@ export interface Researcher {
   summary: string | null;
   tags: string[];
   n_publications: number;
+  /** Of n_publications, with a UiS affiliation (absent in older exports). */
+  n_uis?: number;
+  /** Papers without a UiS affiliation (earlier or other employers). */
+  other_paper_ids?: string[];
+  /** As shown on the Scopus author page (all years, all affiliations). */
+  scopus_metrics?: { documents: number | null; citations: number | null; h_index: number | null } | null;
   citations: number;
   pubs_per_year: Record<string, number>;
   first_year: number;

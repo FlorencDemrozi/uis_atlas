@@ -598,3 +598,4 @@ details.table-view summary { cursor: pointer; color: var(--accent); width: fit-c
 .idea-search .field { width: 100%; }
 .idea-search textarea { width: 100%; font: inherit; color: var(--ink); resize: vertical; }
 .idea-hits { padding-left: 1.4em; display: flex; flex-direction: column; gap: 8px; }
+.aff-other { font-size: 12px; padding: 1px 7px; border-radius: 4px; background: var(--surface-2); color: var(--ink-2); white-space: nowrap; }

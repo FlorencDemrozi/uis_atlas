@@ -127,6 +127,8 @@ export function ProfileView({ atlas, id }: { atlas: Atlas; id: string }) {
   for (let y = fromYear; y <= lastYear; y++) years.push(String(y));
   const keywords = atlas.keywords.get(r.scopus_id) ?? [];
   const recent = atlas.recent.get(r.scopus_id) ?? 0;
+  const other = new Set(r.other_paper_ids ?? []);
+  const sm = r.scopus_metrics;
   const byYear = new Map<string, Paper[]>();
   for (const eid of r.paper_ids) {
     const p = atlas.papers[eid];
@@ -163,11 +165,17 @@ export function ProfileView({ atlas, id }: { atlas: Atlas; id: string }) {
 
       <div class="tiles" style={{ marginTop: "24px" }}>
         <div class="tile"><div class="label">{t("ov.publications")}</div><div class="value">{num(r.n_publications)}</div>
-          <div class="hint">{t("p.pubsHint", { y: String(atlas.meta.period.first_year) })}</div></div>
+          <div class="hint">{sm && r.n_uis != null  // full history collected (collect_scopus_authors.py)
+            ? t("p.pubsHintAll", { y: String(atlas.meta.period.first_year), u: num(r.n_uis) })
+            : t("p.pubsHint", { y: String(atlas.meta.period.first_year) })}</div></div>
         <div class="tile"><div class="label">{t("p.recent")}</div><div class="value">{num(recent)}</div>
           <div class="hint">{t("ov.since", { y: String(atlas.meta.period.recent_from) })}</div></div>
         <div class="tile"><div class="label">{t("ov.citations")}</div><div class="value">{num(r.citations)}</div>
           <div class="hint">{t("p.citationsHint")}</div></div>
+        {sm && sm.h_index != null && (
+          <div class="tile"><div class="label">{t("p.hIndex")}</div><div class="value">{num(sm.h_index)}</div>
+            <div class="hint">{t("p.scopusHint", { d: num(sm.documents ?? 0), c: num(sm.citations ?? 0) })}</div></div>
+        )}
         <div class="tile"><div class="label">{t("p.coauthors")}</div><div class="value">{num(r.top_coauthors.length)}</div>
           <div class="hint">{t("p.coauthorsHint")}</div></div>
       </div>
@@ -198,6 +206,7 @@ export function ProfileView({ atlas, id }: { atlas: Atlas; id: string }) {
                     return (
                       <li key={p.eid}>
                         {url ? <a href={url}>{p.title}</a> : p.title}
+                        {other.has(p.eid) && <> <span class="aff-other">{t("p.otherAff")}</span></>}
                         <div class="venue">
                           {[p.venue, p.type && ptype(p.type)].filter(Boolean).join(" · ")}
                           {p.citations > 0 && ` · ${t("r.citations", { n: num(p.citations) })}`}

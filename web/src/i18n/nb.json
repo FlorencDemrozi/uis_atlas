@@ -474,8 +474,8 @@
   "fld.institution_level": "Utlysning for institusjonen",
   "f.reason.erc_doctorate": "Prosjektleder i ERC må ha doktorgrad, og personen er stipendiat.",
   "f.reason.erc_stg_window": "ERC Starting Grant: 2–7 år etter doktorgraden. Personen har en senior stilling eller har publisert i mer enn 12 år – sjekk doktorgradsdatoen.",
-  "f.reason.erc_cog_window": "ERC Consolidator Grant: 7–12 år etter doktorgraden. Personen har publisert ved UiS i mer enn 16 år – sjekk doktorgradsdatoen.",
-  "f.reason.erc_adg_record": "ERC Advanced Grant: krever betydelige forskningsresultater de siste 10 årene, og personen er postdoktor – sjekk kravene.",
+  "f.reason.erc_cog_window": "ERC Consolidator Grant: 7–12 år etter doktorgraden. Personens første publikasjon er under 7 eller over 16 år gammel – sjekk doktorgradsdatoen.",
+  "f.reason.erc_adg_record": "ERC Advanced Grant: krever betydelige forskningsresultater de siste 10 årene; personen er postdoktor eller publiserte første gang for under 10 år siden – sjekk kravene.",
   "f.reason.msca_supervisor": "UiS-ansatte deltar som veiledere, og personen er stipendiat.",
   "f.reason.msca_supervisor_postdoc": "UiS-ansatte deltar som veiledere – sjekk om en postdoktor kan være veileder her.",
   "f.loadingCall": "Henter detaljene for utlysningen…",
@@ -504,5 +504,10 @@
   "idea.beta": "Beta",
   "idea.betaNote": "Betaversjon: funksjonen testes fortsatt, og resultatene er ennå ikke presise. Bruk den til å få ideer om hvor du kan lete, og sjekk alltid utlysningene selv.",
   "p.pubsHint": "Med UiS-tilknytning, siden {y} (tidligere arbeidssteder er ennå ikke med)",
-  "p.citationsHint": "For disse publikasjonene (Scopus)"
+  "p.citationsHint": "For disse publikasjonene (Scopus)",
+  "p.pubsHintAll": "Siden {y}, alle arbeidssteder – {u} med UiS-tilknytning",
+  "p.hIndex": "h-indeks (Scopus)",
+  "p.scopusHint": "Scopus-profil: {d} dokumenter, {c} siteringer (alle år)",
+  "p.otherAff": "annet arbeidssted",
+  "f.reason.senior_call_short_record": "Utlysningen krever flere år siden disputas, og personens første publikasjon er under 6 år gammel – sjekk disputasdatoen."
 }
