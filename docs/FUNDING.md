@@ -27,6 +27,7 @@ pass it on. To change it, set a new value in `.env` and re-run the export.
 | Match | `match_funding.py` | calls + paper embeddings (`embed.py`) → `data/interim/funding_matches.json` |
 | AI profile | `profile_calls.py` | open/planned RCN calls and pre-filtered EU topics → `data/interim/call_profiles.json` (needs `ANTHROPIC_API_KEY`; skipped otherwise) |
 | Match again | `match_funding.py --changed-profiles` | redoes only the calls whose AI profile changed |
+| Idea vectors | `call_vectors.py` | open calls' scope, aspects and example directions → `data/interim/call_vectors.*` |
 | Export | `export_funding.py` | all of the above → `data/public/funding.enc.json` + 16 `funding.detail-NN.enc.json` (encrypted) |
 
 `run_all.py` runs the processing stages; `run_weekly.py` runs collectors + processing
@@ -199,6 +200,36 @@ decided – needs clearance under DATA_POLICY.md), consortium suggestions (Phase
   passed is shown as closed at once, with a note on its page, and its matches are
   no longer offered on profiles. Rolling calls and calls without a deadline are
   left as they are.
+
+## Project idea → calls (2026-10-29)
+Someone describes a project idea; the system lists open calls it could be submitted to.
+
+- **Method.** The idea is embedded with the atlas model ("query:") and compared with
+  each open, topic-matched call: its scope text, its aspects ("passage:") and the
+  example project directions of its AI profile (compared as two queries, minus
+  `direction_offset`). Score = max(0.5 scope + 0.5 best aspect, best direction −
+  offset). Settings: `config.IDEA_MATCH`; vectors: `call_vectors.py` (cached by text).
+- **What it is good for.** Tested on 8 ideas across UiS fields: the relevant calls
+  are usually in the top 15–20 of ~470, but mixed with calls that only share words
+  ("machine learning for detecting cancer…" next to "machine learning for detecting
+  online hate…"), and similarity scores barely separate them. A larger model
+  (multilingual-e5-base) was not better. Hence two tools:
+- **Website: shortlist.** "Find calls for a project idea" on the Funding page shows
+  the 20 closest open calls with the closest aspect or example direction – labelled
+  as a shortlist, not a judgement. The model (~120 MB, cached afterwards) runs in the
+  browser; the idea is not sent anywhere, and writing-assistant extensions are
+  switched off for the box. Call vectors are in `funding.ideas.enc.json` (int8,
+  2.9 MB encrypted), loaded only when the box is used.
+- **Local: AI-checked answer.** `python pipeline/idea_match.py "idea"` (or
+  `--file idea.txt --out result.md`) takes the 40 closest calls, and Claude reads each
+  call's text and judges strong / partial / none with a reason and a quote. Quotes are
+  checked against the call; a strong fit without a verified quote is lowered to
+  partial. Calls open to all fields are listed separately. The idea is sent to the
+  Anthropic API (a few US cents to ~0.20 USD per idea); `--no-ai` gives the shortlist
+  only, with nothing sent. Examples: the fall-detection idea gave Pilot Health
+  phase 1 as a good fit and the independent-living and dementia calls as partial;
+  a digital-pathology idea gave no good fit and partial options with the reframing
+  each would need.
 
 ## Scheduled update
 See `docs/DEPLOY.md`: weekly `run_weekly.py` on a UiS server (Task Scheduler),
