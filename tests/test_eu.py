@@ -172,3 +172,12 @@ def test_eu_scope_stays_official_text_with_a_profile():
     scope, aspects = match_funding.call_aspects(topic, profile)
     assert scope == match_funding.call_aspects(topic, None)[0] and "Machine learning" not in scope
     assert [a["label"] for a in aspects] == ["Diffusion models"]
+
+
+def test_lower_career_limits_only_with_the_full_publication_history():
+    cog = build("ERC-2027-COG")
+    young = {"position": {"nb": "Førsteamanuensis"}, "first_year": config.REFERENCE_YEAR - 4}
+    assert match_funding.eligibility(cog, young)["status"] == "no_restriction_found"
+    full = dict(young, scopus_metrics={"documents": 10, "h_index": 3})   # collect_scopus_authors.py has run
+    e = match_funding.eligibility(cog, full)
+    assert (e["status"], e["reason"]) == ("check", "erc_cog_window")

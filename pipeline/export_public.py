@@ -23,9 +23,10 @@ import config
 
 RESEARCHER_FIELDS = [
     "scopus_id", "name", "orcid", "faculty", "department", "position", "summary", "tags",
-    "n_publications", "citations", "pubs_per_year", "first_year", "last_year",
-    "top_coauthors", "collab_departments", "paper_ids", "links",
+    "n_publications", "n_uis", "citations", "pubs_per_year", "first_year", "last_year",
+    "top_coauthors", "collab_departments", "paper_ids", "other_paper_ids", "scopus_metrics", "links",
 ]
+SCOPUS_METRICS = ["documents", "citations", "h_index"]   # as shown on the Scopus author page
 
 PAPER_FIELDS = [
     "eid", "title", "year", "venue", "type", "doi", "citations",
@@ -117,8 +118,10 @@ def main() -> None:
         for i in r["scopus_ids"]:
             ov.update(overrides.get(i, {}))
         s = summaries.get(r["scopus_id"], {})
+        metrics = r.get("scopus_metrics")
         rec = dict(r, summary=ov.get("summary") or s.get("summary"), tags=s.get("tags") or [],
                    links=links_for(r, ov.get("links")),
+                   scopus_metrics=allow(metrics, SCOPUS_METRICS) if metrics else None,
                    top_coauthors=[c for c in r["top_coauthors"] if c["scopus_id"] in included])
         researchers.append(allow(rec, RESEARCHER_FIELDS))
 

@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pipeline"))
-from build_profiles import build, given_compatible  # noqa: E402
+from build_profiles import build, fullest_name, given_compatible  # noqa: E402
 
 CS = "Electrical Engineering and Computer Science"
 MATH = "Mathematics and Physics"
@@ -77,3 +77,8 @@ def test_overrides_and_collaboration_fields():
     assert a["keywords"] == [["LiDAR", 2]]
     assert a["top_coauthors"] == []                      # excluded people are not linked
     assert a["collab_departments"] == {MATH: 2}
+
+
+def test_fullest_name_prefers_written_out_given_names():
+    assert fullest_name(["L. Vogt", "Lennart Vogt"]) == "Lennart Vogt"
+    assert fullest_name(["Bjørn Asheim", "Björn Asheim"]) == "Bjørn Asheim"   # tie: first wins

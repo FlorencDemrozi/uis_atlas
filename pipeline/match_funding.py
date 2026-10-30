@@ -155,16 +155,18 @@ def sentence_with(text: str, pattern: str) -> str | None:
     return None
 
 
-# ERC career limits, in years since the first UiS paper in the atlas. The atlas has no
-# PhD dates, the first paper often comes before the PhD, and people recruited from
-# elsewhere have earlier papers we do not hold. So only upper limits are checked (a
-# long UiS record is certain; a short one says little), with wide margins over the
-# official windows (eu.ROLE_RULES), and they only ever lead to "check".
+# ERC career limits, in years since the researcher's first paper in the atlas. The atlas
+# has no PhD dates and the first paper often comes before the PhD, so upper limits get
+# wide margins over the official windows (eu.ROLE_RULES). Lower limits need the full
+# publication history (collect_scopus_authors.py; "full_record"): without it, papers
+# from earlier employers are missing and a short record says little. All give "check".
 ERC_STG_MAX_YEARS = 12
-ERC_COG_MAX_YEARS = 16
+ERC_COG_YEARS = (7, 16)
+ERC_ADG_MIN_YEARS = 10
 
 
-def eu_role_eligibility(ident: str, kind: str | None, career: int | None) -> tuple[str, str] | None:
+def eu_role_eligibility(ident: str, kind: str | None, career: int | None,
+                        full_record: bool = False) -> tuple[str, str] | None:
     """(status, reason) from the ERC / MSCA role rules, or None if nothing applies.
     Only the position (PhD candidate) is certain enough for "likely_ineligible"."""
     if re.match(r"ERC-", ident, re.I):
@@ -173,9 +175,11 @@ def eu_role_eligibility(ident: str, kind: str | None, career: int | None) -> tup
         if re.search(r"-STG$", ident, re.I) and (kind in ("professor", "emeritus")
                                                   or (career is not None and career > ERC_STG_MAX_YEARS)):
             return "check", "erc_stg_window"
-        if re.search(r"-COG$", ident, re.I) and career is not None and career > ERC_COG_MAX_YEARS:
+        if re.search(r"-COG$", ident, re.I) and career is not None and (
+                career > ERC_COG_YEARS[1] or (full_record and career < ERC_COG_YEARS[0])):
             return "check", "erc_cog_window"
-        if re.search(r"-ADG$", ident, re.I) and kind == "postdoc":
+        if re.search(r"-ADG$", ident, re.I) and (
+                kind == "postdoc" or (full_record and career is not None and career < ERC_ADG_MIN_YEARS)):
             return "check", "erc_adg_record"
     elif re.match(r"HORIZON-MSCA-\d{4}-(PF|DN)-", ident, re.I):
         if kind == "phd":
@@ -194,10 +198,11 @@ def eligibility(call: dict, r: dict) -> dict:
                                    for lang in ("nb", "en")]
                          + [lang_text(f["title"]["v"], "nb"), lang_text(f["title"]["v"], "en")]))
     kind = position_kind(r)
-    # Career age is estimated from the first UiS paper in the atlas: there are no PhD dates,
-    # and papers from before someone came to UiS are missing. Only upper limits are
-    # checked with it – a long record is certain, a short one says little.
+    # Career age is estimated from the first paper in the atlas (there are no PhD dates).
+    # Lower limits only once the full publication history is collected (Scopus author
+    # metrics present): before that, papers from earlier employers are missing.
     career = config.REFERENCE_YEAR - r["first_year"] if r.get("first_year") else None
+    full_record = bool(r.get("scopus_metrics"))
     out = lambda status, reason, ev=None: {"status": status, "reason": reason, "evidence": ev}
     if call.get("source") == "eu":
         # EU topics: can a Norwegian university take part at all? (eu.py, with its basis)
@@ -210,7 +215,7 @@ def eligibility(call: dict, r: dict) -> dict:
             return out("check", "eu_country_unknown")
         rule = eu.role_rule(f["call_id"]["v"])
         if rule:
-            e = eu_role_eligibility(f["call_id"]["v"], kind, career)
+            e = eu_role_eligibility(f["call_id"]["v"], kind, career, full_record)
             if e:
                 return out(e[0], e[1], rule[0])
             if kind in ("emeritus", "external", "adjunct"):
@@ -247,6 +252,8 @@ def eligibility(call: dict, r: dict) -> dict:
     if ev:
         if kind in ("phd", "postdoc"):
             return out("likely_ineligible", "senior_call_junior", ev)
+        if full_record and career is not None and career < 6:
+            return out("check", "senior_call_short_record", ev)
     # A submitted thesis is enough (FRIPRO mobility): PhD candidates should check.
     thesis = r"levert doktorgradsavhandling|levert avhandling|submitted (your|the|their) (doctoral )?thesis"
     if kind == "phd" and re.search(thesis, text, re.I):

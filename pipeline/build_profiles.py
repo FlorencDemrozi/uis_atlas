@@ -20,11 +20,13 @@ Steps:
 - Department: override, else directory, else Scopus affiliations.
 - Keep researchers with enough recent papers: confirmed staff need
   config.MIN_RECENT_PUBLICATIONS in config.RECENT_YEARS years (0: all current
-  staff with a Scopus profile), others the stricter config.UNCONFIRMED_* rule
-  (overrides can force include/exclude).
+  staff with a Scopus profile), others the stricter config.UNCONFIRMED_* rule,
+  counting UiS papers only (overrides can force include/exclude).
 - Compute per researcher: faculty, department, position, paper ids (newest
-  first), counts, citations, publications per year, keywords, UiS co-authors,
-  collaborating departments, first/last active year.
+  first; all affiliations since ATLAS_FIRST_YEAR, see collect_scopus_authors.py),
+  how many have a UiS affiliation, counts, citations, publications per year,
+  keywords, UiS co-authors, collaborating departments, first/last active year,
+  and the Scopus author metrics (documents, citations, h-index as on Scopus).
 
 overrides.json format (keyed by any of the person's Scopus IDs):
   {"authors": {"123": {"name": "...", "department": "...",
@@ -156,6 +158,12 @@ def find_merges(authors: dict, papers: dict, name_parts: dict, overrides: dict,
 
 
 # ---------------------------------------------------------------- profiles
+def fullest_name(names: list[str]) -> str:
+    """The most complete of a person's Scopus names ("Lennart Vogt" over "L. Vogt");
+    names come with the profile with most papers first, which wins a tie."""
+    return max((n for n in names if n), key=lambda n: (len(n.replace(".", "").split()[0]), len(n)), default=names[0])
+
+
 def year_of(paper: dict) -> int | None:
     y = paper.get("year") or ""
     return int(y) if y.isdigit() else None
@@ -217,11 +225,18 @@ def build(atlas: dict, name_parts: dict, overrides: dict, reference_year: int,
         paper_ids = sorted({p for i in members for p in authors[i]["papers"]},
                            key=lambda p: (-(year_of(papers[p]) or 0), p))
         years = [y for p in paper_ids if (y := year_of(papers[p]))]
+        # Papers with a UiS affiliation (older atlas_data.json: all papers were UiS papers).
+        uis_ids = {p for i in members for p in authors[i].get("uis_papers", authors[i]["papers"])}
+        uis_years = [y for p in uis_ids if (y := year_of(papers[p]))]
+        # Scopus's own figures for the author profile with the most documents.
+        metrics = max((authors[i]["scopus_metrics"] for i in members if authors[i].get("scopus_metrics")),
+                      key=lambda m: m.get("documents") or 0, default=None)
         dept = ov.get("department") or dept
         people[main_id] = {
             "scopus_id": main_id,
             "scopus_ids": members,
-            "name": ov.get("name") or (entry["name"] if entry and score >= 2 else authors[main_id]["name"]),
+            "name": ov.get("name") or (entry["name"] if entry and score >= 2 else fullest_name(
+                [authors[i]["name"] for i in members])),
             "orcid": next((authors[i]["orcid"] for i in members if authors[i].get("orcid")), None),
             "faculty": config.FACULTY_OF.get(dept or ""),
             "department": dept,
@@ -231,6 +246,9 @@ def build(atlas: dict, name_parts: dict, overrides: dict, reference_year: int,
                           if entry and not entry["excluded"] else None),
             "paper_ids": paper_ids,
             "n_publications": len(paper_ids),
+            "n_uis": len(uis_ids),
+            "other_paper_ids": [p for p in paper_ids if p not in uis_ids],
+            "scopus_metrics": metrics,
             "n_recent": sum(1 for y in years if y >= recent_from),
             "citations": sum(papers[p]["citations"] for p in paper_ids),
             "pubs_per_year": dict(sorted(Counter(str(y) for y in years).items())),
@@ -240,7 +258,9 @@ def build(atlas: dict, name_parts: dict, overrides: dict, reference_year: int,
             "_confirmed": entry is not None and not entry["excluded"],
             "_source": "override" if ov.get("department") else source,
             "_directory": (entry["name"], score) if entry else None,
-            "_n_unconfirmed_recent": sum(1 for y in years if y >= unconfirmed_from),
+            # Not in the UiS directory (may have left): only UiS papers count, so work at
+            # a new employer does not keep someone in the atlas.
+            "_n_unconfirmed_recent": sum(1 for y in uis_years if y >= unconfirmed_from),
             "_affiliations": [s for i in members for s in authors[i].get("affiliation_strings", [])],
         }
         for i in members:

@@ -4,7 +4,8 @@ The scheduled update (e.g. every Saturday 01:00 on a UiS server): collect, rebui
 all JSON files, build the website. No database, no server process – just files.
 
   1. Collectors: Scopus (needs the UiS network; refreshes recent years once the full
-     search is done), UiS employee directory, RCN calls, EU topics. A collector that fails is
+     search is done; then the researchers' publications at other affiliations and their
+     Scopus metrics, collect_scopus_authors.py), UiS employee directory, RCN calls, EU topics. A collector that fails is
      reported, and the previous raw data is used, so a temporary outage never
      empties the site.
   2. run_all.py: profiles, summaries, embeddings, public export, funding calls,
@@ -105,8 +106,10 @@ def main() -> None:
 
     collectors = ["collect_directory.py", "collect_rcn.py", "collect_eu.py"]
     if not args.skip_scopus:
-        collectors.insert(0, "collect_scopus.py")
-    FAILED[:] = [c for c in collectors if not run([sys.executable, str(HERE / c)])]
+        # UiS publications, then the same researchers' publications elsewhere and their
+        # Scopus metrics, then the combined atlas_data.json again (offline).
+        collectors[:0] = ["collect_scopus.py", "collect_scopus_authors.py", "collect_scopus.py --build-only"]
+    FAILED[:] = [c for c in collectors if not run([sys.executable, str(HERE / c.split()[0]), *c.split()[1:]])]
     failed = FAILED
 
     if not run([sys.executable, str(HERE / "run_all.py")]):

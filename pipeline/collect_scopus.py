@@ -18,7 +18,10 @@ Phases:
   2b. History – at least one affiliation per faculty author per period in
                config.HISTORY_PERIODS, so renamed/split departments are resolved
   3. Build   – data/raw/scopus/atlas_data.json (licensed data: local only, never commit)
-               Department = most recent affiliation (see pipeline/departments.py)
+               Department = most recent affiliation (see pipeline/departments.py).
+               Also merges collect_scopus_authors.py's output: every paper (UiS or
+               not) is credited to the UiS authors on it by author id, with "uis":
+               whether they had a UiS affiliation on it; Scopus author metrics.
 
   python pipeline/collect_scopus.py --build-only   reruns phase 3 from the files
   already collected (no network), e.g. after changing the department mapping.
@@ -32,8 +35,8 @@ from datetime import date, datetime
 
 import requests
 
-from config import (AFID, FIRST_YEAR, HISTORY_PERIODS, RAW, RAW_ATLAS, RAW_DETAILS, RAW_DOCS,
-                    RAW_REFRESH, RAW_SEARCH_STATE, SCOPUS_API_KEY, SCOPUS_INSTTOKEN,
+from config import (AFID, FIRST_YEAR, HISTORY_PERIODS, RAW, RAW_ATLAS, RAW_AUTHOR_DOCS, RAW_AUTHOR_METRICS,
+                    RAW_DETAILS, RAW_DOCS, RAW_REFRESH, RAW_SEARCH_STATE, SCOPUS_API_KEY, SCOPUS_INSTTOKEN,
                     SCOPUS_QUERY, SCOPUS_REFRESH_YEARS)
 from departments import current_department, match_dept
 
@@ -184,9 +187,12 @@ def phase_search(s, refresh=True):
     search(s, QUERY, state, DOCS_FILE, lambda: SEARCH_STATE.write_text(json.dumps(state)))
 
 
-def load_docs():
+def load_docs(path=None):
     docs = {}
-    with DOCS_FILE.open(encoding="utf-8") as f:
+    path = path or DOCS_FILE
+    if not path.exists():
+        return []
+    with path.open(encoding="utf-8") as f:
         for line in f:
             e = json.loads(line)
             docs[e.get("eid")] = e
@@ -332,25 +338,31 @@ def phase_history(s, docs, details):
 
 
 # ---------------------------------------------------------------- Phase 3: build
-def build(docs, details):
+def paper_record(e):
+    return {
+        "title": e.get("dc:title"),
+        "year": (e.get("prism:coverDate") or "")[:4],
+        "venue": e.get("prism:publicationName"),
+        "type": e.get("subtypeDescription"),
+        "doi": e.get("prism:doi"),
+        "citations": int(e.get("citedby-count") or 0),
+        "keywords": [k.strip() for k in (e.get("authkeywords") or "").split("|") if k.strip()],
+        "abstract": e.get("dc:description"),
+        "n_authors": len(as_list(e.get("author"))),
+        "coauthor_ids": [a.get("authid") for a in as_list(e.get("author"))],
+    }
+
+
+def build(docs, details, other_docs=(), metrics=None):
+    """docs: UiS publications; other_docs: atlas researchers' publications at other
+    affiliations (collect_scopus_authors.py); metrics: Scopus author metrics by id."""
     papers, authors = {}, {}
     for e in docs:
         eid = e["eid"]
         ua = uis_authors(e)
         if not ua:
             continue
-        papers[eid] = {
-            "title": e.get("dc:title"),
-            "year": (e.get("prism:coverDate") or "")[:4],
-            "venue": e.get("prism:publicationName"),
-            "type": e.get("subtypeDescription"),
-            "doi": e.get("prism:doi"),
-            "citations": int(e.get("citedby-count") or 0),
-            "keywords": [k.strip() for k in (e.get("authkeywords") or "").split("|") if k.strip()],
-            "abstract": e.get("dc:description"),
-            "n_authors": len(as_list(e.get("author"))),
-            "coauthor_ids": [a.get("authid") for a in as_list(e.get("author"))],
-        }
+        papers[eid] = paper_record(e)
         for a in ua:
             auid = a.get("authid")
             rec = authors.setdefault(auid, {
@@ -358,8 +370,28 @@ def build(docs, details):
                 "name": " ".join(filter(None, [a.get("given-name"), a.get("surname")])) or a.get("authname"),
                 "orcid": a.get("orcid"),
                 "papers": [],
+                "uis_papers": [],
             })
             rec["papers"].append(eid)
+            rec["uis_papers"].append(eid)
+    # Work of the same people without a UiS affiliation: UiS papers on which they had
+    # another affiliation (a UiS co-author put the paper in docs), and the papers
+    # collect_scopus_authors.py found. Only people already known as UiS authors.
+    extra = 0
+    for e in list(docs) + list(other_docs):
+        if (doc_year(e) or 0) < FIRST_YEAR:
+            continue
+        eid = e["eid"]
+        for a in as_list(e.get("author")):
+            rec = authors.get(a.get("authid"))
+            if rec is None or eid in rec["papers"]:
+                continue
+            papers.setdefault(eid, paper_record(e))
+            rec["papers"].append(eid)
+            extra += 1
+    for auid, m in (metrics or {}).items():
+        if auid in authors:
+            authors[auid]["scopus_metrics"] = {k: m.get(k) for k in ("documents", "citations", "h_index", "fetched")}
 
     year = {e["eid"]: doc_year(e) for e in docs}
     orgs_by_author, observations = defaultdict(Counter), defaultdict(list)
@@ -384,20 +416,23 @@ def build(docs, details):
         "papers": papers,
     }
     FINAL_FILE.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
+    n_uis = len({p for a in authors.values() for p in a["uis_papers"]})
     print(f"\nDone. {len(authors)} UiS authors ({matched} with a department from Scopus), "
-          f"{len(papers)} papers.")
+          f"{len(papers)} papers ({n_uis} with a UiS affiliation; {extra} author credits from other affiliations).")
     print(f"Output (local only, never commit): {FINAL_FILE}")
     print("Next: python pipeline/collect_directory.py (if not run recently), then python pipeline/run_all.py")
 
 
 if __name__ == "__main__":
+    load_metrics = lambda: (json.loads(RAW_AUTHOR_METRICS.read_text(encoding="utf-8"))
+                            if RAW_AUTHOR_METRICS.exists() else {})
     if "--build-only" in sys.argv:   # rebuild from files already collected, no network
         all_docs = load_docs()
-        build(all_docs, load_details())
+        build(all_docs, load_details(), load_docs(RAW_AUTHOR_DOCS), load_metrics())
         sys.exit()
     session = make_session()
     phase_search(session, refresh="--no-refresh" not in sys.argv)
     all_docs = load_docs()
     all_details = phase_details(session, all_docs)
     all_details = phase_history(session, all_docs, all_details)
-    build(all_docs, all_details)
+    build(all_docs, all_details, load_docs(RAW_AUTHOR_DOCS), load_metrics())

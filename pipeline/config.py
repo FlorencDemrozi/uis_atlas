@@ -186,6 +186,13 @@ RAW_SEARCH_STATE = RAW / "search_state.json"
 RAW_REFRESH = RAW / "refresh.jsonl"     # records of an unfinished refresh search
 RAW_DETAILS = RAW / "details.jsonl"
 RAW_ATLAS = RAW / "atlas_data.json"     # combined output of collect_scopus.py
+# Publications of atlas researchers at other affiliations, and their Scopus author
+# metrics (collect_scopus_authors.py); merged by collect_scopus.py's build step.
+RAW_AUTHOR_DOCS = RAW / "author_docs.jsonl"
+RAW_AUTHOR_REFRESH = RAW / "author_refresh.jsonl"
+RAW_AUTHOR_STATE = RAW / "author_state.json"
+RAW_AUTHOR_METRICS = RAW / "author_metrics.json"
+AUTHOR_BATCH = 25                       # author ids per Scopus query
 RAW_DIRECTORY = DATA / "raw" / "uis_directory"  # UiS employee directory: personal data, local only
 DIRECTORY = RAW_DIRECTORY / "employees.json"
 
