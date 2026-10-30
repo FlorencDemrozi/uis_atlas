@@ -5,7 +5,9 @@ Stage 5c – Export the Funding Intelligence data for the website, encrypted.
 Input:  config.CALLS, config.CALLS_HISTORY, config.CALL_PROFILES (optional),
         config.FUNDING_MATCHES, config.PROFILES
 Output: data/public/funding.enc.json (index: every call and every match),
-        data/public/funding.detail-NN.enc.json (call details, in DETAIL_SHARDS files)
+        data/public/funding.detail-NN.enc.json (call details, in DETAIL_SHARDS files),
+        data/public/funding.ideas.enc.json (call vectors for the idea search, if
+        call_vectors.py has run)
 
 The funding pages are only for people who know the password (project owner,
 2026-10-26). The site is static, so the data file itself is encrypted:
@@ -41,6 +43,7 @@ import config
 OUT = config.PUBLIC / "funding.enc.json"
 DETAIL_SHARDS = 16
 DETAIL_OUT = config.PUBLIC / "funding.detail-{:02d}.enc.json"
+IDEAS_OUT = config.PUBLIC / "funding.ideas.enc.json"
 # Fields read outside the call page (list, filters, profile, match details); every
 # other field goes to the detail shards.
 INDEX_FIELDS = {"call_id", "title", "summary", "status", "funder", "programme", "programme_part", "parent_call",
@@ -204,25 +207,54 @@ def build() -> dict:
     return data
 
 
+def quantise(V) -> tuple[str, str]:
+    """Unit vectors -> (int8 values, one float32 scale per vector), both base64. The
+    browser multiplies back; the error (< 0.5 % of a component) does not change rankings."""
+    import numpy as np
+    scale = np.maximum(np.abs(V).max(axis=1), 1e-9) / 127
+    q = np.round(V / scale[:, None]).astype(np.int8)
+    b64 = lambda a: base64.b64encode(a.tobytes()).decode("ascii")
+    return b64(q), b64(scale.astype("<f4"))
+
+
+def ideas_payload() -> dict | None:
+    """Call texts (kind, label) and their vectors for the idea search (web/src/ideas.ts)."""
+    if not (config.CALL_VECTORS.exists() and config.CALL_VECTORS_META.exists()):
+        return None
+    import call_vectors
+    meta, V = call_vectors.load()
+    values, scales = quantise(V)
+    return {"model": meta["model"], "query_prefix": config.QUERY_PREFIX, "settings": meta["settings"],
+            "dim": int(V.shape[1]), "calls": [{"id": c["id"], "t": c["texts"]} for c in meta["calls"]],
+            "values": values, "scales": scales}
+
+
 def main() -> None:
     password = os.environ.get("ATLAS_FUNDING_PASSWORD")
     if not password:
         sys.exit("ATLAS_FUNDING_PASSWORD is not set in .env – funding data not exported "
                  "(the previous funding.enc.json, if any, is unchanged).")
     data = build()
+    ideas = ideas_payload()
+    data["meta"]["has_ideas"] = ideas is not None
     index, shards = split(data)
-    plains = [json.dumps(x, ensure_ascii=False, separators=(",", ":")) for x in [index] + shards]
+    plains = [json.dumps(x, ensure_ascii=False, separators=(",", ":")) for x in [index] + shards
+              + ([ideas] if ideas else [])]
     for plain in plains:
         check_policy(plain)
     salt = secrets.token_bytes(16)
     key = derive_key(password, salt)
-    files = [OUT] + [DETAIL_OUT.with_name(DETAIL_OUT.name.format(n)) for n in range(DETAIL_SHARDS)]
+    files = ([OUT] + [DETAIL_OUT.with_name(DETAIL_OUT.name.format(n)) for n in range(DETAIL_SHARDS)]
+             + ([IDEAS_OUT] if ideas else []))
     for path, plain in zip(files, plains):
         path.write_text(json.dumps(encrypt(plain.encode("utf-8"), key, salt)), encoding="utf-8")
-    enc = sum(p.stat().st_size for p in files[1:]) / 1e6
+    enc = sum(p.stat().st_size for p in files[1:1 + DETAIL_SHARDS]) / 1e6
     print(f"Funding data: {len(index['calls'])} calls, {sum(len(v) for v in data['matches'].values())} matches -> "
           f"{OUT.name} ({OUT.stat().st_size / 1e6:.2f} MB encrypted, {len(plains[0]) / 1e6:.2f} MB plain) "
-          f"+ {DETAIL_SHARDS} detail files ({enc:.2f} MB encrypted, {sum(map(len, plains[1:])) / 1e6:.2f} MB plain).")
+          f"+ {DETAIL_SHARDS} detail files ({enc:.2f} MB encrypted, "
+          f"{sum(map(len, plains[1:1 + DETAIL_SHARDS])) / 1e6:.2f} MB plain)"
+          + (f" + {IDEAS_OUT.name} ({IDEAS_OUT.stat().st_size / 1e6:.2f} MB encrypted, "
+             f"{len(ideas['calls'])} calls)." if ideas else "."))
 
 
 if __name__ == "__main__":

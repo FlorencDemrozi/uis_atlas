@@ -12,6 +12,7 @@ STAGES = [
     # funding calls: matching on the official text first, so profile_calls.py can pick the
     # EU topics worth an AI profile; the second pass redoes only calls whose profile changed.
     "build_calls.py", "match_funding.py", "profile_calls.py", "match_funding.py --changed-profiles",
+    "call_vectors.py",  # idea search: call texts as vectors (cached by text)
     "export_funding.py",
 ]
 

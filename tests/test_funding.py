@@ -455,3 +455,48 @@ def test_telegram_message_is_skipped_without_setup_and_never_raises(monkeypatch)
     monkeypatch.setattr(notify.urllib.request, "urlopen", down)
     error = notify.send("x")
     assert error and "secret-token" not in error  # the token is never logged
+
+
+# -------------------------------------------------------------- idea search
+def test_idea_vectors_survive_int8_compression():
+    rng = np.random.default_rng(1)
+    V = rng.normal(size=(50, 384)).astype(np.float32)
+    V /= np.linalg.norm(V, axis=1, keepdims=True)
+    values, scales = export_funding.quantise(V)
+    q8 = np.frombuffer(base64.b64decode(values), dtype=np.int8).reshape(V.shape)
+    back = q8 * np.frombuffer(base64.b64decode(scales), dtype="<f4")[:, None]
+    q = V[0] * 0.6 + V[1] * 0.4
+    assert np.abs(back - V).max() < 0.01
+    assert list(np.argsort(-(back @ q))[:10]) == list(np.argsort(-(V @ q))[:10])
+
+
+def test_idea_score_uses_aspects_and_offset_directions():
+    import call_vectors
+    meta = {"calls": [
+        {"id": "a", "start": 0, "texts": [["scope", "A"], ["aspect", "a1"], ["direction", "d1"]]},
+        {"id": "b", "start": 3, "texts": [["scope", "B"], ["aspect", "b1"]]}]}
+    q = np.array([1.0, 0.0], dtype=np.float32)
+    V = np.array([[0.5, 0], [0.7, 0], [0.62, 0], [0.8, 0], [0.8, 0]], dtype=np.float32)
+    ranked = call_vectors.score_calls(q, meta, V)
+    assert [cid for _, cid, _ in ranked] == ["b", "a"]
+    a = next(x for x in ranked if x[1] == "a")
+    # 0.5 * 0.5 + 0.5 * 0.7 = 0.60 beats the direction (0.62 - 0.03 = 0.59)
+    assert abs(a[0] - 0.60) < 1e-6 and a[2] == 1
+    V[2, 0] = 0.70  # now the direction wins: 0.67
+    a = next(x for x in call_vectors.score_calls(q, meta, V) if x[1] == "a")
+    assert abs(a[0] - 0.67) < 1e-6 and a[2] == 2
+
+
+def test_idea_review_needs_a_verified_quote_for_a_strong_fit(monkeypatch):
+    import idea_match
+    call = build_calls.build_call(raw_call("1", FUNDAMENTAL))
+    real = re.sub(r"\s+", " ", profile_calls.call_text(call))[200:300].strip()
+    quote = " ".join(real.split()[1:9])
+    monkeypatch.setattr(idea_match.llm, "client", lambda: object())
+    monkeypatch.setattr(idea_match.llm, "ask_json", lambda *a, **k: {"calls": [
+        {"n": 1, "fit": "strong", "reason": "r", "evidence": quote},
+        {"n": 2, "fit": "strong", "reason": "r", "evidence": "words that are not in the call at all"}]})
+    other = dict(call, id="rcn-2")
+    judged = idea_match.review("an idea about something", [(0.8, call, ["scope", "x"]), (0.7, other, ["scope", "y"])])
+    assert judged[call["id"]]["fit"] == "strong" and judged[call["id"]]["verified"]
+    assert judged["rcn-2"]["fit"] == "partial" and not judged["rcn-2"]["verified"] and judged["rcn-2"]["evidence"] == ""

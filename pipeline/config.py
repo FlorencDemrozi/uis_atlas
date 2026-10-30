@@ -289,6 +289,22 @@ CALLS = INTERIM / "calls.json"                    # structured calls (build_call
 CALLS_HISTORY = INTERIM / "calls_history.json"    # detected changes per call
 CALL_PROFILES = INTERIM / "call_profiles.json"    # AI call profiles (profile_calls.py)
 FUNDING_MATCHES = INTERIM / "funding_matches.json"
+CALL_VECTORS = INTERIM / "call_vectors.npz"        # idea search: call texts as vectors (call_vectors.py)
+CALL_VECTORS_META = INTERIM / "call_vectors.json"
+
+# Project idea -> calls (call_vectors.py, idea_match.py, web/src/ideas.ts). An idea is
+# compared with each open call's scope text, its aspects and the example project
+# directions of its AI profile; a call scores max(0.5 scope + 0.5 best aspect, best
+# direction - direction_offset). Tested 2026-10-29 on 8 ideas: the relevant calls are
+# usually in the top 15-20 but mixed with wrong ones, so the site shows a shortlist,
+# not a verdict; idea_match.py lets Claude check the shortlist against the call texts.
+IDEA_MATCH = {
+    "max_aspects": 10,          # aspects per call kept for the idea search
+    "max_directions": 8,        # example directions per call (AI profile)
+    "direction_offset": 0.03,   # idea vs. idea similarity runs higher than idea vs. call text
+    "shortlist": 20,            # calls shown on the website
+    "review": 40,               # calls idea_match.py gives to Claude
+}
 FUNDING_OVERRIDES = CONFIG_DIR / "funding_overrides.json"
 
 # Researcher–call matching (match_funding.py). Initial values, not validated
