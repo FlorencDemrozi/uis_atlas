@@ -7,7 +7,7 @@ import { useI18n } from "../i18n";
 import { links } from "../router";
 import type { Hit } from "../search";
 import { useShortlist } from "../shortlist";
-import { DeptLabel, Highlight, Position, doiUrl } from "./common";
+import { DeptLabel, Highlight, Position, paperUrl } from "./common";
 
 export function ShortlistButton({ r, compact = false }: { r: Researcher; compact?: boolean }) {
   const { t } = useI18n();
@@ -105,7 +105,7 @@ function ResultDetail({ hit, atlas, ranked }: { hit: Hit; atlas: Atlas; ranked: 
         {papers.map((eid) => {
           const p = atlas.papers[eid];
           if (!p) return null;
-          const url = doiUrl(p.doi);
+          const url = paperUrl(p);
           const title = <Highlight text={p.title} terms={hit.terms} />;
           return <li key={eid}>{url ? <a href={url}>{title}</a> : title}<div class="venue">{p.year}{p.venue ? ` · ${p.venue}` : ""}</div></li>;
         })}

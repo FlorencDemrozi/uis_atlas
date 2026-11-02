@@ -1,9 +1,9 @@
-import type { Atlas, Paper } from "../data";
+import { CATEGORIES, type Atlas, type Paper } from "../data";
 import { dept, orderedDepts } from "../org";
 import { useI18n } from "../i18n";
 import { links } from "../router";
 import { BarList, ColumnChart } from "../components/charts";
-import { DeptLabel, Position, doiUrl } from "../components/common";
+import { DeptLabel, Position, paperUrl } from "../components/common";
 import { useState } from "preact/hooks";
 import { CategoryBadge, EligibilityBadge, FundingGate, MatchDetails, SourceBadge, StatusBadge, useFmt } from "../components/funding";
 import { FAMILIES, callTitle, familyOf, nextDeadline, openFieldCallsFor, pick, useFunding, type Call,
@@ -109,7 +109,12 @@ function ProfileFunding({ atlas, id, name }: { atlas: Atlas; id: string; name: s
 
 export function ProfileView({ atlas, id }: { atlas: Atlas; id: string }) {
   const { t, num, deptName, lang } = useI18n();
-  const ptype = (type: string) => { const s = t(`ptype.${type}`); return s.startsWith("ptype.") ? type : s; };
+  // Scopus types have their own label; NVA types ("AcademicChapter", ...) show their category.
+  const ptype = (p: Paper) => {
+    const s = t(`ptype.${p.type}`);
+    if (!s.startsWith("ptype.")) return s;
+    return p.category ? t(`cat.${p.category}`) : p.type;
+  };
   const r = atlas.byId.get(id);
   if (!r) {
     return (
@@ -160,6 +165,7 @@ export function ProfileView({ atlas, id }: { atlas: Atlas; id: string }) {
           {r.links.orcid && <a href={r.links.orcid}>ORCID</a>}
           {r.links.uis && <a href={(lang === "en" && r.links.uis_en) || r.links.uis}>{t("p.uis")}</a>}
           {r.links.cristin && <a href={r.links.cristin}>Cristin</a>}
+          {r.links.nva && <a href={r.links.nva}>{t("p.nva")}</a>}
         </div>
       </header>
 
@@ -194,13 +200,13 @@ export function ProfileView({ atlas, id }: { atlas: Atlas; id: string }) {
           <ProfileFunding atlas={atlas} id={r.scopus_id} name={r.name} />
 
           <section class="section" aria-labelledby="h-pubs">
-            <h2 id="h-pubs">{t("p.publications", { n: r.n_publications })}</h2>
+            <h2 id="h-pubs">{t("p.outputs", { n: r.paper_ids.length })}</h2>
             {[...byYear.entries()].map(([year, papers]) => (
               <div class="pub-year" key={year}>
                 <h3>{year} <span class="muted">· {papers.length}</span></h3>
                 <ul class="pubs">
                   {papers.map((p) => {
-                    const url = doiUrl(p.doi);
+                    const url = paperUrl(p);
                     const others = p.uis_author_ids.filter((x) => x !== r.scopus_id)
                       .map((x) => atlas.byId.get(x)).filter((x) => !!x);
                     return (
@@ -208,8 +214,8 @@ export function ProfileView({ atlas, id }: { atlas: Atlas; id: string }) {
                         {url ? <a href={url}>{p.title}</a> : p.title}
                         {other.has(p.eid) && <> <span class="aff-other">{t("p.otherAff")}</span></>}
                         <div class="venue">
-                          {[p.venue, p.type && ptype(p.type)].filter(Boolean).join(" · ")}
-                          {p.citations > 0 && ` · ${t("r.citations", { n: num(p.citations) })}`}
+                          {[p.venue, p.type && ptype(p)].filter(Boolean).join(" · ")}
+                          {(p.citations ?? 0) > 0 && ` · ${t("r.citations", { n: num(p.citations ?? 0) })}`}
                           {others.length > 0 && <> · {t("p.with")} {others.map((o, i) => (
                             <span key={o!.scopus_id}>{i > 0 && ", "}<a href={links.profile(o!.scopus_id)}>{o!.name}</a></span>
                           ))}</>}
@@ -224,6 +230,19 @@ export function ProfileView({ atlas, id }: { atlas: Atlas; id: string }) {
         </div>
 
         <aside>
+          {r.output_types && (
+            <section class="panel" style={{ marginBottom: "20px" }} aria-labelledby="h-types">
+              <h2 id="h-types" style={{ fontSize: "17px", marginBottom: "8px" }}>{t("p.outputTypes")}</h2>
+              <table class="data-table">
+                <tbody>
+                  {CATEGORIES.filter((c) => r.output_types![c]).map((c) => (
+                    <tr key={c}><th scope="row">{t(`cat.${c}`)}</th><td class="n">{num(r.output_types![c])}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+              <p class="hint small">{t("p.outputTypesHint")}</p>
+            </section>
+          )}
           <section class="panel" aria-labelledby="h-years">
             <h2 id="h-years" style={{ fontSize: "17px", marginBottom: "8px" }}>{t("ov.perYear")}</h2>
             <ColumnChart color={color} unit={t("chart.papers")} height={150} ariaLabel={t("ov.perYear")}

@@ -1,6 +1,6 @@
 // Overview statistics for the selected faculties/departments, computed in the
 // browser so any mix of units is exact (same logic as pipeline/export_public.py).
-import { kwKey, type Atlas, type Researcher } from "./data";
+import { isPublication, kwKey, type Atlas, type Researcher } from "./data";
 import { isNotStated, orderedDepts, orderedFaculties } from "./org";
 import { unitKey, type Level } from "./selection";
 
@@ -16,7 +16,7 @@ export function recentTopics(atlas: Atlas, people: Researcher[], limit: number):
   const count = new Map<string, number>();
   const spelling = new Map<string, Map<string, number>>();
   for (const p of Object.values(atlas.papers)) {
-    if (Number(p.year) < from || !p.uis_author_ids.some((id) => ids.has(id))) continue;
+    if (Number(p.year) < from || !isPublication(p) || !p.uis_author_ids.some((id) => ids.has(id))) continue;
     for (const k of new Set(p.keywords)) {
       const key = kwKey(k);
       if (PLACES.has(key)) continue;
@@ -56,6 +56,7 @@ export function scopedStats(atlas: Atlas, people: Researcher[], level: Level): S
   const collab = new Map<string, number>();
   const totals = { researchers: people.length, papers: 0, citations: 0, crossUnit: 0 };
   for (const p of Object.values(atlas.papers)) {
+    if (!isPublication(p)) continue;   // lectures, media and artistic work are not counted as papers
     const us = new Set(p.uis_author_ids.map((id) => unitOf.get(id)).filter((u): u is string => !!u));
     if (!us.size) continue;
     totals.papers++;

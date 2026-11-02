@@ -66,3 +66,8 @@ export function useWidth<T extends HTMLElement>(): [{ current: T | null }, numbe
 export function doiUrl(doi: string | null) {
   return doi ? `https://doi.org/${doi}` : null;
 }
+
+/** DOI link, else the NVA record (outputs without a DOI: lectures, artistic work, ...). */
+export function paperUrl(p: { doi: string | null; url?: string | null }) {
+  return doiUrl(p.doi) ?? p.url ?? null;
+}

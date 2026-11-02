@@ -509,5 +509,20 @@
   "p.hIndex": "h-indeks (Scopus)",
   "p.scopusHint": "Scopus-profil: {d} dokumenter, {c} siteringer (alle år)",
   "p.otherAff": "annet arbeidssted",
-  "f.reason.senior_call_short_record": "Utlysningen krever flere år siden disputas, og personens første publikasjon er under 6 år gammel – sjekk disputasdatoen."
+  "f.reason.senior_call_short_record": "Utlysningen krever flere år siden disputas, og personens første publikasjon er under 6 år gammel – sjekk disputasdatoen.",
+  "p.nva": "Forskerprofil i NVA",
+  "p.outputs": "Forskningsresultater ({n})",
+  "p.outputTypes": "Resultater etter type",
+  "p.outputTypesHint": "Scopus og NVA (Nasjonalt vitenarkiv). Publikasjoner er artikler, bøker, kapitler, konferanseartikler, rapporter og doktorgradsavhandlinger.",
+  "cat.article": "Tidsskriftartikler",
+  "cat.book": "Bøker",
+  "cat.chapter": "Bokkapitler",
+  "cat.conference": "Konferanseartikler",
+  "cat.report": "Rapporter",
+  "cat.thesis": "Doktorgradsavhandlinger",
+  "cat.artistic": "Kunstneriske resultater",
+  "cat.presentation": "Foredrag og postere",
+  "cat.popular": "Populærvitenskap og kronikker",
+  "cat.media": "Medieopptredener",
+  "cat.other": "Annet"
 }

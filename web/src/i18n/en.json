@@ -509,5 +509,20 @@
   "p.hIndex": "h-index (Scopus)",
   "p.scopusHint": "Scopus profile: {d} documents, {c} citations (all years)",
   "p.otherAff": "other affiliation",
-  "f.reason.senior_call_short_record": "The call requires several years since the doctorate, and the person's first publication is less than 6 years old – check the PhD date."
+  "f.reason.senior_call_short_record": "The call requires several years since the doctorate, and the person's first publication is less than 6 years old – check the PhD date.",
+  "p.nva": "NVA research profile",
+  "p.outputs": "Research output ({n})",
+  "p.outputTypes": "Output by type",
+  "p.outputTypesHint": "Scopus and NVA (Nasjonalt vitenarkiv). Publications are articles, books, chapters, conference papers, reports and PhD theses.",
+  "cat.article": "Journal articles",
+  "cat.book": "Books",
+  "cat.chapter": "Book chapters",
+  "cat.conference": "Conference papers",
+  "cat.report": "Reports",
+  "cat.thesis": "PhD theses",
+  "cat.artistic": "Artistic work",
+  "cat.presentation": "Lectures and posters",
+  "cat.popular": "Popular science and op-eds",
+  "cat.media": "Media appearances",
+  "cat.other": "Other"
 }

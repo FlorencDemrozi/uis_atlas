@@ -5,7 +5,7 @@ import { callTitle, familyOf, isStale, pick, useFunding, type Call, type Eligibi
   type Match } from "../funding";
 import { useI18n } from "../i18n";
 import { links } from "../router";
-import { DeptLabel, Position, doiUrl } from "./common";
+import { DeptLabel, Position, paperUrl } from "./common";
 
 // ------------------------------------------------------------- unlock gate
 /** Renders children with the decrypted data, or the password form. */
@@ -275,7 +275,7 @@ export function MatchDetails({ atlas, call, m, who = false }: { atlas: Atlas; ca
           {m.papers.map((p) => {
             const paper = atlas.papers[p.eid];
             if (!paper) return null;
-            const url = doiUrl(paper.doi);
+            const url = paperUrl(paper);
             return (
               <li key={p.eid}>
                 {url ? <a href={url}>{paper.title}</a> : paper.title}

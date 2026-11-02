@@ -11,9 +11,12 @@ export interface Researcher {
   position: { nb: string | null; en: string | null } | null;
   summary: string | null;
   tags: string[];
+  /** Publications only (articles, books, chapters, conference papers, reports, PhD theses). */
   n_publications: number;
   /** Of n_publications, with a UiS affiliation (absent in older exports). */
   n_uis?: number;
+  /** All research output per category (see CATEGORIES), most frequent first. */
+  output_types?: Record<string, number>;
   /** Papers without a UiS affiliation (earlier or other employers). */
   other_paper_ids?: string[];
   /** As shown on the Scopus author page (all years, all affiliations). */
@@ -28,6 +31,9 @@ export interface Researcher {
   links: Record<string, string>;
 }
 
+/** As in papers.json, where empty fields are left out and the id is the key. */
+type StoredPaper = Partial<Paper> & { title: string; year: string };
+
 export interface Paper {
   eid: string;
   title: string;
@@ -35,9 +41,24 @@ export interface Paper {
   venue: string | null;
   type: string | null;
   doi: string | null;
-  citations: number;
+  /** null: not in Scopus (NVA only), no citation count. */
+  citations: number | null;
   keywords: string[];
   uis_author_ids: string[];
+  /** Output category (pipeline/config.py OUTPUT_CATEGORIES); absent in older exports. */
+  category?: string;
+  /** NVA record, for outputs found only in NVA. */
+  url?: string | null;
+}
+
+/** Output categories in display order (pipeline/config.py OUTPUT_CATEGORIES). */
+export const CATEGORIES = ["article", "book", "chapter", "conference", "report", "thesis",
+  "artistic", "presentation", "popular", "media", "other"];
+const PUBLICATION_CATEGORIES = new Set(["article", "book", "chapter", "conference", "report", "thesis"]);
+
+/** Counted as a publication (unit statistics, papers per year); see config.PUBLICATION_CATEGORIES. */
+export function isPublication(p: Paper): boolean {
+  return PUBLICATION_CATEGORIES.has(p.category ?? "article");
 }
 
 export interface UnitStats {
@@ -112,12 +133,19 @@ export function aggregateKeywords(paperIds: string[], papers: Record<string, Pap
 }
 
 export async function loadAtlas(): Promise<Atlas> {
-  const [researchers, papers, stats, meta] = await Promise.all([
+  const [researchers, stored, stats, meta] = await Promise.all([
     getJson<Researcher[]>("researchers.json"),
-    getJson<Record<string, Paper>>("papers.json"),
+    getJson<Record<string, StoredPaper>>("papers.json"),
     getJson<Stats>("stats.json"),
     getJson<Meta>("meta.json"),
   ]);
+  const papers: Record<string, Paper> = {};
+  for (const [eid, p] of Object.entries(stored)) {
+    papers[eid] = {
+      venue: null, type: null, doi: null, citations: null, keywords: [], uis_author_ids: [], ...p, eid,
+      url: eid.startsWith("nva-") ? `https://nva.sikt.no/registration/${eid.slice(4)}` : null,
+    };
+  }
   const keywords = new Map<string, [string, number][]>();
   const recent = new Map<string, number>();
   for (const r of researchers) {

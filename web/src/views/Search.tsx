@@ -4,7 +4,7 @@ import { useI18n } from "../i18n";
 import { links, replaceHash, type Route } from "../router";
 import { buildIndex, search, type Hit } from "../search";
 import { inScope, isAll, useSelection } from "../selection";
-import { DeptLabel, Highlight, Position, doiUrl } from "../components/common";
+import { DeptLabel, Highlight, Position, paperUrl } from "../components/common";
 import { OrgFilter } from "../components/OrgFilter";
 import { Explore } from "../components/Explore";
 import { Affinity, ResultsTable, ShortlistButton, SplitView } from "../components/results";
@@ -176,7 +176,7 @@ function ResultItem({ hit, rank, atlas, ranked }: { hit: Hit; rank: number; atla
             <ul>
               {hit.papers.map((eid) => {
                 const p = atlas.papers[eid];
-                const url = doiUrl(p.doi);
+                const url = paperUrl(p);
                 const title = <Highlight text={p.title} terms={hit.terms} />;
                 return (
                   <li key={eid}>
