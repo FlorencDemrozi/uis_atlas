@@ -22,6 +22,16 @@ Scopus content is licensed to UiS through its subscription. Elsevier’s terms g
 
 Before launch, the UiS Library (which manages the Scopus agreement) must confirm the public field list.
 
+## 2b. NVA data (open)
+
+NVA (Nasjonalt vitenarkiv, run by Sikt) publishes its metadata openly through a public API; no key or licence is needed. Raw records stay in `data/raw/nva/` (local, never committed), like all raw data.
+
+| Data | Where it may live |
+|---|---|
+| Bibliographic references: title, year, venue, type, DOI, link to the NVA record | Public site |
+| Cristin person id (link to the NVA research profile) | Public site |
+| Abstracts (copyright may lie with the publisher) | Local only, as for Scopus: used for summaries and embeddings, never published |
+
 ## 3. Personal data (GDPR)
 
 Researcher profiles are personal data, even though they describe professional activity. Before launch:

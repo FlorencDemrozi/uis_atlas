@@ -27,11 +27,12 @@ Visitors are not expected to know UiS’s organisation or academic vocabulary. T
   - Faculty of Social Sciences: Media and Social Sciences; Social Studies; Psychology; NHS – Leadership and Service Innovation (assigned from Scopus affiliations only; not a unit in the employee directory)
   - Not included: national centres (Reading Centre, Learning Environment Centre, Knowledge Centre for Education), the Museum of Archaeology, central divisions.
 - **Current staff and departments:** the public UiS employee directory (www.uis.no/nb/sok/ansatte) is the source of who works where today; Scopus affiliations are the fallback.
-- **Inclusion:** everyone found in the directory who has a Scopus profile, whatever their publication record (project owner, 2026-10-28); others (who may have left UiS) with ≥3 publications in the last 2 years (`config.py`). Staff without a Scopus profile will come from a staff list (Excel, with start and contract dates) later.
+- **Inclusion:** everyone found in the directory who has a Scopus profile or NVA registrations, whatever their publication record (project owner, 2026-10-28 and 2026-11-02); others (who may have left UiS) with ≥3 publications with a UiS affiliation in the last 2 years (`config.py`; lectures, media items and errata do not count). Staff with neither will come from a staff list (Excel, with start and contract dates) later.
 - **Period:** publications from 2020 onward (configurable via `ATLAS_FIRST_YEAR`).
-- **Source:** Scopus (Elsevier), UiS affiliation ID `60014497`, via the Scopus API.
+- **Sources:** Scopus (Elsevier), UiS affiliation ID `60014497`, via the Scopus API; and NVA (Nasjonalt vitenarkiv, Sikt; the successor of Cristin), UiS organisation `217.0.0.0`, via its open API (added 2026-11-02). NVA adds books, chapters, reports, Norwegian-language articles, artistic work, lectures and media contributions that Scopus does not index. An output in both sources counts once (same DOI, else same title and year).
+- **Output types:** profiles show counts for every category (project owner, 2026-11-02; `config.OUTPUT_CATEGORIES`). "Publications" (headline count, papers per year, unit statistics) are journal articles, books, chapters, conference papers, reports and PhD theses. Student theses are not collected.
 - Faculties and departments are configuration (`pipeline/config.py`, `web/src/org.ts`), not code.
-- Known limitation: Scopus covers humanities, law and especially performing arts poorly, so those units look thinner than they are.
+- Known limitation: Scopus covers humanities, law and especially performing arts poorly; NVA (since 2026-11-02) fills much of that gap. NVA has no citation counts, so citations still come from Scopus only.
 
 Out of scope for v1: login, editing by researchers through the site, patents.
 
@@ -56,8 +57,9 @@ Why static: it can be hosted anywhere (GitHub Pages, UiS web server), costs noth
 | Stage | Script | Input → Output | Notes |
 |---|---|---|---|
 | 1. Collect | `collect_scopus.py` | Scopus API → `data/raw/scopus/` | **Already implemented.** Resumable. Must run on the UiS network or with an institutional token. |
+| 1f. NVA | `collect_nva.py` | NVA search API → `data/raw/nva/` | UiS outputs per publication year, any network, no key; resumable by year, recent years refreshed. |
 | 1b. Directory | `collect_directory.py` | UiS employee directory → `data/raw/uis_directory/` | Current staff, unit, position, profile link (nb + en). Any network; polite (~100 requests). |
-| 2. Build profiles | `build_profiles.py` | raw → `data/interim/profiles.json` | One record per researcher: department, papers, keywords, co-authors, metrics. Handles name variants and duplicate Scopus author IDs. |
+| 2. Build profiles | `build_profiles.py` | raw → `data/interim/profiles.json`, `papers.json` | One record per researcher: department, papers, output types, keywords, co-authors, metrics. Merges Scopus and NVA (`nva.py`): shared outputs once, NVA people linked to Scopus authors by shared papers and the employee directory. Handles name variants and duplicate Scopus author IDs. People found only in NVA get the profile id `nva-<Cristin id>`. |
 | 3. Summarize | `summarize.py` | profiles → `data/interim/summaries.json` | Uses the Claude API **offline** to write a 2–3 sentence overview and 3–6 topic tags per researcher. Cached and only regenerated when a profile changes. |
 | 4. Embed | `embed.py` | profiles + summaries → `data/interim/embeddings.npy` | Semantic vectors for each researcher and for each paper (see §4). |
 | 5. Export | `export_public.py` | interim → `data/public/` | Writes **only licence-safe fields** (see `DATA_POLICY.md`). This is the only data the website sees. |
