@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Run the processing stages in order: researchers (stages 2–5), then funding calls.
-The collectors (collect_scopus.py, collect_directory.py, collect_rcn.py) are run
+The collectors (collect_scopus.py, collect_nva.py, collect_directory.py, collect_rcn.py, ...) are run
 separately or through run_weekly.py, because Scopus needs the UiS network."""
 import subprocess
 import sys

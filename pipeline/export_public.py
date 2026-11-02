@@ -3,7 +3,7 @@
 Stage 5 – Export the public dataset for the website. THE LICENCE GATE.
 
 Input:  profiles, summaries, embeddings (data/interim/), config/exclusions.json,
-        config/overrides.json, papers in config.RAW_ATLAS
+        config/overrides.json, papers in config.PAPERS (build_profiles.py)
 Output: data/public/  (researchers.json, papers.json, stats.json, meta.json,
         vectors.bin once embeddings exist)
 
@@ -23,15 +23,18 @@ import config
 
 RESEARCHER_FIELDS = [
     "scopus_id", "name", "orcid", "faculty", "department", "position", "summary", "tags",
-    "n_publications", "n_uis", "citations", "pubs_per_year", "first_year", "last_year",
+    "n_publications", "n_uis", "output_types", "citations", "pubs_per_year", "first_year", "last_year",
     "top_coauthors", "collab_departments", "paper_ids", "other_paper_ids", "scopus_metrics", "links",
 ]
 SCOPUS_METRICS = ["documents", "citations", "h_index"]   # as shown on the Scopus author page
 
 PAPER_FIELDS = [
-    "eid", "title", "year", "venue", "type", "doi", "citations",
-    "keywords", "uis_author_ids",
+    "title", "year", "venue", "type", "doi", "citations",
+    "keywords", "uis_author_ids", "category",
 ]
+# papers.json is keyed by paper id ("nva-..." for NVA-only outputs, whose link the
+# site builds from the id). Empty fields are left out to keep the file small; the
+# site fills them in (web/src/data.ts).
 
 MIN_COPIED_WORDS = 8   # a public sentence this long that also occurs in an abstract fails
 
@@ -40,8 +43,16 @@ def allow(record: dict, fields: list[str]) -> dict:
     return {k: record.get(k) for k in fields}
 
 
+def compact(record: dict) -> dict:
+    return {k: v for k, v in record.items() if v not in (None, [], "")}
+
+
 def links_for(r: dict, extra: dict) -> dict:
-    links = {"scopus": f"https://www.scopus.com/authid/detail.uri?authorId={r['scopus_id']}"}
+    links = {}
+    if not r["scopus_id"].startswith("nva-"):   # NVA-only people have no Scopus profile
+        links["scopus"] = f"https://www.scopus.com/authid/detail.uri?authorId={r['scopus_id']}"
+    if r.get("cristin_id"):
+        links["nva"] = config.NVA_PERSON_URL.format(r["cristin_id"])
     if r.get("orcid"):
         links["orcid"] = f"https://orcid.org/{r['orcid']}"
     uis = r.get("uis_links") or {}
@@ -69,21 +80,24 @@ def check_no_copied_text(researchers: list[dict], abstracts: list[str]) -> None:
 
 def unit_stats(researchers: list[dict], papers: dict, key: str) -> dict:
     """Researchers, papers, citations, papers per year, collaboration and themes per
-    unit, where key is "department" or "faculty"."""
+    unit, where key is "department" or "faculty". Publications only (no lectures,
+    media, artistic work: see config.PUBLICATION_CATEGORIES)."""
     unit_of = {r["scopus_id"]: r[key] for r in researchers}
     per_unit = defaultdict(lambda: {"researchers": 0, "papers": set(), "citations": 0})
     for r in researchers:
         u = per_unit[r[key]]
         u["researchers"] += 1
-        u["papers"].update(r["paper_ids"])
+        u["papers"].update(p for p in r["paper_ids"] if config.is_publication(papers[p]))
     years, themes = defaultdict(Counter), defaultdict(Counter)
     collab = Counter()
     for eid, p in papers.items():
-        units = {unit_of[a] for a in p["uis_author_ids"]}
+        if not config.is_publication(p):
+            continue
+        units = {unit_of[a] for a in p.get("uis_author_ids", [])}
         for u in units:
             years[u][p["year"]] += 1
-            per_unit[u]["citations"] += p["citations"] or 0
-            themes[u].update({k.lower() for k in p["keywords"]})
+            per_unit[u]["citations"] += p.get("citations") or 0
+            themes[u].update({k.lower() for k in p.get("keywords", [])})
         for a, b in combinations(sorted(units), 2):
             collab[(a, b)] += 1
     return {
@@ -102,7 +116,7 @@ def build_stats(researchers: list[dict], papers: dict) -> dict:
 
 def main() -> None:
     profiles = json.loads(config.PROFILES.read_text(encoding="utf-8"))
-    atlas = json.loads(config.RAW_ATLAS.read_text(encoding="utf-8"))
+    all_papers = json.loads(config.PAPERS.read_text(encoding="utf-8"))
     excluded = set(json.loads(config.EXCLUSIONS.read_text(encoding="utf-8")).get("scopus_ids", []))
     overrides = json.loads(config.OVERRIDES.read_text(encoding="utf-8")).get("authors", {})
     summaries = (json.loads(config.SUMMARIES.read_text(encoding="utf-8"))
@@ -128,11 +142,14 @@ def main() -> None:
     used = {p for r in researchers for p in r["paper_ids"]}
     papers = {}
     for eid in sorted(used):
-        p = atlas["papers"][eid]
+        p = all_papers[eid]
         uis = sorted({canon[a] for a in p["coauthor_ids"] if a in canon})
-        papers[eid] = allow(dict(p, eid=eid, uis_author_ids=uis), PAPER_FIELDS)
+        rec = allow(dict(p, uis_author_ids=uis), PAPER_FIELDS)
+        if eid.startswith("nva-"):
+            rec.pop("type")   # NVA's own type names: the site shows the category
+        papers[eid] = compact(rec)
 
-    check_no_copied_text(researchers, [atlas["papers"][e].get("abstract") for e in used])
+    check_no_copied_text(researchers, [all_papers[e].get("abstract") for e in used])
 
     meta = {
         "generated": datetime.now().isoformat(timespec="seconds"),

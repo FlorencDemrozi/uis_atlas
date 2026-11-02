@@ -2,7 +2,7 @@
 """
 Local review page for stage 2 output (not the public website).
 
-Input:  config.PROFILES, papers in config.RAW_ATLAS
+Input:  config.PROFILES, papers in config.PAPERS (build_profiles.py)
 Output: config.REVIEW_DIR / "preview.html" – contains licensed data, local only.
         Opens it in the default browser.
 """
@@ -99,9 +99,9 @@ PAPER_FIELDS = ["title", "year", "venue", "doi", "citations"]  # no abstracts on
 
 def main() -> None:
     profiles = json.loads(config.PROFILES.read_text(encoding="utf-8"))
-    atlas = json.loads(config.RAW_ATLAS.read_text(encoding="utf-8"))
+    all_papers = json.loads(config.PAPERS.read_text(encoding="utf-8"))
     used = {p for r in profiles["researchers"] for p in r["paper_ids"]}
-    papers = {p: {k: atlas["papers"][p].get(k) for k in PAPER_FIELDS} for p in used}
+    papers = {p: {k: all_papers[p].get(k) for k in PAPER_FIELDS} for p in used}
     data = json.dumps({"researchers": profiles["researchers"], "papers": papers}, ensure_ascii=False)
     html = (PAGE.replace("__DATA__", data.replace("</", "<\\/"))
                 .replace("__GENERATED__", profiles["generated"])

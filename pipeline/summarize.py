@@ -2,7 +2,7 @@
 """
 Stage 3 – Write a short overview and topic tags for each researcher (offline).
 
-Input:  config.PROFILES, papers in config.RAW_ATLAS
+Input:  config.PROFILES, papers in config.PAPERS (build_profiles.py)
 Output: config.SUMMARIES  ({scopus_id: {summary, tags, source_hash, model, generated}})
 
 - Only papers from the last config.ACTIVE_YEARS years are used (project owner,
@@ -57,7 +57,8 @@ SCHEMA = {
 
 def select_papers(r: dict, papers: dict) -> list[dict]:
     recent = [papers[e] for e in r["paper_ids"] if e in papers and config.is_active_paper(papers[e])]
-    recent.sort(key=lambda p: (-int(p["year"]), -(p.get("citations") or 0)))
+    # Publications first; lectures, artistic work and popular science fill the remaining slots.
+    recent.sort(key=lambda p: (not config.is_publication(p), -int(p["year"]), -(p.get("citations") or 0)))
     return recent[:config.SUMMARY_MAX_PAPERS]
 
 
@@ -103,7 +104,7 @@ def main() -> None:
         return
 
     profiles = json.loads(config.PROFILES.read_text(encoding="utf-8"))["researchers"]
-    papers = json.loads(config.RAW_ATLAS.read_text(encoding="utf-8"))["papers"]
+    papers = json.loads(config.PAPERS.read_text(encoding="utf-8"))
     cache = json.loads(config.SUMMARIES.read_text(encoding="utf-8")) if config.SUMMARIES.exists() else {}
 
     todo = profiles

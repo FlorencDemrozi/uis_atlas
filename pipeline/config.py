@@ -29,80 +29,82 @@ INSTITUTION_NAME = "University of Stavanger"
 # more specific phrases first. "directory": unit ids in the UiS employee directory
 # (www.uis.no/nb/sok/ansatte, facet "department:<id>"); a department without ids
 # is assigned from Scopus affiliations only. "hints": faculty-level phrases.
+# "nva": Cristin unit id prefixes in NVA (api.nva.unit.no/cristin/organization/
+# 217.0.0.0); "217.8.4" covers 217.8.4.0 and its sub-units (labs, administration).
 FACULTIES = [
-    {"name": "Faculty of Science and Technology", "directory": 1222,
+    {"name": "Faculty of Science and Technology", "directory": 1222, "nva": ["217.8", "217.26"],
      "hints": ["science and technology", "teknisk-naturvitenskapelig", "teknisk- naturvitenskapelig",
                "technology and natural sci", "technology and science", "sciences & technology"],
      "departments": [
-         {"name": "Energy and Petroleum Engineering", "directory": [1268, 1250],
+         {"name": "Energy and Petroleum Engineering", "directory": [1268, 1250], "nva": ["217.8.6", "217.8.11"],
           "phrases": ["energy resources", "energiressurs", "petroleum"]},
-         {"name": "Chemistry, Bioscience and Environmental Engineering", "directory": [1247],
+         {"name": "Chemistry, Bioscience and Environmental Engineering", "directory": [1247], "nva": ["217.8.10"],
           "phrases": ["chemistry", "bioscience", "environmental engineering", "kjemi",
                       "miljøteknikk", "miljøteknologi"]},
-         {"name": "Electrical Engineering and Computer Science", "directory": [1256],
+         {"name": "Electrical Engineering and Computer Science", "directory": [1256], "nva": ["217.8.4"],
           "phrases": ["computer science", "electrical engineering", "elektro", "data- og"]},
-         {"name": "Mathematics and Physics", "directory": [1259],
+         {"name": "Mathematics and Physics", "directory": [1259], "nva": ["217.8.2"],
           "phrases": ["mathematics", "physics", "matematikk", "fysikk"]},
-         {"name": "Mechanical and Structural Engineering and Materials Science", "directory": [1234],
+         {"name": "Mechanical and Structural Engineering and Materials Science", "directory": [1234], "nva": ["217.8.5"],
           "phrases": ["mechanical", "structural engineering", "materials science", "maskin",
                       "konstruksjon"]},
-         {"name": "Safety, Economics and Planning", "directory": [1223],
+         {"name": "Safety, Economics and Planning", "directory": [1223], "nva": ["217.8.3"],
           "phrases": ["safety, economics", "safety economics", "industrial economics",
                       "risk management", "sikkerhet", "planlegging"]},
      ]},
-    {"name": "Faculty of Arts and Education", "directory": 1224,
+    {"name": "Faculty of Arts and Education", "directory": 1224, "nva": ["217.6", "217.22"],
      "hints": ["arts and education", "education and arts", "utdanningsvitenskap og humaniora"],
      "departments": [
-         {"name": "Department of Early Childhood Education", "directory": [1272],
+         {"name": "Department of Early Childhood Education", "directory": [1272], "nva": ["217.6.4"],
           "phrases": ["early childhood", "barnehagelærer"]},
-         {"name": "Department of Education and Sports Science", "directory": [1228],
+         {"name": "Department of Education and Sports Science", "directory": [1228], "nva": ["217.6.3"],
           "phrases": ["education and sport", "sports science", "sport science", "grunnskolelærer",
                       "idrett og spesialpedagogikk"]},
-         {"name": "Department of Cultural Studies and Languages", "directory": [1225],
+         {"name": "Department of Cultural Studies and Languages", "directory": [1225], "nva": ["217.6.2"],
           "phrases": ["cultural studies", "kultur- og språk"]},
      ]},
-    {"name": "Faculty of Performing Arts", "directory": 1275,
+    {"name": "Faculty of Performing Arts", "directory": 1275, "nva": ["217.15", "217.24"],
      "hints": ["performing arts", "utøvende kunstfag"],
      "departments": [
          {"name": "Department of Jazz, Dance, Practical-Pedagogical Education and Music Production",
-          "directory": [1276], "phrases": ["jazz", "dance", "music production", "musikkproduksjon"]},
-         {"name": "Department of Classical Music", "directory": [1298],
+          "directory": [1276], "nva": ["217.15.2"], "phrases": ["jazz", "dance", "music production", "musikkproduksjon"]},
+         {"name": "Department of Classical Music", "directory": [1298], "nva": ["217.15.1"],
           "phrases": ["classical music", "klassisk musikk"]},
      ]},
-    {"name": "UiS School of Business and Law", "directory": 1229,
+    {"name": "UiS School of Business and Law", "directory": 1229, "nva": ["217.14"],
      "hints": ["business school", "school of business and law", "handelshøgskolen"],
      "departments": [
-         {"name": "Department of Economics and Finance", "directory": [1249],
+         {"name": "Department of Economics and Finance", "directory": [1249], "nva": ["217.14.3"],
           "phrases": ["economics and finance", "samfunnsøkonomi og finans"]},
-         {"name": "Department of Innovation, Management and Marketing", "directory": [1255],
+         {"name": "Department of Innovation, Management and Marketing", "directory": [1255], "nva": ["217.14.1"],
           "phrases": ["innovation, management", "innovation, leadership", "department of innovation",
                       "management and marketing", "innovasjon, led"]},
-         {"name": "Department of Accounting and Law", "directory": [1294],
+         {"name": "Department of Accounting and Law", "directory": [1294], "nva": ["217.14.2"],
           "phrases": ["accounting", "regnskap", "rettsvitenskap", "department of law"]},
      ]},
-    {"name": "Faculty of Health Sciences", "directory": 1235,
+    {"name": "Faculty of Health Sciences", "directory": 1235, "nva": ["217.13", "217.25"],
      "hints": ["faculty of health", "health sciences", "helsevitenskap",
                "centre for resilience in healthcare", "center for resilience in healthcare"],
      "departments": [
-         {"name": "Department of Public Health", "directory": [1243],
+         {"name": "Department of Public Health", "directory": [1243], "nva": ["217.13.1"],
           "phrases": ["public health", "folkehelse"]},
-         {"name": "Department of Quality and Health Technology", "directory": [1240],
+         {"name": "Department of Quality and Health Technology", "directory": [1240], "nva": ["217.13.2"],
           "phrases": ["quality and health technology", "health technology", "helseteknologi"]},
-         {"name": "Department of Caring and Ethics", "directory": [1236],
+         {"name": "Department of Caring and Ethics", "directory": [1236], "nva": ["217.13.3"],
           "phrases": ["caring and ethics", "care and ethics", "omsorg og etikk"]},
      ]},
-    {"name": "Faculty of Social Sciences", "directory": 1241,
+    {"name": "Faculty of Social Sciences", "directory": 1241, "nva": ["217.7", "217.21"],
      "hints": ["faculty of social science", "samfunnsvitenskap"],
      "departments": [
          # Not a unit in the employee directory: assigned from Scopus affiliations only.
-         {"name": "NHS – Department of Leadership and Service Innovation", "directory": [],
+         {"name": "NHS – Department of Leadership and Service Innovation", "directory": [], "nva": ["217.7.6"],
           "phrases": ["hotel management", "hotellhøgskole", "leadership and service innovation",
                       "service innovation"]},
-         {"name": "Department of Media and Social Sciences", "directory": [1242],
+         {"name": "Department of Media and Social Sciences", "directory": [1242], "nva": ["217.7.5"],
           "phrases": ["media and social science", "medie- og samfunnsfag", "department of media"]},
-         {"name": "Department of Social Studies", "directory": [1271],
+         {"name": "Department of Social Studies", "directory": [1271], "nva": ["217.7.3"],
           "phrases": ["social studies", "social work", "sosialfag"]},
-         {"name": "Department of Psychology", "directory": [8977],
+         {"name": "Department of Psychology", "directory": [8977], "nva": ["217.7.7"],
           "phrases": ["psychology", "psykologi"]},
      ]},
 ]
@@ -138,6 +140,8 @@ FACULTY_HINTS = [(f["name"], f["hints"]) for f in FACULTIES]
 DIRECTORY_DEPARTMENTS = {uid: d["name"] for f in FACULTIES for d in f["departments"]
                          for uid in d["directory"]}
 DIRECTORY_FACULTIES = {f["directory"]: f["name"] for f in FACULTIES}
+NVA_DEPARTMENTS = {u: d["name"] for f in FACULTIES for d in f["departments"] for u in d["nva"]}
+NVA_FACULTIES = {u: f["name"] for f in FACULTIES for u in f["nva"]}
 
 # Former department names, checked BEFORE the current names above. Derived from
 # authors whose affiliation changed over time; confirmed by the project owner
@@ -196,7 +200,13 @@ AUTHOR_BATCH = 25                       # author ids per Scopus query
 RAW_DIRECTORY = DATA / "raw" / "uis_directory"  # UiS employee directory: personal data, local only
 DIRECTORY = RAW_DIRECTORY / "employees.json"
 
+# NVA (Nasjonalt vitenarkiv, Sikt): open metadata, collected by collect_nva.py.
+RAW_NVA = DATA / "raw" / "nva"          # one JSONL file per publication year, local only
+RAW_NVA_STATE = RAW_NVA / "state.json"
+
 PROFILES = INTERIM / "profiles.json"
+# Scopus and NVA papers merged by build_profiles.py (abstracts inside: local only).
+PAPERS = INTERIM / "papers.json"
 MERGE_LOG = INTERIM / "merge_log.json"
 REVIEW_DIR = INTERIM / "review"         # CSVs for the project owner (local only)
 SUMMARIES = INTERIM / "summaries.json"
@@ -256,8 +266,67 @@ ACTIVE_FROM = REFERENCE_YEAR - ACTIVE_YEARS + 1
 
 
 def is_active_paper(paper: dict) -> bool:
+    """A recent paper that says something about the person's topics (summaries,
+    embeddings, funding matches): no media interviews or other minor items."""
     year = str(paper.get("year") or "")
-    return year.isdigit() and int(year) >= ACTIVE_FROM
+    return (year.isdigit() and int(year) >= ACTIVE_FROM
+            and paper.get("category", "article") in TOPICAL_CATEGORIES)
+
+
+# ---- NVA (Nasjonalt vitenarkiv) ------------------------------------------
+# Norway's national research archive (successor of Cristin, run by Sikt). Its
+# metadata is open: no key needed. UiS output is found by organisation id; each
+# contributor carries a Cristin person id and unit-level UiS affiliations.
+NVA_SEARCH_URL = "https://api.nva.unit.no/search/resources"
+NVA_ORG = "https://api.nva.unit.no/cristin/organization/217.0.0.0"
+NVA_PAGE = 100                  # 200 gives server errors on some pages
+NVA_SLEEP = 0.5                 # seconds between requests
+NVA_REFRESH_YEARS = 2           # like SCOPUS_REFRESH_YEARS: recent years are fetched again
+NVA_PUBLICATION_URL = "https://nva.sikt.no/registration/{}"
+NVA_PERSON_URL = "https://nva.sikt.no/research-profile/{}"
+# Student theses: written by students, not by the atlas researchers. Not collected.
+NVA_SKIPPED_TYPES = ["DegreeBachelor", "DegreeMaster", "OtherStudentWork"]
+# Contributor roles that do not make the output the person's own work.
+NVA_SKIPPED_ROLES = {"Supervisor", "Organizer", "ContactPerson", "RightsHolder", "Registrar",
+                     "CollaborationPartner", "RoleOther"}
+
+# Output categories (project owner, 2026-11-02: profiles show counts for all types).
+# Publication types from Scopus ("Article", ...) and NVA ("AcademicArticle", ...)
+# map to one category; unknown types count as "other".
+OUTPUT_CATEGORIES = {
+    "article": ["Article", "Review", "Letter", "Note", "Short Survey", "Data Paper", "Editorial",
+                "AcademicArticle", "AcademicLiteratureReview", "AcademicCommentary",
+                "CaseReport", "StudyProtocol", "JournalLetter", "JournalLeader"],
+    "book": ["Book", "AcademicMonograph", "BookAnthology", "Textbook", "NonFictionMonograph",
+             "PopularScienceMonograph", "Encyclopedia", "ExhibitionCatalog"],
+    "chapter": ["Book Chapter", "AcademicChapter", "NonFictionChapter", "PopularScienceChapter",
+                "EncyclopediaChapter", "TextbookChapter", "Introduction",
+                "ExhibitionCatalogChapter", "ChapterInReport", "ChapterConferenceAbstract"],
+    "conference": ["Conference Paper", "Conference Review", "ConferenceAbstract"],
+    "report": ["ReportResearch", "ReportBasic", "ReportPolicy", "ReportWorkingPaper",
+               "ReportBookOfAbstract", "ConferenceReport"],
+    "thesis": ["DegreePhd", "DegreeLicentiate"],
+    "artistic": ["MusicPerformance", "PerformingArts", "ExhibitionProduction", "MovingPicture",
+                 "VisualArts", "LiteraryArts", "ArtisticDesign", "Architecture",
+                 "OtherArtisticOutput"],
+    "presentation": ["ConferenceLecture", "Lecture", "ConferencePoster", "OtherPresentation"],
+    "popular": ["PopularScienceArticle", "ProfessionalArticle", "MediaFeatureArticle",
+                "MediaReaderOpinion", "MediaBlogPost"],
+    "media": ["MediaInterview", "MediaParticipationInRadioOrTv", "MediaPodcast"],
+}
+CATEGORY_OF = {t: c for c, types in OUTPUT_CATEGORIES.items() for t in types}
+# Counted as publications (headline count, papers per year, inclusion rule).
+PUBLICATION_CATEGORIES = {"article", "book", "chapter", "conference", "report", "thesis"}
+# Used for summaries, embeddings and funding matches (titles describe research topics).
+TOPICAL_CATEGORIES = PUBLICATION_CATEGORIES | {"artistic", "presentation", "popular"}
+
+
+def category_of(paper_type: str | None) -> str:
+    return CATEGORY_OF.get(paper_type or "", "other")
+
+
+def is_publication(paper: dict) -> bool:
+    return paper.get("category", "article") in PUBLICATION_CATEGORIES
 
 
 # ---- Funding calls (Research Council of Norway) --------------------------

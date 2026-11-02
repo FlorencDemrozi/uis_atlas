@@ -2,7 +2,7 @@
 """
 Stage 4 – Compute semantic embeddings for papers and researchers.
 
-Input:  config.PROFILES, config.SUMMARIES (optional), papers in config.RAW_ATLAS
+Input:  config.PROFILES, config.SUMMARIES (optional), papers in config.PAPERS (build_profiles.py)
 Output: config.EMBEDDINGS_DIR/
           papers.npy       float32, one normalised row per paper
           papers.json      {"model", "ids", "hashes"}
@@ -94,7 +94,7 @@ def embed_papers(model, texts: dict[str, str]) -> tuple[list[str], np.ndarray]:
 
 def main() -> None:
     profiles = json.loads(config.PROFILES.read_text(encoding="utf-8"))["researchers"]
-    papers = json.loads(config.RAW_ATLAS.read_text(encoding="utf-8"))["papers"]
+    papers = json.loads(config.PAPERS.read_text(encoding="utf-8"))
     summaries = (json.loads(config.SUMMARIES.read_text(encoding="utf-8"))
                  if config.SUMMARIES.exists() else {})
 

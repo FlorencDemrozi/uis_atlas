@@ -3,18 +3,26 @@
 Stage 2 – Build one profile per researcher.
 
 Input:  config.RAW_ATLAS and config.RAW_DOCS (from collect_scopus.py),
+        config.RAW_NVA (from collect_nva.py, optional),
         config.DIRECTORY (from collect_directory.py, optional),
         config/overrides.json
-Output: config.PROFILES, config.MERGE_LOG, review CSVs in config.REVIEW_DIR
+Output: config.PROFILES, config.PAPERS (Scopus and NVA papers merged),
+        config.MERGE_LOG, review CSVs in config.REVIEW_DIR
         (all licensed or personal data – local only, never commit)
 
 Steps:
+- Add NVA outputs and people (pipeline/nva.py): an output also in Scopus becomes
+  the Scopus paper; NVA-only outputs (books, chapters, reports, artistic work,
+  lectures, ...) get id "nva-<identifier>", NVA people "nva-<Cristin id>". The
+  steps below treat NVA people like Scopus author IDs; a person found only in
+  NVA keeps the "nva-" id as profile id.
 - Match each Scopus author to the UiS employee directory by name (see
   pipeline/directory.py). A match confirms the person as current staff and
   gives today's department, position and UiS profile link. Staff listed only in
   excluded units (national centres, museum, divisions) are left out.
 - Merge duplicate Scopus author IDs for the same person: forced merges from
-  overrides, same ORCID, the same directory person, or same normalised name +
+  overrides, an NVA person with a compatible name on a paper shared with Scopus,
+  same ORCID, the same directory person, or same normalised name +
   department + a shared co-author. Name-only matches are not merged but listed
   for review.
 - Department: override, else directory, else Scopus affiliations.
@@ -24,7 +32,8 @@ Steps:
   counting UiS papers only (overrides can force include/exclude).
 - Compute per researcher: faculty, department, position, paper ids (newest
   first; all affiliations since ATLAS_FIRST_YEAR, see collect_scopus_authors.py),
-  how many have a UiS affiliation, counts, citations, publications per year,
+  counts per output category (config.OUTPUT_CATEGORIES; "publications" are
+  config.PUBLICATION_CATEGORIES), how many publications have a UiS affiliation, citations, publications per year,
   keywords, UiS co-authors, collaborating departments, first/last active year,
   and the Scopus author metrics (documents, citations, h-index as on Scopus).
 
@@ -40,6 +49,7 @@ from datetime import datetime
 from itertools import combinations
 
 import config
+import nva
 from directory import Directory
 
 NOT_STATED_KEYS = config.NOT_STATED_KEYS
@@ -70,6 +80,10 @@ def given_compatible(g1: str, g2: str) -> bool:
     return t1[0] == t2[0]
 
 
+def is_nva(author_id: str) -> bool:
+    return author_id.startswith("nva-")
+
+
 def split_name(full: str) -> tuple[str, str]:
     parts = (full or "").split()
     return (parts[-1], " ".join(parts[:-1])) if parts else ("", "")
@@ -96,7 +110,7 @@ class UnionFind:
 
 
 def find_merges(authors: dict, papers: dict, name_parts: dict, overrides: dict,
-                dir_match: dict | None = None):
+                dir_match: dict | None = None, links: list | None = None):
     """Return (UnionFind, merge log, unmerged name-match candidates)."""
     uf, log, candidates = UnionFind(), [], []
     dir_match = dir_match or {}
@@ -112,6 +126,10 @@ def find_merges(authors: dict, papers: dict, name_parts: dict, overrides: dict,
         if len(ids) > 1:
             merge(ids, "override")
 
+    for nva_id, scopus_id in links or []:
+        if nva_id in authors and scopus_id in authors:
+            merge([scopus_id, nva_id], "same paper in NVA and Scopus")
+
     by_orcid = defaultdict(list)
     for auid, a in authors.items():
         if a.get("orcid"):
@@ -120,14 +138,16 @@ def find_merges(authors: dict, papers: dict, name_parts: dict, overrides: dict,
         if len(ids) > 1:
             merge(ids, "same ORCID")
 
-    # Several Scopus IDs with a good name match to the same current employee.
+    # Several Scopus IDs (or an NVA person) with a good name match to the same current
+    # employee. Two Scopus IDs on the same paper are different people; an NVA person
+    # and a Scopus ID on the same paper are rather one person seen by both sources.
     by_employee = defaultdict(list)
     for auid, (entry, score) in dir_match.items():
         if score >= 2:
             by_employee[entry["id"]].append(auid)
     for ids in by_employee.values():
         for x, y in combinations(ids, 2):
-            if not set(authors[x]["papers"]) & set(authors[y]["papers"]):
+            if is_nva(x) != is_nva(y) or not set(authors[x]["papers"]) & set(authors[y]["papers"]):
                 merge([x, y], "same person in the UiS employee directory")
 
     def coauthors(auid: str) -> set[str]:
@@ -165,7 +185,7 @@ def fullest_name(names: list[str]) -> str:
 
 
 def year_of(paper: dict) -> int | None:
-    y = paper.get("year") or ""
+    y = str(paper.get("year") or "")
     return int(y) if y.isdigit() else None
 
 
@@ -185,7 +205,8 @@ def place(scopus_dept: str | None, entry: dict | None) -> tuple[str | None, str]
 
 def build(atlas: dict, name_parts: dict, overrides: dict, reference_year: int,
           recent_years: int, min_recent: int, directory: Directory | None = None,
-          unconfirmed_years: int | None = None, unconfirmed_min: int | None = None) -> dict:
+          unconfirmed_years: int | None = None, unconfirmed_min: int | None = None,
+          links: list | None = None) -> dict:
     authors = {a["scopus_id"]: a for a in atlas["authors"]}
     papers = atlas["papers"]
     recent_from = reference_year - recent_years + 1
@@ -199,14 +220,15 @@ def build(atlas: dict, name_parts: dict, overrides: dict, reference_year: int,
         if entry:
             dir_match[auid] = (entry, score)
 
-    uf, merge_log, candidates = find_merges(authors, papers, name_parts, overrides, dir_match)
+    uf, merge_log, candidates = find_merges(authors, papers, name_parts, overrides, dir_match, links)
     clusters = defaultdict(list)
     for auid in authors:
         clusters[uf.find(auid)].append(auid)
 
     people, canon = {}, {}
     for members in clusters.values():
-        members.sort(key=lambda i: -len(authors[i]["papers"]))
+        # A Scopus ID is the profile id whenever the person has one.
+        members.sort(key=lambda i: (is_nva(i), -len(authors[i]["papers"])))
         main_id = members[0]
         ov = {}
         for i in members:
@@ -224,10 +246,12 @@ def build(atlas: dict, name_parts: dict, overrides: dict, reference_year: int,
         dept, source = place(scopus_dept, entry)
         paper_ids = sorted({p for i in members for p in authors[i]["papers"]},
                            key=lambda p: (-(year_of(papers[p]) or 0), p))
-        years = [y for p in paper_ids if (y := year_of(papers[p]))]
+        pub_ids = [p for p in paper_ids if config.is_publication(papers[p])]
+        years = [y for p in pub_ids if (y := year_of(papers[p]))]
+        all_years = [y for p in paper_ids if (y := year_of(papers[p]))]
         # Papers with a UiS affiliation (older atlas_data.json: all papers were UiS papers).
         uis_ids = {p for i in members for p in authors[i].get("uis_papers", authors[i]["papers"])}
-        uis_years = [y for p in uis_ids if (y := year_of(papers[p]))]
+        uis_years = [y for p in uis_ids if config.is_publication(papers[p]) and (y := year_of(papers[p]))]
         # Scopus's own figures for the author profile with the most documents.
         metrics = max((authors[i]["scopus_metrics"] for i in members if authors[i].get("scopus_metrics")),
                       key=lambda m: m.get("documents") or 0, default=None)
@@ -235,6 +259,7 @@ def build(atlas: dict, name_parts: dict, overrides: dict, reference_year: int,
         people[main_id] = {
             "scopus_id": main_id,
             "scopus_ids": members,
+            "cristin_id": next((authors[i]["cristin_id"] for i in members if is_nva(i)), None),
             "name": ov.get("name") or (entry["name"] if entry and score >= 2 else fullest_name(
                 [authors[i]["name"] for i in members])),
             "orcid": next((authors[i]["orcid"] for i in members if authors[i].get("orcid")), None),
@@ -245,15 +270,16 @@ def build(atlas: dict, name_parts: dict, overrides: dict, reference_year: int,
             "uis_links": ({"nb": entry.get("url_nb"), "en": entry.get("url_en")}
                           if entry and not entry["excluded"] else None),
             "paper_ids": paper_ids,
-            "n_publications": len(paper_ids),
-            "n_uis": len(uis_ids),
+            "n_publications": len(pub_ids),
+            "n_uis": sum(1 for p in pub_ids if p in uis_ids),
+            "output_types": dict(Counter(papers[p].get("category", "article") for p in paper_ids).most_common()),
             "other_paper_ids": [p for p in paper_ids if p not in uis_ids],
             "scopus_metrics": metrics,
             "n_recent": sum(1 for y in years if y >= recent_from),
-            "citations": sum(papers[p]["citations"] for p in paper_ids),
+            "citations": sum(int(papers[p]["citations"] or 0) for p in paper_ids),
             "pubs_per_year": dict(sorted(Counter(str(y) for y in years).items())),
-            "first_year": min(years, default=None),
-            "last_year": max(years, default=None),
+            "first_year": min(all_years, default=None),
+            "last_year": max(all_years, default=None),
             "_include_override": ov.get("include"),
             "_confirmed": entry is not None and not entry["excluded"],
             "_source": "override" if ov.get("department") else source,
@@ -283,7 +309,7 @@ def build(atlas: dict, name_parts: dict, overrides: dict, reference_year: int,
         kw_count, kw_spellings = Counter(), defaultdict(Counter)
         co_count, dept_count = Counter(), Counter()
         for p in person["paper_ids"]:
-            for k in papers[p]["keywords"]:
+            for k in papers[p]["keywords"] or []:
                 kw_count[k.lower()] += 1
                 kw_spellings[k.lower()][k] += 1
             co = {canon[c] for c in papers[p]["coauthor_ids"] if c in canon} - {pid}
@@ -347,8 +373,29 @@ def write_csv(path, header: list[str], rows: list[list]) -> None:
         w.writerows(rows)
 
 
+def load_nva() -> list[dict]:
+    records = []
+    for path in sorted(config.RAW_NVA.glob("*.jsonl")) if config.RAW_NVA.exists() else []:
+        with path.open(encoding="utf-8") as f:
+            records.extend(json.loads(line) for line in f)
+    return records
+
+
+def profile_url(person: dict) -> str:
+    if is_nva(person["scopus_id"]):
+        return config.NVA_PERSON_URL.format(person["scopus_id"][4:])
+    return SCOPUS_AUTHOR_URL.format(person["scopus_id"])
+
+
 def main() -> None:
     atlas = json.loads(config.RAW_ATLAS.read_text(encoding="utf-8"))
+    nva_records = load_nva()
+    if nva_records:
+        atlas, links, nva_stats = nva.integrate(atlas, nva_records)
+        print("NVA: " + ", ".join(f"{v} {k}" for k, v in nva_stats.items()) + ".")
+    else:
+        links = []
+        print("No NVA data yet (run pipeline/collect_nva.py) – Scopus only.")
     overrides = json.loads(config.OVERRIDES.read_text(encoding="utf-8")).get("authors", {})
     name_parts, years_by_author = load_raw_docs()
     if config.DIRECTORY.exists():
@@ -363,7 +410,7 @@ def main() -> None:
 
     res = build(atlas, name_parts, overrides, config.REFERENCE_YEAR,
                 config.RECENT_YEARS, config.MIN_RECENT_PUBLICATIONS, directory,
-                config.UNCONFIRMED_RECENT_YEARS, config.UNCONFIRMED_MIN_RECENT_PUBLICATIONS)
+                config.UNCONFIRMED_RECENT_YEARS, config.UNCONFIRMED_MIN_RECENT_PUBLICATIONS, links)
     people = res["people"]
     included = [p for p in people.values() if p["included"]]
     included.sort(key=lambda p: (p["faculty"], p["department"], p["name"]))
@@ -382,6 +429,8 @@ def main() -> None:
     config.PROFILES.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
     config.MERGE_LOG.write_text(json.dumps(res["merge_log"], ensure_ascii=False, indent=1),
                                 encoding="utf-8")
+    config.PAPERS.write_text(json.dumps(atlas["papers"], ensure_ascii=False, separators=(",", ":")),
+                             encoding="utf-8")
 
     # ---- review files for the project owner
     listed = [p for p in people.values() if p["department"] or p["_directory"]]
@@ -389,12 +438,12 @@ def main() -> None:
               ["status", "scopus_id", "other_scopus_ids", "name", "faculty", "department",
                "department_source", "directory_name", "directory_match", "position",
                "n_publications", f"n_since_{res['recent_from']}", "last_year",
-               "affiliation_example", "scopus_url"],
+               "affiliation_example", "profile_url"],
               [["included" if p["included"] else "dropped", p["scopus_id"],
                 " ".join(p["scopus_ids"][1:]), p["name"], p["faculty"], p["department"],
                 p["_source"], (p["_directory"] or ["", ""])[0], (p["_directory"] or ["", ""])[1],
                 (p["position"] or {}).get("nb"), p["n_publications"], p["n_recent"], p["last_year"],
-                (p["_affiliations"] or [""])[0], SCOPUS_AUTHOR_URL.format(p["scopus_id"])]
+                (p["_affiliations"] or [""])[0], profile_url(p)]
                for p in sorted(listed, key=lambda p: (not p["included"], p["faculty"] or "~",
                                                       p["department"] or "", p["name"]))])
     unmatched = sorted((p for p in people.values()
@@ -421,13 +470,13 @@ def main() -> None:
 
     # ---- report
     confirmed = sum(1 for p in included if p["_confirmed"])
-    print(f"{len(atlas['authors'])} Scopus author IDs → {len(people)} people after "
+    print(f"{len(atlas['authors'])} Scopus author IDs and NVA people → {len(people)} people after "
           f"{len(res['merge_log'])} merges ({len(res['candidates'])} possible duplicates left for review).")
     rule = (f"≥{config.MIN_RECENT_PUBLICATIONS} papers since {res['recent_from']}"
             if config.MIN_RECENT_PUBLICATIONS else "all")
     print(f"Included: {len(included)} – {confirmed} confirmed in the employee directory "
           f"({rule}), "
-          f"{len(included) - confirmed} from Scopus only "
+          f"{len(included) - confirmed} not in the directory "
           f"(≥{config.UNCONFIRMED_MIN_RECENT_PUBLICATIONS} since {res['unconfirmed_from']}).\n")
     by_faculty = defaultdict(Counter)
     for p in included:
@@ -437,7 +486,8 @@ def main() -> None:
         print(f"  {sum(depts.values()):4d}  {f['name']}")
         for dept, n in depts.most_common():
             print(f"        {n:4d}  {dept}")
-    years_by_person = {pid: [y for p in person["paper_ids"] if (y := year_of(atlas["papers"][p]))]
+    years_by_person = {pid: [y for p in person["paper_ids"] if config.is_publication(atlas["papers"][p])
+                             and (y := year_of(atlas["papers"][p]))]
                        for pid, person in people.items() if person["department"]}
     print("\nPeople with a department under other inclusion rules (for tuning config.py):")
     print("\n".join(threshold_table(years_by_person, config.REFERENCE_YEAR)))

@@ -4,7 +4,7 @@ Stage 4c – Match UiS researchers to open and planned funding calls, and sugges
 internal collaborators who complement them.
 
 Input:  config.CALLS, config.CALL_PROFILES (optional), config.PROFILES,
-        paper vectors from embed.py, papers in config.RAW_ATLAS
+        paper vectors from embed.py, papers in config.PAPERS (build_profiles.py)
 Output: config.FUNDING_MATCHES
 
 Method (settings in config.FUNDING_MATCH; transparent and reproducible):
@@ -318,7 +318,8 @@ def term_hits(terms: list[str], papers: list[dict]) -> tuple[np.ndarray, list[li
     return hits, found, [t for t, _ in pats]
 
 
-NOT_EVIDENCE_TYPES = {"Editorial", "Erratum", "Note", "Letter", "Retracted"}
+NOT_EVIDENCE_TYPES = {"Editorial", "Erratum", "Note", "Letter", "Retracted",   # Scopus
+                      "JournalLeader", "JournalLetter", "MediaReaderOpinion", "MediaBlogPost"}  # NVA
 NOT_EVIDENCE_TITLE = re.compile(r"^\s*(corrigendum|correction|erratum|preface|editorial|retraction)", re.I)
 
 
@@ -331,7 +332,7 @@ def main() -> None:
     calls = json.loads(config.CALLS.read_text(encoding="utf-8"))
     profiles_doc = json.loads(config.PROFILES.read_text(encoding="utf-8"))
     people = profiles_doc["researchers"]
-    raw_papers = json.loads(config.RAW_ATLAS.read_text(encoding="utf-8"))["papers"]
+    raw_papers = json.loads(config.PAPERS.read_text(encoding="utf-8"))
     call_profiles = (json.loads(config.CALL_PROFILES.read_text(encoding="utf-8"))
                      if config.CALL_PROFILES.exists() else {})
     paper_ids, P = embed.load_papers()
