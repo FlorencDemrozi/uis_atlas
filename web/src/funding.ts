@@ -129,11 +129,14 @@ interface EncryptedFile {
   data: string;
 }
 
+/** funding.head.json: what is needed to derive the key, without the data. */
+type FileHead = Pick<EncryptedFile, "format" | "kdf">;
+
 const KEY_STORE = "atlas-funding-key";
 const b64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 const toB64 = (b: Uint8Array) => btoa(String.fromCharCode(...b));
 
-async function deriveKey(password: string, file: EncryptedFile): Promise<Uint8Array<ArrayBuffer>> {
+async function deriveKey(password: string, file: FileHead): Promise<Uint8Array<ArrayBuffer>> {
   const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
   const bits = await crypto.subtle.deriveBits(
     { name: "PBKDF2", hash: "SHA-256", salt: b64(file.kdf.salt), iterations: file.kdf.iterations }, base, 256);
@@ -269,9 +272,38 @@ export interface FundingValue {
 export const FundingContext = createContext<FundingValue>(null as unknown as FundingValue);
 export const useFunding = () => useContext(FundingContext);
 
+// The encrypted data (about 3 MB) is fetched only when it can be opened: after the
+// password is typed, or with a key saved earlier in this browser session. Until then
+// only funding.head.json (a few hundred bytes) is read, so public pages stay light.
+let body: Promise<EncryptedFile> | null = null;
+function fetchBody(): Promise<EncryptedFile> {
+  body ??= fetch("./data/funding.enc.json").then((res) => {
+    if (!res.ok) throw new Error(String(res.status));
+    return res.json() as Promise<EncryptedFile>;
+  });
+  body.catch(() => { body = null; });   // try again next time
+  return body;
+}
+
+async function fetchHead(): Promise<FileHead | null> {
+  const res = await fetch("./data/funding.head.json");
+  if (res.ok) return (await res.json()) as FileHead;
+  // Exports from before the head file: the head is part of the data file.
+  const full = await fetch("./data/funding.enc.json");
+  if (full.status === 404) return null;
+  if (!full.ok) throw new Error(String(full.status));
+  const f = (await full.json()) as EncryptedFile;
+  body = Promise.resolve(f);
+  return f;
+}
+
+function forgetKey(): void {
+  try { sessionStorage.removeItem(KEY_STORE); } catch { /* ignore */ }
+}
+
 export function useFundingState(): FundingValue {
   const [state, setState] = useState<FundingState>({ status: "idle" });
-  const [file, setFile] = useState<EncryptedFile | null>(null);
+  const [head, setHead] = useState<FileHead | null>(null);
 
   const load = useCallback(() => {
     if (state.status !== "idle") return;
@@ -280,40 +312,44 @@ export function useFundingState(): FundingValue {
       return;
     }
     setState({ status: "loading" });
-    fetch("./data/funding.enc.json")
-      .then(async (res) => {
-        if (res.status === 404) return setState({ status: "missing" });
-        if (!res.ok) throw new Error(String(res.status));
-        const f = (await res.json()) as EncryptedFile;
-        setFile(f);
+    fetchHead()
+      .then(async (h) => {
+        if (!h) return setState({ status: "missing" });
+        setHead(h);
         let saved: string | null = null;
         try { saved = sessionStorage.getItem(KEY_STORE); } catch { /* storage unavailable */ }
         const [salt, key] = saved?.split(":") ?? [];
-        if (salt === f.kdf.salt && key) {
+        if (salt === h.kdf.salt && key) {
+          const f = await fetchBody();
           try { return setState({ status: "ready", data: await decrypt(f, b64(key)) }); } catch { /* key outdated */ }
         }
+        if (saved) forgetKey();   // from an older export or otherwise unusable
         setState({ status: "locked" });
       })
       .catch((e) => setState({ status: "error", error: String(e) }));
   }, [state.status]);
 
   const unlock = useCallback(async (password: string) => {
-    if (!file) return false;
-    const raw = await deriveKey(password, file);
+    if (!head) return false;
+    let [raw, f] = await Promise.all([deriveKey(password, head), fetchBody()]);
+    if (f.kdf.salt !== head.kdf.salt) {   // a new export arrived meanwhile: use its salt
+      raw = await deriveKey(password, f);
+      setHead(f);
+    }
     try {
-      const data = await decrypt(file, raw);
-      try { sessionStorage.setItem(KEY_STORE, `${file.kdf.salt}:${toB64(raw)}`); } catch { /* ignore */ }
+      const data = await decrypt(f, raw);
+      try { sessionStorage.setItem(KEY_STORE, `${f.kdf.salt}:${toB64(raw)}`); } catch { /* ignore */ }
       setState({ status: "ready", data });
       return true;
     } catch {
       return false;
     }
-  }, [file]);
+  }, [head]);
 
   const lock = useCallback(() => {
-    try { sessionStorage.removeItem(KEY_STORE); } catch { /* ignore */ }
-    setState(file ? { status: "locked" } : { status: "idle" });
-  }, [file]);
+    forgetKey();
+    setState(head ? { status: "locked" } : { status: "idle" });
+  }, [head]);
 
   return useMemo(() => ({ state, load, unlock, lock }), [state, load, unlock, lock]);
 }

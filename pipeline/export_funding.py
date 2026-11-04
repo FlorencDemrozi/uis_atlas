@@ -44,6 +44,10 @@ OUT = config.PUBLIC / "funding.enc.json"
 DETAIL_SHARDS = 16
 DETAIL_OUT = config.PUBLIC / "funding.detail-{:02d}.enc.json"
 IDEAS_OUT = config.PUBLIC / "funding.ideas.enc.json"
+# Format and key-derivation settings only (no data; the same values are in every
+# encrypted file). The site reads this small file first and fetches funding.enc.json
+# only once someone unlocks, so public profile pages do not download it.
+HEAD_OUT = config.PUBLIC / "funding.head.json"
 # Fields read outside the call page (list, filters, profile, match details); every
 # other field goes to the detail shards.
 INDEX_FIELDS = {"call_id", "title", "summary", "status", "funder", "programme", "programme_part", "parent_call",
@@ -248,6 +252,8 @@ def main() -> None:
              + ([IDEAS_OUT] if ideas else []))
     for path, plain in zip(files, plains):
         path.write_text(json.dumps(encrypt(plain.encode("utf-8"), key, salt)), encoding="utf-8")
+    head = json.loads(OUT.read_text(encoding="utf-8"))
+    HEAD_OUT.write_text(json.dumps({"format": head["format"], "kdf": head["kdf"]}), encoding="utf-8")
     enc = sum(p.stat().st_size for p in files[1:1 + DETAIL_SHARDS]) / 1e6
     print(f"Funding data: {len(index['calls'])} calls, {sum(len(v) for v in data['matches'].values())} matches -> "
           f"{OUT.name} ({OUT.stat().st_size / 1e6:.2f} MB encrypted, {len(plains[0]) / 1e6:.2f} MB plain) "
