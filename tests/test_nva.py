@@ -90,3 +90,52 @@ def test_profile_counts_publications_and_output_types():
     assert person["output_types"] == {"article": 1, "chapter": 1, "presentation": 1}
     assert person["citations"] == 4
     assert person["pubs_per_year"] == {"2025": 2}
+
+
+def test_nva_duplicates_are_counted_once():
+    recs = [
+        trim(hit("d1", "AcademicChapter", "A chapter registered twice in NVA", 2024,
+                 [("7", "Kari Nordmann", "Creator", "217.8.4.0")], doi="10.9/dup")),
+        trim(hit("d2", "AcademicChapter", "A chapter registered twice in NVA", 2024,
+                 [("8", "Ola Nordmann", "Creator", "217.8.4.0")], doi="10.9/DUP")),
+        trim(hit("d3", "ReportResearch", "A report registered twice without any DOI", 2024,
+                 [("7", "Kari Nordmann", "Creator", "217.8.4.0")])),
+        trim(hit("d4", "ReportResearch", "A report registered twice without any DOI", 2024,
+                 [("7", "Kari Nordmann", "Creator", "217.8.4.0")])),
+        # Same DOI but a different kind of output (a talk about the paper): kept apart.
+        trim(hit("d5", "ConferenceLecture", "A talk", 2024,
+                 [("7", "Kari Nordmann", "Creator", "217.8.4.0")], doi="10.9/dup")),
+    ]
+    merged, _, stats = integrate({"authors": [], "papers": {}}, recs)
+    assert stats["NVA only"] == 3 and stats["NVA duplicate"] == 2
+    assert sorted(merged["papers"]["nva-d1"]["coauthor_ids"]) == ["nva-7", "nva-8"]
+    assert "nva-d2" not in merged["papers"] and "nva-d4" not in merged["papers"]
+    nva7 = next(a for a in merged["authors"] if a["scopus_id"] == "nva-7")
+    assert nva7["papers"] == ["nva-d1", "nva-d3", "nva-d5"]
+
+
+def test_unlinked_twin_still_listed_on_the_paper():
+    """Kari's NVA record matches two different Scopus authors equally often, so she is
+    not linked to either; the papers must still list her, as her profile lists them."""
+    base = {"authors": [{"scopus_id": "s1", "name": "Kari Nordmann", "orcid": None, "department": CS,
+                         "papers": ["e1"], "uis_papers": ["e1"]},
+                        {"scopus_id": "s2", "name": "K. Nordmann", "orcid": None, "department": CS,
+                         "papers": ["e2"], "uis_papers": ["e2"]}],
+            "papers": {"e1": {"title": "First paper in both Scopus and NVA", "year": "2025", "type": "Article",
+                              "doi": "10.1/a", "citations": 0, "keywords": [], "coauthor_ids": ["s1"]},
+                       "e2": {"title": "Second paper in both Scopus and NVA", "year": "2025", "type": "Article",
+                              "doi": "10.1/b", "citations": 0, "keywords": [], "coauthor_ids": ["s2"]}}}
+    recs = [trim(hit("m1", "AcademicArticle", "First paper in both Scopus and NVA", 2025,
+                     [("7", "Kari Nordmann", "Creator", "217.8.4.0")], doi="10.1/a")),
+            trim(hit("m2", "AcademicArticle", "Second paper in both Scopus and NVA", 2025,
+                     [("7", "Kari Nordmann", "Creator", "217.8.4.0")], doi="10.1/b"))]
+    merged, links, _ = integrate(base, recs)
+    assert links == []
+    assert merged["papers"]["e1"]["coauthor_ids"] == ["s1", "nva-7"]
+    assert merged["papers"]["e2"]["coauthor_ids"] == ["s2", "nva-7"]
+
+
+def test_linked_twin_is_not_added_twice():
+    merged, links, _ = integrate(atlas(), records())
+    assert links == [("nva-7", "s1")]
+    assert merged["papers"]["e1"]["coauthor_ids"] == ["s1"]

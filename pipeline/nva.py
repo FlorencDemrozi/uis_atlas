@@ -118,6 +118,9 @@ def integrate(atlas: dict, records: list[dict]) -> tuple[dict, list[tuple[str, s
 
     people = {}
     votes = defaultdict(Counter)
+    twin_of = {}            # (NVA person, Scopus paper) -> the one Scopus author with a compatible name
+    nva_by_doi = {}         # (DOI, category) -> NVA-only paper id
+    nva_by_title = {}       # (title, year, category, venue) -> NVA-only publication id
     stats = Counter()
     seen = set()
     for r in records:
@@ -134,19 +137,32 @@ def integrate(atlas: dict, records: list[dict]) -> tuple[dict, list[tuple[str, s
             y = int(r["year"]) if r["year"].isdigit() else 0
             eid = next((by_title[k] for k in [(nt, str(y)), (nt, str(y - 1)), (nt, str(y + 1))]
                         if k in by_title), None)
+        category = config.category_of(r["type"])
+        doi_key = (r["doi"], category) if r["doi"] else None
+        title_key = ((nt, r["year"], category, norm_title(r["venue"]))
+                     if len(nt) >= 20 and category in config.PUBLICATION_CATEGORIES else None)
         if eid:
             stats["also in Scopus"] += 1
             papers[eid]["nva_id"] = r["id"]
             pid = eid
+        elif (dup := nva_by_doi.get(doi_key) or nva_by_title.get(title_key)):
+            # The same output registered twice in NVA (same DOI, or same title, year
+            # and venue): count it once.
+            stats["NVA duplicate"] += 1
+            pid = dup
         else:
             stats["NVA only"] += 1
             pid = f"nva-{r['id']}"
             papers[pid] = {
                 "title": r["title"], "year": r["year"], "venue": r["venue"], "type": r["type"],
                 "doi": r["doi"], "citations": None, "keywords": r["tags"], "abstract": r["abstract"],
-                "n_authors": r["n_authors"], "coauthor_ids": [], "category": config.category_of(r["type"]),
+                "n_authors": r["n_authors"], "coauthor_ids": [], "category": category,
                 "source": "nva", "url": config.NVA_PUBLICATION_URL.format(r["id"]),
             }
+            if doi_key:
+                nva_by_doi[doi_key] = pid
+            if title_key:
+                nva_by_title[title_key] = pid
         for c in contributors:
             aid = f"nva-{c['id']}"
             person = people.setdefault(aid, {"names": Counter(), "papers": set(), "observed": []})
@@ -158,6 +174,7 @@ def integrate(atlas: dict, records: list[dict]) -> tuple[dict, list[tuple[str, s
                      if a in scopus_authors and names_compatible(c["name"], scopus_authors[a]["name"])]
             if eid and len(twins) == 1:
                 votes[aid][twins[0]] += 1
+                twin_of[(aid, pid)] = twins[0]
             elif aid not in papers[pid]["coauthor_ids"]:
                 papers[pid]["coauthor_ids"].append(aid)
 
@@ -166,6 +183,12 @@ def integrate(atlas: dict, records: list[dict]) -> tuple[dict, list[tuple[str, s
         (best, n), *rest = v.most_common()
         if not rest or n > rest[0][1]:
             links.append((aid, best))
+    # A person whose twin on a paper did not become their link would otherwise list
+    # the paper without the paper listing them: add them as an author of their own.
+    linked = dict(links)
+    for (aid, pid), twin in twin_of.items():
+        if linked.get(aid) != twin and aid not in papers[pid]["coauthor_ids"]:
+            papers[pid]["coauthor_ids"].append(aid)
     authors = list(atlas["authors"])
     for aid, person in people.items():
         pids = sorted(person["papers"])
