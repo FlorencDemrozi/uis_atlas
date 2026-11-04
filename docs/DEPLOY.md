@@ -115,6 +115,7 @@ Type=oneshot
 User=atlas
 WorkingDirectory=/home/atlas/uis_atlas
 ExecStart=/home/atlas/venvs/atlas/bin/python pipeline/run_weekly.py --publish
+TimeoutStartSec=12h
 
 # /etc/systemd/system/atlas-weekly.timer
 [Timer]
@@ -127,6 +128,12 @@ WantedBy=timers.target
 `sudo systemctl enable --now atlas-weekly.timer`; run once now with
 `sudo systemctl start atlas-weekly.service`; status with `systemctl list-timers` and
 `journalctl -u atlas-weekly`.
+
+**Overlapping runs and hung steps.** Only one pipeline run can run at a time
+(`run_weekly.py` and `run_all.py` share an OS file lock, `logs/.run.lock`): a second
+run started meanwhile stops at once with a message. Each collector and each
+`run_all.py` stage is stopped after `config.STEP_TIMEOUT` (4 h), the website build
+after 30 min; the run then fails and reports it like any other failure.
 
 ## Maintenance
 

@@ -213,6 +213,11 @@ SUMMARIES = INTERIM / "summaries.json"
 EMBEDDINGS_DIR = INTERIM / "embeddings"
 
 LOGS = ROOT / "logs"                    # run_weekly.py logs (local only, not committed)
+RUN_LOCK = LOGS / ".run.lock"           # one pipeline run at a time (run_weekly.py, run_all.py)
+# Time limits, so a hung step (network, model download, npm) cannot block every later
+# run. Generous: a first full Scopus collection or regenerating all summaries takes hours.
+STEP_TIMEOUT = 4 * 3600                 # seconds per collector and per run_all.py stage
+WEB_BUILD_TIMEOUT = 30 * 60             # npm run build
 
 EXCLUSIONS = CONFIG_DIR / "exclusions.json"
 OVERRIDES = CONFIG_DIR / "overrides.json"

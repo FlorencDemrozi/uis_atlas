@@ -29,11 +29,13 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 from datetime import datetime
 from pathlib import Path
 
 import notify
-from config import LOGS, ROOT
+import runlock
+from config import LOGS, ROOT, STEP_TIMEOUT, WEB_BUILD_TIMEOUT
 
 HERE = Path(__file__).resolve().parent
 WEB = ROOT / "web"
@@ -48,7 +50,9 @@ def say(text: str) -> None:
     LOG.flush()
 
 
-def run(cmd: list[str], cwd: Path | None = None) -> bool:
+def run(cmd: list[str], cwd: Path | None = None, timeout: float | None = STEP_TIMEOUT) -> bool:
+    """Run one step, its output going to the console and the log. A step still running
+    after `timeout` seconds is killed and counts as failed (None: no limit)."""
     say(f"\n=== {Path(cmd[-1]).name if cmd[0] == sys.executable else ' '.join(cmd[1:])} ===")
     env = {**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8"}
     try:
@@ -58,9 +62,27 @@ def run(cmd: list[str], cwd: Path | None = None) -> bool:
     except OSError as exc:
         say(f"Could not start: {exc}")
         return False
-    for line in p.stdout:
-        say(line.rstrip("\n"))
-    return p.wait() == 0
+    timed_out = threading.Event()
+
+    def kill() -> None:
+        timed_out.set()
+        p.kill()
+
+    timer = threading.Timer(timeout, kill) if timeout else None
+    if timer:
+        timer.daemon = True
+        timer.start()
+    try:
+        for line in p.stdout:
+            say(line.rstrip("\n"))
+        code = p.wait()
+    finally:
+        if timer:
+            timer.cancel()
+    if timed_out.is_set():
+        say(f"Stopped: still running after {timeout // 60:.0f} min (time limit).")
+        return False
+    return code == 0
 
 
 def git(*args: str) -> bool:
@@ -101,6 +123,8 @@ def main() -> None:
     LOG = (LOGS / f"weekly-{started:%Y-%m-%d_%H%M}.log").open("w", encoding="utf-8")
     prune_logs()
     say(f"Weekly update started {started:%Y-%m-%d %H:%M}")
+    if not runlock.acquire():
+        stop("Weekly update not started: another pipeline run is still in progress.")
 
     if args.publish and not git("pull", "--ff-only"):
         stop("Weekly update stopped: could not update the repository (git pull --ff-only).")
@@ -113,16 +137,16 @@ def main() -> None:
     FAILED[:] = [c for c in collectors if not run([sys.executable, str(HERE / c.split()[0]), *c.split()[1:]])]
     failed = FAILED
 
-    if not run([sys.executable, str(HERE / "run_all.py")]):
+    if not run([sys.executable, str(HERE / "run_all.py")], timeout=None):   # each stage has its own limit
         stop("Weekly update stopped: a processing stage failed (see above). The website was not rebuilt.")
     if not args.no_web:
         npm = shutil.which("npm") or shutil.which("npm.cmd")
-        if not npm or not run([npm, "run", "build"], cwd=WEB):
+        if not npm or not run([npm, "run", "build"], cwd=WEB, timeout=WEB_BUILD_TIMEOUT):
             stop("Weekly update: data updated, but the website build failed.")
     if args.publish and not publish():
         stop("Weekly update: data updated, but publishing failed (see above).")
 
-    took = (datetime.now() - started).seconds // 60
+    took = int((datetime.now() - started).total_seconds() // 60)
     say(f"\nWeekly update finished in {took} min." + (f" Collectors with problems (old data used): "
                                                      f"{', '.join(failed)}." if failed else ""))
     tell(f"UiS Atlas weekly update OK ({took} min)" + (" – with collector problems" if failed else ""))

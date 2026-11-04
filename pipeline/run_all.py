@@ -6,6 +6,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+import config
+import runlock
+
 HERE = Path(__file__).resolve().parent
 STAGES = [
     "build_profiles.py", "summarize.py", "embed.py", "export_public.py",          # researchers
@@ -16,10 +19,15 @@ STAGES = [
     "export_funding.py",
 ]
 
+if not runlock.acquire():
+    sys.exit("Another pipeline run is in progress (run_weekly.py or run_all.py): not started.")
 for stage in STAGES:
     print(f"\n=== {stage} ===")
     script, *args = stage.split()
-    result = subprocess.run([sys.executable, str(HERE / script), *args])
+    try:
+        result = subprocess.run([sys.executable, str(HERE / script), *args], timeout=config.STEP_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        sys.exit(f"Stopped: {stage} took longer than {config.STEP_TIMEOUT // 60} min.")
     if result.returncode != 0:
         sys.exit(f"Stopped: {stage} failed.")
 print("\nPipeline complete. Public data is in data/public/.")
