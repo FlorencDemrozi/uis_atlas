@@ -22,7 +22,18 @@ const processTerm = (term: string) => {
   return STOPWORDS.has(t) ? null : t;
 };
 
+// One index per loaded atlas: building it (56k paper titles) takes a noticeable
+// moment, so it is kept for the session instead of being rebuilt each time the
+// Search view opens again.
+const indexes = new WeakMap<Atlas, SearchIndex>();
+
 export function buildIndex(atlas: Atlas): SearchIndex {
+  let index = indexes.get(atlas);
+  if (!index) indexes.set(atlas, index = createIndex(atlas));
+  return index;
+}
+
+function createIndex(atlas: Atlas): SearchIndex {
   const people = new MiniSearch({
     fields: ["name", "keywords", "tags", "summary"],
     processTerm,
