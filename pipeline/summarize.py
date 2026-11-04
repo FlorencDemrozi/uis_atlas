@@ -78,6 +78,14 @@ def source_hash(text: str) -> str:
     return hashlib.sha256(f"{config.SUMMARY_MODEL}|{PROMPT_VERSION}|{text}".encode()).hexdigest()
 
 
+def stable_hash(r: dict, selected: list[dict]) -> str:
+    """Cache key that ignores the order of the selected papers. Citations decide the
+    order in the prompt, so a weekly citation refresh alone must not trigger a new
+    summary; only a change in which papers are selected, or in their text, does."""
+    ordered = sorted(selected, key=lambda p: (not config.is_publication(p), -int(p["year"]), p["title"]))
+    return source_hash(prompt_for(r, ordered))
+
+
 def valid(out: dict | None, abstracts: list[str]) -> str | None:
     """Reason the answer is unusable, or None if it is fine."""
     if not out or not out.get("summary", "").strip():
@@ -113,38 +121,55 @@ def main() -> None:
 
     done, failed = [], []
     written = unchanged = no_recent = 0
-    for i, r in enumerate(todo, 1):
-        selected = select_papers(r, papers)
-        if not selected:
-            no_recent += 1
-            continue
-        text = prompt_for(r, selected)
-        h = source_hash(text)
-        if cache.get(r["scopus_id"], {}).get("source_hash") == h:
-            unchanged += 1
+    migrated = False
+
+    def save() -> None:   # temp file + rename: an interrupted run never leaves a broken cache
+        tmp = config.SUMMARIES.with_suffix(".tmp")
+        tmp.write_text(json.dumps(cache, ensure_ascii=False, indent=1), encoding="utf-8")
+        tmp.replace(config.SUMMARIES)
+
+    try:
+        for i, r in enumerate(todo, 1):
+            selected = select_papers(r, papers)
+            if not selected:
+                no_recent += 1
+                continue
+            text = prompt_for(r, selected)
+            h = stable_hash(r, selected)
+            cached = cache.get(r["scopus_id"], {})
+            if cached.get("source_hash") in (h, source_hash(text)):   # 2nd: entries from before stable_hash
+                if cached["source_hash"] != h:
+                    cached["source_hash"] = h
+                    migrated = True
+                unchanged += 1
+                done.append(r)
+                continue
+            out = None
+            for _ in range(2):  # one retry if the answer fails the checks
+                out = llm.ask_json(cl, SYSTEM, text, SCHEMA, effort="low")
+                problem = valid(out, [p.get("abstract") for p in selected])
+                if problem is None:
+                    break
+            if problem:
+                failed.append((r["name"], problem))
+                print(f"  [{i}/{len(todo)}] {r['name']}: rejected ({problem})")
+                continue
+            cache[r["scopus_id"]] = {
+                "summary": out["summary"].strip(),
+                "tags": [t.strip() for t in out["tags"]][:6],
+                "source_hash": h,
+                "model": config.SUMMARY_MODEL,
+                "generated": datetime.now().isoformat(timespec="seconds"),
+            }
             done.append(r)
-            continue
-        out = None
-        for _ in range(2):  # one retry if the answer fails the checks
-            out = llm.ask_json(cl, SYSTEM, text, SCHEMA, effort="low")
-            problem = valid(out, [p.get("abstract") for p in selected])
-            if problem is None:
-                break
-        if problem:
-            failed.append((r["name"], problem))
-            print(f"  [{i}/{len(todo)}] {r['name']}: rejected ({problem})")
-            continue
-        cache[r["scopus_id"]] = {
-            "summary": out["summary"].strip(),
-            "tags": [t.strip() for t in out["tags"]][:6],
-            "source_hash": h,
-            "model": config.SUMMARY_MODEL,
-            "generated": datetime.now().isoformat(timespec="seconds"),
-        }
-        config.SUMMARIES.write_text(json.dumps(cache, ensure_ascii=False, indent=1), encoding="utf-8")
-        done.append(r)
-        written += 1
-        print(f"  [{i}/{len(todo)}] {r['name']}")
+            written += 1
+            if written % 25 == 0:
+                save()
+            print(f"  [{i}/{len(todo)}] {r['name']}")
+
+    finally:   # also on Ctrl+C or a fatal API error: keep what was written
+        if written or migrated:
+            save()
 
     if args.sample:
         config.REVIEW_DIR.mkdir(parents=True, exist_ok=True)

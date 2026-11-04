@@ -24,17 +24,31 @@ def client():
 
 def ask_json(cl, system: str, user: str, schema: dict, effort: str = "low",
              max_tokens: int = 8000) -> dict | None:
-    """One request, answer parsed as JSON. None if the model declined or ran out of room."""
-    resp = cl.beta.messages.create(
-        model=config.SUMMARY_MODEL,
-        max_tokens=max_tokens,
-        system=system,
-        messages=[{"role": "user", "content": user}],
-        output_config={"effort": effort, "format": {"type": "json_schema", "schema": schema}},
-        betas=[FALLBACK_BETA],
-        fallbacks="default",
-    )
+    """One request, answer parsed as JSON. None if the model declined, ran out of
+    room, gave unparseable JSON or the request failed after the SDK's retries, so
+    one bad item never stops a whole stage. A wrong or unauthorised key still
+    raises: every later request would fail the same way."""
+    import anthropic
+    try:
+        resp = cl.beta.messages.create(
+            model=config.SUMMARY_MODEL,
+            max_tokens=max_tokens,
+            system=system,
+            messages=[{"role": "user", "content": user}],
+            output_config={"effort": effort, "format": {"type": "json_schema", "schema": schema}},
+            betas=[FALLBACK_BETA],
+            fallbacks="default",
+        )
+    except (anthropic.AuthenticationError, anthropic.PermissionDeniedError):
+        raise
+    except anthropic.APIError as e:
+        print(f"  Claude API error ({type(e).__name__}): {e}")
+        return None
     if resp.stop_reason in ("refusal", "max_tokens"):
         return None
     text = next((b.text for b in resp.content if b.type == "text"), None)
-    return json.loads(text) if text else None
+    try:
+        return json.loads(text) if text else None
+    except json.JSONDecodeError:
+        print("  Claude answer was not valid JSON")
+        return None
