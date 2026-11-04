@@ -26,6 +26,9 @@ interface ExtEdge { source: Node; target: InstNode; w: number }
 type SimNode = Node | InstNode;
 const isInst = (n: SimNode): n is InstNode => "inst" in n;
 const EXT_TOP = 40;   // institutions shown with "External partners"
+// Links to institutions drawn while nothing is selected or pointed at: only those with at
+// least this many shared papers (the rest appear for the researcher or institution in focus).
+const EXT_MIN_PAPERS = 3;
 interface View { k: number; x: number; y: number }
 
 const pairKey = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
@@ -304,44 +307,40 @@ export function NetworkView({ atlas, route }: { atlas: Atlas; route: Route }) {
     drag.current = null;
   };
 
+  // Classes from the selection (focus, institution, highlighted group). Pointing at a node
+  // does not change them: the drawn layers stay as they are and the hover overlay below
+  // repaints only that node's links, which keeps large networks smooth.
   const nodeClass = (n: Node) => {
     if (focusInst) return levels.has(n.id) ? "" : " dim";
-    if (hoverInst) return g.peopleOf.get(hoverInst.id)?.some((e) => e.source.id === n.id) ? "" : " dim";
     if (focus) {
       const l = levels.get(n.id);
       if (l === undefined) return " dim";
       return l === 0 ? " focus" : l === 2 ? " far" : "";
     }
-    if (hover) return n.id === hover.id || g.neighbours.get(hover.id)?.has(n.id) ? "" : " dim";
     if (focusDept) return g.groupOf(n) === focusDept ? "" : " dim";
     return "";
   };
   const edgeClass = (e: Edge) => {
-    if (focusInst || hoverInst) return " dim";
+    if (focusInst) return " dim";
     if (focus) {
       const a = levels.get(e.source.id), b = levels.get(e.target.id);
       if (a === undefined || b === undefined) return " dim";
       if (a === 0 || b === 0) return " hl";
       return a === 2 && b === 2 ? " dim" : " soft";
     }
-    if (hover) return e.source.id === hover.id || e.target.id === hover.id ? " hl" : " dim";
     if (focusDept) return g.groupOf(e.source) === focusDept || g.groupOf(e.target) === focusDept ? "" : " dim";
     return "";
   };
   const linkedTo = (n: InstNode, id: string) => g.peopleOf.get(n.id)?.some((e) => e.source.id === id);
   const instClass = (n: InstNode) => {
     if (focusInst) return n.id === focusInst ? " focus" : " dim";
-    if (hoverInst) return n.id === hoverInst.id ? "" : " dim";
     if (focus) return linkedTo(n, focus) ? "" : " dim";
-    if (hover) return linkedTo(n, hover.id) ? "" : " dim";
     if (focusDept) return g.peopleOf.get(n.id)?.some((e) => g.groupOf(e.source) === focusDept) ? "" : " dim";
     return "";
   };
   const extEdgeClass = (e: ExtEdge) => {
     if (focusInst) return e.target.id === focusInst ? " hl" : " dim";
-    if (hoverInst) return e.target.id === hoverInst.id ? " hl" : " dim";
     if (focus) return e.source.id === focus ? " hl" : " dim";
-    if (hover) return e.source.id === hover.id ? " hl" : " dim";
     if (focusDept) return g.groupOf(e.source) === focusDept ? "" : " dim";
     return "";
   };
@@ -423,6 +422,95 @@ export function NetworkView({ atlas, route }: { atlas: Atlas; route: Route }) {
   }, [g, focus, focusInst, hover, hoverInst, fontSize]);
   const short = (name: string) => (name.length > 34 ? `${name.slice(0, 32)}…` : name);
 
+  // Drawn layers, rebuilt only when the graph or the selection changes (not on hover,
+  // pan or zoom): line widths are in screen pixels (non-scaling), so zooming leaves them.
+  const edgesOf = useMemo(() => {
+    const m = new Map<string, Edge[]>();
+    for (const e of g.edges) {
+      (m.get(e.source.id) ?? m.set(e.source.id, []).get(e.source.id)!).push(e);
+      (m.get(e.target.id) ?? m.set(e.target.id, []).get(e.target.id)!).push(e);
+    }
+    return m;
+  }, [g]);
+  const edgeWidth = (e: Edge) => 0.35 + Math.log2(1 + e.w) * 0.3;
+  const extWidth = (e: ExtEdge) => 0.3 + Math.log2(1 + e.w) * 0.25;
+  const linkLayer = useMemo(() => (
+    <g class="base">
+      <g>
+        {g.extEdges.filter((e) => e.w >= EXT_MIN_PAPERS || e.source.id === focus || e.target.id === focusInst)
+          .map((e) => (
+            <line key={`${e.source.id}>${e.target.id}`} class={`edge ext${extEdgeClass(e)}`} vector-effect="non-scaling-stroke"
+              x1={e.source.x} y1={e.source.y} x2={e.target.x} y2={e.target.y} stroke-width={extWidth(e)} />
+          ))}
+      </g>
+      <g>
+        {g.edges.map((e, i) => (
+          <line key={i} class={`edge${edgeClass(e)}`} vector-effect="non-scaling-stroke"
+            x1={e.source.x} y1={e.source.y} x2={e.target.x} y2={e.target.y} stroke-width={edgeWidth(e)} />
+        ))}
+      </g>
+    </g>
+  ), [g, focus, focusInst, levels, focusDept]);
+  const nodeLayer = useMemo(() => (
+    <g class="base">
+      <g>
+        {g.nodes.map((n) => (
+          <g key={n.id} class="node-g"
+            onClick={() => goTo(n.id)}
+            onDblClick={() => { location.hash = links.profile(n.id); }}
+            onPointerEnter={() => showTip(n)} onPointerLeave={hideTip}>
+            <circle class={`node${nodeClass(n)}${peek === n.id ? " peek" : ""}`} cx={n.x} cy={n.y}
+              r={radius(n)} fill={g.colorOf(n.r)} vector-effect="non-scaling-stroke"
+              stroke-width={focus === n.id || peek === n.id ? 2.5 : 1.2} />
+          </g>
+        ))}
+      </g>
+      <g>
+        {g.instNodes.map((n) => (
+          <g key={n.id} class="node-g"
+            onClick={() => goToInst(n.id)}
+            onPointerEnter={() => showTip(n)} onPointerLeave={hideTip}>
+            <rect class={`inst-node${instClass(n)}`} x={(n.x ?? 0) - half(n)} y={(n.y ?? 0) - half(n)}
+              width={2 * half(n)} height={2 * half(n)} rx={1.5 / Math.sqrt(view.k)} vector-effect="non-scaling-stroke"
+              stroke-width={focusInst === n.id ? 2.5 : 1} />
+          </g>
+        ))}
+      </g>
+    </g>
+  ), [g, focus, focusInst, levels, focusDept, peek, view.k]);
+
+  // Hover without a selection: the layers above fade as a whole (one opacity change,
+  // CSS "pointing") and only the pointed node, its links and neighbours are drawn again
+  // on top. The copies ignore the pointer, so the node underneath keeps the hover.
+  const pointing = !focus && !focusInst && !!(hover || hoverInst);
+  const overlay = useMemo(() => {
+    if (!pointing) return null;
+    const people: Node[] = [], insts: InstNode[] = [];
+    let edges: Edge[] = [], ext: ExtEdge[] = [];
+    if (hover) {
+      edges = edgesOf.get(hover.id) ?? [];
+      ext = g.instOf.get(hover.id) ?? [];
+      people.push(hover, ...edges.map((e) => (e.source.id === hover.id ? e.target : e.source)));
+      insts.push(...ext.map((e) => e.target));
+    } else if (hoverInst) {
+      ext = g.peopleOf.get(hoverInst.id) ?? [];
+      people.push(...ext.map((e) => e.source));
+      insts.push(hoverInst);
+    }
+    return (
+      <g class="overlay" aria-hidden="true">
+        {ext.map((e) => <line key={`x${e.source.id}>${e.target.id}`} class="edge ext hl" vector-effect="non-scaling-stroke"
+          x1={e.source.x} y1={e.source.y} x2={e.target.x} y2={e.target.y} stroke-width={extWidth(e)} />)}
+        {edges.map((e) => <line key={`${e.source.id}-${e.target.id}`} class="edge hl" vector-effect="non-scaling-stroke"
+          x1={e.source.x} y1={e.source.y} x2={e.target.x} y2={e.target.y} stroke-width={edgeWidth(e)} />)}
+        {people.map((n) => <circle key={n.id} class="node" cx={n.x} cy={n.y} r={radius(n)} fill={g.colorOf(n.r)}
+          vector-effect="non-scaling-stroke" stroke-width={1.2} />)}
+        {insts.map((n) => <rect key={n.id} class="inst-node" x={(n.x ?? 0) - half(n)} y={(n.y ?? 0) - half(n)}
+          width={2 * half(n)} height={2 * half(n)} vector-effect="non-scaling-stroke" stroke-width={1} />)}
+      </g>
+    );
+  }, [pointing, hover, hoverInst, g, edgesOf, view.k]);
+
   return (
     <>
       <div class="page-head">
@@ -489,45 +577,11 @@ export function NetworkView({ atlas, route }: { atlas: Atlas; route: Route }) {
           <svg ref={svgRef} viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} role="img"
             aria-label={focusNode ? t("net.focusAria", { name: focusNode.r.name })
               : focusInstNode ? t("net.focusAria", { name: focusInstNode.inst.name }) : t("net.aria")}
-            class={drag.current?.moved ? "dragging" : ""}
+            class={`${drag.current?.moved ? "dragging" : ""}${pointing ? " pointing" : ""}`}
             onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={() => { drag.current = null; }}>
-            <g>
-              {g.extEdges.map((e, i) => (
-                <line key={`x${i}`} class={`edge ext${extEdgeClass(e)}`}
-                  x1={e.source.x} y1={e.source.y} x2={e.target.x} y2={e.target.y}
-                  stroke-width={(0.4 + Math.log2(1 + e.w) * 0.4) / Math.sqrt(view.k)} />
-              ))}
-            </g>
-            <g>
-              {g.edges.map((e, i) => (
-                <line key={i} class={`edge${edgeClass(e)}`}
-                  x1={e.source.x} y1={e.source.y} x2={e.target.x} y2={e.target.y}
-                  stroke-width={(0.5 + Math.log2(1 + e.w) * 0.6) / Math.sqrt(view.k)} />
-              ))}
-            </g>
-            <g>
-              {g.nodes.map((n) => (
-                <g key={n.id} class="node-g"
-                  onClick={() => goTo(n.id)}
-                  onDblClick={() => { location.hash = links.profile(n.id); }}
-                  onPointerEnter={() => showTip(n)} onPointerLeave={hideTip}>
-                  <circle class={`node${nodeClass(n)}${peek === n.id ? " peek" : ""}`} cx={n.x} cy={n.y}
-                    r={radius(n)} fill={g.colorOf(n.r)}
-                    stroke-width={(focus === n.id || peek === n.id ? 3 : 2) / Math.sqrt(view.k)} />
-                </g>
-              ))}
-            </g>
-            <g>
-              {g.instNodes.map((n) => (
-                <g key={n.id} class="node-g"
-                  onClick={() => goToInst(n.id)}
-                  onPointerEnter={() => showTip(n)} onPointerLeave={hideTip}>
-                  <rect class={`inst-node${instClass(n)}`} x={(n.x ?? 0) - half(n)} y={(n.y ?? 0) - half(n)}
-                    width={2 * half(n)} height={2 * half(n)} rx={1.5 / Math.sqrt(view.k)}
-                    stroke-width={(focusInst === n.id ? 3 : 1.5) / Math.sqrt(view.k)} />
-                </g>
-              ))}
-            </g>
+            {linkLayer}
+            {nodeLayer}
+            {overlay}
             <g>
               {instLabels.map((n) => (
                 <text key={`l${n.id}`} class={`node-label inst${focusInst === n.id ? " focus" : ""}`} x={n.x}

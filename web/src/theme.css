@@ -635,3 +635,8 @@ details.table-view summary { cursor: pointer; color: var(--accent); width: fit-c
 .data-sources ul { margin: 8px 0 0; padding-left: 20px; color: var(--ink-2); }
 .data-sources li { margin: 4px 0; }
 .links a.email { font-weight: 600; }
+
+/* Network hover: the drawn layers fade as one group; the overlay repaints the pointed node. */
+.net-wrap svg.pointing g.base { opacity: 0.18; transition: opacity 0.15s; }
+.net-wrap g.overlay { pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .net-wrap svg.pointing g.base { transition: none; } }

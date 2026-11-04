@@ -57,39 +57,46 @@ function WorldMap({ countries, label }: { countries: [string, number][]; label: 
     const projection = geoNaturalEarth1().fitExtent([[4, 4], [w - 4, h - 4]], { type: "FeatureCollection", features: COUNTRIES });
     return { path: geoPath(projection), project: (p: [number, number]) => projection(p) };
   }, [w, h]);
-  const value = new Map(countries.map(([c, n]) => [MAP_NAME[c] ?? c, n]));
-  const max = Math.max(1, ...countries.map(([, n]) => n));
-  const nameOf = new Map(countries.map(([c]) => [MAP_NAME[c] ?? c, c]));
-  const onMap = new Set(COUNTRIES.map((f) => f.properties.name));
-  const dots = countries.filter(([c]) => !onMap.has(MAP_NAME[c] ?? c) && DOT[c]);
-
   const show = (e: PointerEvent, scopusName: string, n: number) => {
     const box = wrapRef.current?.getBoundingClientRect();
     if (box) setTip({ x: e.clientX - box.left, y: e.clientY - box.top, name: countryName(scopusName, lang), n });
   };
+  const hide = () => setTip(null);
+  // The country shapes are computed and drawn once per size and data, not on every
+  // pointer move (the tooltip is the only thing that changes then).
+  const shapes = useMemo(() => {
+    const value = new Map(countries.map(([c, n]) => [MAP_NAME[c] ?? c, n]));
+    const max = Math.max(1, ...countries.map(([, n]) => n));
+    const nameOf = new Map(countries.map(([c]) => [MAP_NAME[c] ?? c, c]));
+    const onMap = new Set(COUNTRIES.map((f) => f.properties.name));
+    const dots = countries.filter(([c]) => !onMap.has(MAP_NAME[c] ?? c) && DOT[c]);
+    return (<>
+      <g>
+        {COUNTRIES.map((f) => {
+          const n = value.get(f.properties.name) ?? 0;
+          const s = step(n, max);
+          return (
+            <path key={f.properties.name} d={path(f) ?? ""} class={`country${s ? ` seq-${s}` : ""}`}
+              onPointerMove={n ? (e) => show(e, nameOf.get(f.properties.name)!, n) : undefined}
+              onPointerLeave={hide} />
+          );
+        })}
+      </g>
+      <g>
+        {dots.map(([c, n]) => {
+          const p = project(DOT[c]);
+          return p && <circle key={c} class={`country dot seq-${step(n, max)}`} cx={p[0]} cy={p[1]} r={4}
+            onPointerMove={(e) => show(e, c, n)} onPointerLeave={hide} />;
+        })}
+      </g>
+    </>);
+  }, [countries, path, project, lang]);
   const uis = project(STAVANGER);
 
   return (
     <div class="world-map" ref={wrapRef}>
-      <svg viewBox={`0 0 ${w} ${h}`} width="100%" role="img" aria-label={label} onPointerLeave={() => setTip(null)}>
-        <g>
-          {COUNTRIES.map((f) => {
-            const n = value.get(f.properties.name) ?? 0;
-            const s = step(n, max);
-            return (
-              <path key={f.properties.name} d={path(f) ?? ""} class={`country${s ? ` seq-${s}` : ""}`}
-                onPointerMove={n ? (e) => show(e, nameOf.get(f.properties.name)!, n) : undefined}
-                onPointerLeave={() => setTip(null)} />
-            );
-          })}
-        </g>
-        <g>
-          {dots.map(([c, n]) => {
-            const p = project(DOT[c]);
-            return p && <circle key={c} class={`country dot seq-${step(n, max)}`} cx={p[0]} cy={p[1]} r={4}
-              onPointerMove={(e) => show(e, c, n)} onPointerLeave={() => setTip(null)} />;
-          })}
-        </g>
+      <svg viewBox={`0 0 ${w} ${h}`} width="100%" role="img" aria-label={label} onPointerLeave={hide}>
+        {shapes}
         {uis && (
           <g class="home" aria-hidden="true">
             <circle cx={uis[0]} cy={uis[1]} r={4.5} />

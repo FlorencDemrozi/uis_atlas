@@ -94,7 +94,7 @@
   "p.collabDeptsSub": "Artikler med medforfattere fra andre institutter.",
   "footer.prototype": "Prototype",
   "footer.prototypeText": "Testversjon under utvikling. Bruken av data og forskerprofilene venter på godkjenning fra Universitetsbiblioteket og personvernombudet.",
-  "footer.source": "Kilder: Scopus (Elsevier), NVA, PubMed/MEDLINE (gjennom Scopus) og UiS' ansattkatalog; utlysninger fra Forskningsrådet og EU. Publikasjoner siden {from}. Oppdateres ukentlig, sist {date}.",
+  "footer.source": "Kilder: Scopus (Elsevier), NVA, PubMed/MEDLINE (gjennom Scopus) og UiS' ansattkatalog. Publikasjoner siden {from}. Oppdateres ukentlig, sist {date}.",
   "footer.summaries": "Forskersammendragene er generert automatisk fra publikasjoner og beskriver kun forskning. Forskere kan be om retting eller reservere seg.",
   "footer.designerRole": "professor i biomedisinske sensorsystemer, Universitetet i Stavanger.",
   "net.whole": "Hele nettverket",
@@ -549,12 +549,10 @@
   "net.instResearchers": "UiS-forskere som samarbeider med den ({n})",
   "net.instScopus": "Institusjonen i Scopus",
   "src.title": "Om dataene",
-  "src.weekly": "Oppdateres én gang i uken: nye publikasjoner fra Scopus og NVA, ansatte fra UiS' ansattkatalog og åpne utlysninger fra Forskningsrådet og EUs Funding & Tenders-portal. Sist oppdatert: {date}.",
+  "src.weekly": "Oppdateres én gang i uken med nye publikasjoner fra Scopus og NVA og ansatte fra UiS' ansattkatalog. Sist oppdatert: {date}.",
   "src.lead": "Kilder",
   "src.scopus": "Scopus (Elsevier): fagfellevurderte artikler, konferansebidrag, bøker og kapitler med UiS-tilknytning siden {from}, siteringer og medforfatternes institusjoner.",
   "src.nva": "NVA (Nasjonalt vitenarkiv, Sikt): alle registrerte forskningsresultater fra UiS, også bøker, rapporter, kunstneriske arbeider, foredrag og formidling i media.",
   "src.pubmed": "PubMed / MEDLINE: biomedisinske og helsefaglige publikasjoner er med gjennom Scopus, som indekserer alle MEDLINE-tidsskrifter.",
-  "src.directory": "UiS' ansattkatalog (uis.no): hvem som jobber ved UiS i dag, institutt, stilling, profilside og jobb-e-post.",
-  "src.rcn": "Forskningsrådet: åpne og kommende utlysninger.",
-  "src.eu": "EUs Funding & Tenders-portal: temaer i Horisont Europa og andre EU-programmer."
+  "src.directory": "UiS' ansattkatalog (uis.no): hvem som jobber ved UiS i dag, institutt, stilling, profilside og jobb-e-post."
 }

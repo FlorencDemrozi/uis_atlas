@@ -150,8 +150,6 @@ const SOURCES: [string, string, string][] = [   // [key, name, link]
   ["nva", "NVA", "https://nva.sikt.no/"],
   ["pubmed", "PubMed", "https://pubmed.ncbi.nlm.nih.gov/"],
   ["directory", "UiS", "https://www.uis.no/nb/sok/ansatte"],
-  ["rcn", "RCN", "https://www.forskningsradet.no/utlysninger/"],
-  ["eu", "EU F&T", "https://ec.europa.eu/info/funding-tenders/opportunities/portal/"],
 ];
 
 /** Where the data comes from and how often it is refreshed (home page). */

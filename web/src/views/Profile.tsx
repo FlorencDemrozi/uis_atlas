@@ -203,9 +203,9 @@ export function ProfileView({ atlas, id }: { atlas: Atlas; id: string }) {
             </div>
           </section>
 
-          <ProfileFunding atlas={atlas} id={r.scopus_id} name={r.name} />
-
           {atlas.meta.has_partners && <PartnerSection id={r.scopus_id} />}
+
+          <ProfileFunding atlas={atlas} id={r.scopus_id} name={r.name} />
 
           <section class="section" aria-labelledby="h-pubs">
             <h2 id="h-pubs">{t("p.outputs", { n: r.paper_ids.length })}</h2>
