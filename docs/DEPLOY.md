@@ -1,5 +1,9 @@
 # Deploying the weekly update on a UiS (Linux) server
 
+> **Step-by-step installation:** README.md, "Deployment on the UiS server". It uses the
+> ready-made files in `deploy/` (nginx site, systemd service and timer, install and
+> status scripts) and corresponds to option B below. This page has the background.
+
 `pipeline/run_weekly.py` does the whole update in one command: collectors (Scopus,
 UiS employee directory, RCN calls, EU topics), processing (`run_all.py`) and the
 website build. This page sets it up as a weekly job on a Linux server at UiS.
@@ -54,7 +58,7 @@ cd ~/uis_atlas
 
 # 2. Python environment (outside the repo) and web dependencies
 python3.12 -m venv ~/venvs/atlas
-~/venvs/atlas/bin/pip install -r requirements.lock
+~/venvs/atlas/bin/pip install -r requirements-cpu.lock   # CPU build of PyTorch (no GPU)
 (cd web && npm ci)
 
 # 3. Secrets: SCOPUS_API_KEY, ANTHROPIC_API_KEY, ATLAS_FUNDING_PASSWORD,
@@ -220,9 +224,10 @@ after 30 min; the run then fails and reports it like any other failure.
   run `git pull` (and `npm ci` if `web/package-lock.json` changed) on the server.
 - **Scopus quota or access errors** are in the log; the site keeps the last data.
   Run `pipeline/collect_scopus.py` by hand later; it resumes where it stopped.
-- **Python packages**: install from `requirements.lock` (exact versions, the same
-  as on the laptop and in CI, so the embeddings stay identical). After changing
-  `requirements.txt`, regenerate the lock (command at the top of the file).
+- **Python packages**: install from `requirements-cpu.lock` on the server (the same
+  exact versions as `requirements.lock` on the laptop and in CI, with PyTorch's CPU
+  build, so the embeddings stay identical). After changing `requirements.txt`,
+  regenerate both locks (commands at the top of each file).
 - **"Sharp drop" stop**: read the log to see which collector returned too little.
   If the drop is intended (e.g. a changed inclusion rule), run again with
   `--allow-drop`.

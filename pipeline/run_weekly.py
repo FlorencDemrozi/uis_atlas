@@ -181,7 +181,19 @@ def main() -> None:
     took = int((datetime.now() - started).total_seconds() // 60)
     say(f"\nWeekly update finished in {took} min." + (f" Collectors with problems (old data used): "
                                                      f"{', '.join(failed)}." if failed else ""))
+    record(True, f"Finished in {took} min" + (" (collector problems: old data used)" if failed else ""))
     tell(f"UiS Atlas weekly update OK ({took} min)" + (" – with collector problems" if failed else ""))
+
+
+def record(ok: bool, message: str) -> None:
+    """logs/last-run.json after every run, logs/last-success.json after a successful one
+    (read by deploy/status.sh): when it finished, the outcome and the log file."""
+    status = {"finished": datetime.now().isoformat(timespec="seconds"), "ok": ok,
+              "message": message, "log": Path(LOG.name).name, "collector_problems": FAILED}
+    text = json.dumps(status, ensure_ascii=False, indent=1)
+    (LOGS / "last-run.json").write_text(text, encoding="utf-8")
+    if ok:
+        (LOGS / "last-success.json").write_text(text, encoding="utf-8")
 
 
 def tell(headline: str) -> None:
@@ -197,6 +209,7 @@ def tell(headline: str) -> None:
 
 def stop(message: str) -> None:
     say(message)
+    record(False, message)
     tell("UiS Atlas weekly update FAILED: " + message)
     sys.exit(1)
 

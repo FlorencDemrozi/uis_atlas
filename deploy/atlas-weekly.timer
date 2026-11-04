@@ -1,0 +1,12 @@
+# UiS Researcher Atlas: run the weekly update every Saturday at 01:00 (server time).
+# Persistent=true: a run missed while the machine was off starts at the next boot.
+[Unit]
+Description=UiS Researcher Atlas weekly update (Saturdays 01:00)
+
+[Timer]
+OnCalendar=Sat *-*-* 01:00:00
+Persistent=true
+Unit=atlas-weekly.service
+
+[Install]
+WantedBy=timers.target
