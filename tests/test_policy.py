@@ -12,6 +12,8 @@ def test_no_abstract_field_in_public_data():
         text = f.read_text(encoding="utf-8")
         assert '"abstract"' not in text, f"{f.name} contains abstracts"
         assert '"affiliation_strings"' not in text, f"{f.name} contains raw affiliations"
+        # External co-authors are shown as institutions only (partners.json), never as people.
+        assert '"authname"' not in text and '"given-name"' not in text, f"{f.name} contains Scopus author records"
 
 
 def test_no_secrets_or_licensed_data_tracked_by_git():

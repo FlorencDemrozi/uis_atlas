@@ -269,6 +269,7 @@ def build(atlas: dict, name_parts: dict, overrides: dict, reference_year: int,
                          if entry and not entry["excluded"] else None),
             "uis_links": ({"nb": entry.get("url_nb"), "en": entry.get("url_en")}
                           if entry and not entry["excluded"] else None),
+            "email": entry.get("email") if entry and not entry["excluded"] else None,
             "paper_ids": paper_ids,
             "n_publications": len(pub_ids),
             "n_uis": sum(1 for p in pub_ids if p in uis_ids),

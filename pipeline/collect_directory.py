@@ -16,8 +16,13 @@ units (faculties, museum, divisions) and, once a unit is selected, its
 sub-units (departments, centres, administration). "Load more" pages are
 cumulative: page=N returns the first (N+1)×14 people.
 
-Polite: about 80 small requests, one per DIRECTORY_SLEEP seconds. Works from any
-network. Run it again before each pipeline refresh.
+The work e-mail is only on each person's profile page: it is read once per person
+in the atlas departments and kept in config.DIRECTORY_EMAILS, so later runs only
+read the pages of new staff.
+
+Polite: about 80 small requests (plus one per new person for the e-mail), one per
+DIRECTORY_SLEEP seconds. Works from any network. Run it again before each pipeline
+refresh.
 """
 import html
 import json
@@ -37,6 +42,8 @@ FACET = re.compile(r'href="[^"]*employees%5B\d%5D=department%3A(\d+)[^"]*"[^>]*>
 CARD = re.compile(r'<a href="(/(?:nb|en)/profile/[^"]+)"[^>]*class="profile_search_card__link".*?'
                   r'profile_search_card__name">(.*?)</div>\s*'
                   r'(?:<div class="profile_search_card__position">(.*?)</div>)?', re.S)
+MAILTO = re.compile(r'href="mailto:([^"?]+)')
+GENERIC_EMAILS = {"post@uis.no"}   # site-wide addresses, never a person's
 
 
 def text(fragment: str) -> str:
@@ -53,7 +60,10 @@ def fetch(s: requests.Session, lang: str, unit: str | None = None, page: int = 0
         params["employees[0]"] = f"department:{unit}"
     if page:
         params["page"] = page
-    url = config.DIRECTORY_URL.format(lang=lang, path=LANGS[lang])
+    return fetch_url(s, config.DIRECTORY_URL.format(lang=lang, path=LANGS[lang]), params)
+
+
+def fetch_url(s: requests.Session, url: str, params: dict | None = None) -> str:
     for attempt in range(5):
         try:
             r = s.get(url, params=params, timeout=60)
@@ -88,6 +98,41 @@ def members(s: requests.Session, lang: str, unit: str, count: int) -> list[dict]
     if len(out) < count:
         print(f"  warning: unit {unit} ({lang}) lists {count} people, got {len(out)}")
     return out
+
+
+def email_of(page: str) -> str | None:
+    """The person's work e-mail from their profile page (the first personal mailto link)."""
+    for address in MAILTO.findall(page):
+        address = html.unescape(address).strip().lower()
+        if address not in GENERIC_EMAILS:
+            return address
+    return None
+
+
+def add_emails(s: requests.Session, people: dict[str, dict]) -> None:
+    """Work e-mail of everyone in the atlas departments, read from their profile page.
+    The listing does not show it, so each new person costs one request; known addresses
+    come from config.DIRECTORY_EMAILS (local only) and are not fetched again."""
+    cache = (json.loads(config.DIRECTORY_EMAILS.read_text(encoding="utf-8"))
+             if config.DIRECTORY_EMAILS.exists() else {})
+    wanted = [url for url, p in people.items()
+              if any(int(u) in config.DIRECTORY_DEPARTMENTS for u in p["units"])]
+    new = [url for url in wanted if url not in cache]
+    print(f"E-mail addresses: {len(wanted) - len(new)} known, {len(new)} profile pages to read…")
+    for i, url in enumerate(new, 1):
+        try:
+            cache[url] = email_of(fetch_url(s, url))
+        except (requests.RequestException, RuntimeError) as exc:
+            print(f"  could not read {url}: {exc}")
+            continue
+        if i % 100 == 0:
+            print(f"  {i}/{len(new)}")
+            config.DIRECTORY_EMAILS.write_text(json.dumps(cache, ensure_ascii=False, indent=1), encoding="utf-8")
+    cache = {url: cache[url] for url in wanted if url in cache}   # forget people who left
+    config.DIRECTORY_EMAILS.write_text(json.dumps(cache, ensure_ascii=False, indent=1), encoding="utf-8")
+    for url in wanted:
+        if cache.get(url):
+            people[url]["email"] = cache[url]
 
 
 def main() -> None:
@@ -131,6 +176,7 @@ def main() -> None:
                 p.setdefault("position_en", e["position"])
 
     config.RAW_DIRECTORY.mkdir(parents=True, exist_ok=True)
+    add_emails(s, people)
     out = {"generated": datetime.now().isoformat(timespec="seconds"),
            "units": units, "employees": list(people.values())}
     config.DIRECTORY.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")

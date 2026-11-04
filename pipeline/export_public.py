@@ -5,7 +5,7 @@ Stage 5 – Export the public dataset for the website. THE LICENCE GATE.
 Input:  profiles, summaries, embeddings (data/interim/), config/exclusions.json,
         config/overrides.json, papers in config.PAPERS (build_profiles.py)
 Output: data/public/  (researchers.json, papers.json, stats.json, meta.json,
-        vectors.bin once embeddings exist)
+        partners.json once build_partners.py has run, vectors.bin once embeddings exist)
 
 Only fields in the allow-lists below may be written. Everything else is dropped.
 Never add abstracts or raw affiliation strings (docs/DATA_POLICY.md §2).
@@ -22,7 +22,7 @@ from itertools import combinations
 import config
 
 RESEARCHER_FIELDS = [
-    "scopus_id", "name", "orcid", "faculty", "department", "position", "summary", "tags",
+    "scopus_id", "name", "orcid", "email", "faculty", "department", "position", "summary", "tags",
     "n_publications", "n_uis", "output_types", "citations", "pubs_per_year", "first_year", "last_year",
     "top_coauthors", "collab_departments", "other_paper_ids", "scopus_metrics", "links",
 ]
@@ -118,6 +118,21 @@ def unit_stats(researchers: list[dict], papers: dict, key: str) -> dict:
     }
 
 
+def export_partners(partners: dict, included: set[str]) -> dict:
+    """partners.json for the site: per researcher on the site, partner institutions and
+    countries with the number of shared papers, most first. Institutions: Scopus
+    affiliation id -> [name, city, country] only (no people, no raw affiliation strings)."""
+    researchers = {}
+    for sid, p in sorted(partners["researchers"].items()):
+        if sid in included:
+            researchers[sid] = {"i": [[a, n] for a, n in p["institutions"].items()],
+                                "c": [[c, n] for c, n in p["countries"].items()]}
+    used = {a for r in researchers.values() for a, _ in r["i"]}
+    institutions = {a: [i["name"], i["city"], i["country"]]
+                    for a, i in sorted(partners["institutions"].items()) if a in used}
+    return {"institutions": institutions, "researchers": researchers}
+
+
 def build_stats(researchers: list[dict], papers: dict) -> dict:
     return {"departments": unit_stats(researchers, papers, "department"),
             "faculties": unit_stats(researchers, papers, "faculty")}
@@ -187,6 +202,7 @@ def main() -> None:
         "summary_model": config.SUMMARY_MODEL if summaries else None,
         "has_summaries": bool(summaries),
         "has_vectors": False,
+        "has_partners": config.PARTNERS.exists(),
         # Scopus document type -> output category, for papers without "category".
         "category_of": {t: config.category_of(t) for t in sorted({p["type"] for p in papers.values() if p.get("type")})},
     }
@@ -194,6 +210,9 @@ def main() -> None:
     config.PUBLIC.mkdir(parents=True, exist_ok=True)
     out = {"researchers.json": researchers, "papers.json": papers,
            "stats.json": stats, "meta.json": meta}
+    if config.PARTNERS.exists():   # build_partners.py (stage 2b)
+        out["partners.json"] = export_partners(json.loads(config.PARTNERS.read_text(encoding="utf-8")),
+                                               {r["scopus_id"] for r in researchers})
     for name, data in out.items():
         (config.PUBLIC / name).write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")),
                                           encoding="utf-8")

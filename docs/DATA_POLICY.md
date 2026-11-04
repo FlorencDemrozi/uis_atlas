@@ -17,6 +17,7 @@ Scopus content is licensed to UiS through its subscription. Elsevier’s terms g
 | Bibliographic references: title, year, venue, DOI link, Scopus link | Public site |
 | Author identifiers: Scopus author ID, ORCID | Public site |
 | Derived content: AI-written summaries, topic tags, counts, embedding vectors | Public site, **pending UiS Library confirmation** |
+| Partner institutions of co-authors outside UiS (`build_partners.py`): Scopus affiliation id, institution name, city, country, and per researcher the number of shared papers | Public site (`partners.json`), **pending UiS Library confirmation**. Institutions only: names or ids of external co-authors are never published. |
 
 `pipeline/export_public.py` is the single gate between licensed and public data. It must use an explicit **allow-list** of fields; anything not on the list is dropped. A test checks that no abstract text appears in `data/public/`.
 
@@ -39,7 +40,7 @@ Researcher profiles are personal data, even though they describe professional ac
 - Confirm the legal basis and approach with the UiS data protection officer (personvernombud).
 - Publish a short privacy notice on the site: what is shown, where it comes from, how often it is updated.
 - Provide a way for researchers to **correct or opt out** (for v1: a contact email plus `config/exclusions.json` and `config/overrides.json`, which the pipeline respects).
-- The UiS employee directory (`collect_directory.py`) is used to confirm current staff and their unit. The raw copy (`data/raw/uis_directory/`) stays local and is never committed. Only name, position, faculty/department and the UiS profile link may reach the public site, and only for researchers who are in the atlas.
+- The UiS employee directory (`collect_directory.py`) is used to confirm current staff and their unit. The raw copy (`data/raw/uis_directory/`) stays local and is never committed. Only name, position, faculty/department, the UiS profile link and the work e-mail address (as shown on the person's public UiS profile page; decided by the project owner, 2026-11-04) may reach the public site, and only for researchers who are in the atlas.
 - Summaries describe research only. Never generate personal judgements, rankings of quality, or anything beyond published work.
 
 ## 4. AI-generated summaries

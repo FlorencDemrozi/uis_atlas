@@ -199,6 +199,7 @@ RAW_AUTHOR_METRICS = RAW / "author_metrics.json"
 AUTHOR_BATCH = 25                       # author ids per Scopus query
 RAW_DIRECTORY = DATA / "raw" / "uis_directory"  # UiS employee directory: personal data, local only
 DIRECTORY = RAW_DIRECTORY / "employees.json"
+DIRECTORY_EMAILS = RAW_DIRECTORY / "emails.json"   # profile URL -> work e-mail (cache)
 
 # NVA (Nasjonalt vitenarkiv, Sikt): open metadata, collected by collect_nva.py.
 RAW_NVA = DATA / "raw" / "nva"          # one JSONL file per publication year, local only
@@ -208,6 +209,9 @@ PROFILES = INTERIM / "profiles.json"
 # Scopus and NVA papers merged by build_profiles.py (abstracts inside: local only).
 PAPERS = INTERIM / "papers.json"
 MERGE_LOG = INTERIM / "merge_log.json"
+# External partner institutions per researcher (build_partners.py, from raw Scopus).
+PARTNERS = INTERIM / "partners.json"
+PARTNER_MAX_AUTHORS = 50   # papers with more authors (consortia) do not count as partnerships
 REVIEW_DIR = INTERIM / "review"         # CSVs for the project owner (local only)
 SUMMARIES = INTERIM / "summaries.json"
 EMBEDDINGS_DIR = INTERIM / "embeddings"

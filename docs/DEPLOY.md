@@ -12,7 +12,10 @@ website build. This page sets it up as a weekly job on a Linux server at UiS.
    lookups (departments) run only for authors who still need them. A typical run
    uses a few hundred API requests, well within the weekly quota.
 2. **Employee directory, RCN calls and EU topics** are collected again (EU topics
-   incrementally: only changed topics are re-read).
+   incrementally: only changed topics are re-read). The work e-mail of each person
+   is read from their UiS profile page only once (`data/raw/uis_directory/emails.json`):
+   the first run reads about 1,100 pages (~30 min), later runs only those of new staff.
+   Copy `emails.json` with the rest of `data/raw/` to skip that first pass.
 3. **Processing**: profiles, summaries (Anthropic API, only for changed researchers),
    embeddings, public export, funding calls, matching, encrypted funding export.
 4. **Sanity check**: if researchers or papers dropped by more than
