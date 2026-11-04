@@ -15,8 +15,12 @@ website build. This page sets it up as a weekly job on a Linux server at UiS.
    incrementally: only changed topics are re-read).
 3. **Processing**: profiles, summaries (Anthropic API, only for changed researchers),
    embeddings, public export, funding calls, matching, encrypted funding export.
-4. **Website** build to `web/dist/`.
-5. **Publishing** (only with `--publish`): the licence guard (`tests/test_policy.py`)
+4. **Sanity check**: if researchers or papers dropped by more than
+   `config.MAX_COUNT_DROP` (15 %) compared with the `data/public/` committed in git,
+   the run stops before the website is rebuilt or published (a collector that
+   silently returned too little). After an intended drop, run once with `--allow-drop`.
+5. **Website** build to `web/dist/`.
+6. **Publishing** (only with `--publish`): the licence guard (`tests/test_policy.py`)
    runs, then `data/public/` alone is committed and pushed, and the GitHub Pages
    workflow redeploys the site.
 
@@ -47,7 +51,7 @@ cd ~/uis_atlas
 
 # 2. Python environment (outside the repo) and web dependencies
 python3.12 -m venv ~/venvs/atlas
-~/venvs/atlas/bin/pip install -r requirements.txt
+~/venvs/atlas/bin/pip install -r requirements.lock
 (cd web && npm ci)
 
 # 3. Secrets: SCOPUS_API_KEY, ANTHROPIC_API_KEY, ATLAS_FUNDING_PASSWORD,
@@ -92,7 +96,72 @@ fast-forward, the run stops.
 
 **B. Serve from a UiS web server.** Leave out `--publish` and point nginx (or
 Apache) at `~atlas/uis_atlas/web/dist`, or copy that folder to the web server after
-the run (`rsync -a --delete web/dist/ webhost:/var/www/atlas/`).
+the run (`rsync -a --delete web/dist/ webhost:/var/www/atlas/`). Nothing is then
+committed each week, so the git history stops growing with data. The sanity check
+still compares with the `data/public/` in git; that baseline only moves when you
+commit data, which is fine for catching a sudden drop.
+
+The encrypted funding files are only rewritten when their content changes (same
+password), so with option A a quiet week adds little to the git history.
+
+### Web server (option B)
+
+The site is static: HTML, JavaScript, JSON and one large `.wasm` file. Suggested
+nginx server block (adapt names and certificate paths to the UiS setup):
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name atlas.example.uis.no;                 # the name UiS IT assigns
+    ssl_certificate     /etc/ssl/certs/atlas.pem;     # UiS certificate or certbot
+    ssl_certificate_key /etc/ssl/private/atlas.key;
+    root /var/www/atlas;                              # a copy of web/dist (rsync above)
+
+    # Compression: the data files shrink about 3x (papers.json 17 MB -> 5 MB).
+    gzip on;
+    gzip_types application/json application/javascript text/css application/wasm image/svg+xml;
+    gzip_min_length 1024;
+
+    # Hashed file names never change: cache for a year. Data files keep their names
+    # and change weekly: always revalidate (cheap 304 when unchanged).
+    location /assets/ { add_header Cache-Control "public, max-age=31536000, immutable"; }
+    location /data/   { add_header Cache-Control "no-cache"; }
+    location = /index.html { add_header Cache-Control "no-cache"; }
+
+    # Security headers (also repeat them inside each location block that has its
+    # own add_header, as nginx does not inherit them there).
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; connect-src 'self' https://huggingface.co https://*.huggingface.co https://*.hf.co; img-src 'self' data:; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; frame-ancestors 'none'" always;
+
+    # Optional extra layer for the funding pages: only from the UiS network/VPN.
+    # The files stay encrypted either way; this also stops outside password guessing.
+    # location ~ ^/data/funding { allow 152.94.0.0/16; deny all; }   # check UiS ranges with IT
+}
+server { listen 80; server_name atlas.example.uis.no; return 301 https://$host$request_uri; }
+```
+
+The Content-Security-Policy starts as *Report-Only*: open every page (including
+the idea search, which downloads the embedding model) and check the browser
+console for blocked requests, then rename it to `Content-Security-Policy`. The
+`'unsafe-inline'` for scripts is there for the small theme script in
+`index.html`; it can be replaced by that script's hash.
+
+### Backups
+
+`data/raw/` and `data/interim/` are the only copy of months of quota-limited
+Scopus collection and the AI summaries and call profiles (paid for). Everything in
+`data/public/` and `web/dist/` can be rebuilt from them. Back them up weekly, after
+the run, to UiS-managed storage (never public cloud: licensed and personal data),
+e.g. with restic:
+
+```bash
+restic -r sftp:backup.uis.no:/atlas backup ~/uis_atlas/data/raw ~/uis_atlas/data/interim ~/uis_atlas/.env
+restic -r sftp:backup.uis.no:/atlas forget --keep-weekly 8 --keep-monthly 12 --prune
+```
+
+Test a restore once. Ask UiS IT which backup target to use.
 
 ## Schedule
 
@@ -102,7 +171,9 @@ the run (`rsync -a --delete web/dist/ webhost:/var/www/atlas/`).
 0 1 * * 6 cd $HOME/uis_atlas && $HOME/venvs/atlas/bin/python pipeline/run_weekly.py --publish >/dev/null 2>&1
 ```
 
-Leave out `--publish` for option B. The log is in `logs/` either way.
+Leave out `--publish` for option B. The log is in `logs/` either way. With cron,
+a run that fails is only visible in the log, so set up the Telegram message (step
+6 above) or prefer the systemd timer, whose failures show in `systemctl --failed`.
 
 **systemd timer** (alternative, survives reboots and missed runs):
 
@@ -116,6 +187,11 @@ User=atlas
 WorkingDirectory=/home/atlas/uis_atlas
 ExecStart=/home/atlas/venvs/atlas/bin/python pipeline/run_weekly.py --publish
 TimeoutStartSec=12h
+# Hardening: the job may only write its own folder and caches.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/home/atlas/uis_atlas /home/atlas/.cache /home/atlas/.npm
 
 # /etc/systemd/system/atlas-weekly.timer
 [Timer]
@@ -141,6 +217,12 @@ after 30 min; the run then fails and reports it like any other failure.
   run `git pull` (and `npm ci` if `web/package-lock.json` changed) on the server.
 - **Scopus quota or access errors** are in the log; the site keeps the last data.
   Run `pipeline/collect_scopus.py` by hand later; it resumes where it stopped.
+- **Python packages**: install from `requirements.lock` (exact versions, the same
+  as on the laptop and in CI, so the embeddings stay identical). After changing
+  `requirements.txt`, regenerate the lock (command at the top of the file).
+- **"Sharp drop" stop**: read the log to see which collector returned too little.
+  If the drop is intended (e.g. a changed inclusion rule), run again with
+  `--allow-drop`.
 - **Full re-collection** (e.g. a new `ATLAS_FIRST_YEAR`): change it in `.env`; the
   next run searches the whole range again. `collect_eu.py --full` re-reads every
   EU topic.
