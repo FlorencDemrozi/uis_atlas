@@ -5,6 +5,12 @@ import { dept, unit } from "../org";
 import { useI18n } from "../i18n";
 import { STOPWORDS } from "../search";
 
+/** The URL if it is a plain web link, else undefined. Links scraped from funder
+ *  pages reach href as they are, so "javascript:" or any other scheme is dropped. */
+export function safeUrl(url: string | null | undefined): string | undefined {
+  return url && /^https?:\/\//i.test(url.trim()) ? url : undefined;
+}
+
 /** Department (or faculty) name with its faculty's colour dot; "own" colours a
  * department by its own slot (views scoped to one faculty). */
 export function DeptLabel({ name, short = true, withFaculty = false, own = false }:

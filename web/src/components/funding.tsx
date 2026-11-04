@@ -5,7 +5,7 @@ import { callTitle, familyOf, isStale, pick, useFunding, type Call, type Eligibi
   type Match } from "../funding";
 import { useI18n } from "../i18n";
 import { links } from "../router";
-import { DeptLabel, Position, paperUrl } from "./common";
+import { DeptLabel, Position, paperUrl, safeUrl } from "./common";
 
 // ------------------------------------------------------------- unlock gate
 /** Renders children with the decrypted data, or the password form. */
@@ -156,7 +156,7 @@ export function FieldValue({ name, f, currency = "NOK" }: { name: string; f: Fie
   if (name === "documents") {
     return (
       <ul class="doc-list">
-        {(v as { text: string; url: string; kind: string }[]).map((d) => (
+        {(v as { text: string; url: string; kind: string }[]).filter((d) => safeUrl(d.url)).map((d) => (
           <li key={d.url}><span class="muted small">{t(`f.doc.${d.kind}`)}</span> <a href={d.url}>{d.text}</a></li>
         ))}
       </ul>
@@ -166,8 +166,9 @@ export function FieldValue({ name, f, currency = "NOK" }: { name: string; f: Fie
   if (Array.isArray(v)) return <>{v.join(", ")}</>;
   if (name === "url") {
     // EU topics have one (English) page on the EU portal.
-    const en = v.en && <a href={v.en}>{t(v.nb ? "f.officialEn" : "f.officialEu")}</a>;
-    return <>{v.nb && <a href={v.nb}>{t("f.official")}</a>}{v.nb && en && " · "}{en}</>;
+    const nb = safeUrl(v.nb), enUrl = safeUrl(v.en);
+    const en = enUrl && <a href={enUrl}>{t(nb ? "f.officialEn" : "f.officialEu")}</a>;
+    return <>{nb && <a href={nb}>{t("f.official")}</a>}{nb && en && " · "}{en}</>;
   }
   const { value, fallback } = pick<any>(v, lang);
   if (value == null) return <span class="muted">{t("f.notSpecified")}</span>;
@@ -190,7 +191,7 @@ export function FieldRow({ name, f, currency }: { name: string; f: Field<any>; c
         {!missing && (
           <div class="field-meta">
             <MethodBadge f={f} />
-            {f.src && (f.url ? <a href={f.url}>{t("f.source", { src: f.src })}</a> : <span>{t("f.source", { src: f.src })}</span>)}
+            {f.src && (safeUrl(f.url) ? <a href={safeUrl(f.url)}>{t("f.source", { src: f.src })}</a> : <span>{t("f.source", { src: f.src })}</span>)}
             {f.ev && f.m !== "section" && String(f.ev) !== String(f.v) && (
               <details class="ev"><summary>{t("f.showSource")}</summary><q>{f.ev}</q></details>
             )}

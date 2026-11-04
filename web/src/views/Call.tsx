@@ -3,6 +3,7 @@ import type { Atlas } from "../data";
 import { callTitle, isInstitutionLevel, pick, useCallDetail, type Call, type Funding, type Match } from "../funding";
 import { useI18n } from "../i18n";
 import { links } from "../router";
+import { safeUrl } from "../components/common";
 import { CategoryBadge, FieldList, Freshness, FundingGate, MatchDetails, SourceBadge, StatusBadge, useFmt } from "../components/funding";
 
 // The agreed field list, grouped as on the page (pipeline/build_calls.py, pipeline/eu.py).
@@ -60,8 +61,8 @@ function CallPage({ atlas, data, id }: { atlas: Atlas; data: Funding; id: string
           {!f.deadline.v && f.rolling.v && <span>{t("f.rolling")}</span>}
         </div>
         <div class="links">
-          {url.nb && <a href={url.nb}>{t("f.official")}</a>}
-          {url.en && <a href={url.en}>{t(call.source === "eu" ? "f.officialEu" : "f.officialEn")}</a>}
+          {safeUrl(url.nb) && <a href={safeUrl(url.nb)}>{t("f.official")}</a>}
+          {safeUrl(url.en) && <a href={safeUrl(url.en)}>{t(call.source === "eu" ? "f.officialEu" : "f.officialEn")}</a>}
         </div>
         {call.closed_by_date && <p class="warn small" role="note">{t("f.closedByDate")}</p>}
         {call.review.length > 0 && (

@@ -24,7 +24,9 @@ def doc_links(secs: list[dict]) -> list[dict]:
     for s in secs:
         for link in s["links"]:
             url = link["url"]
-            if (not url or url in seen or url.startswith("mailto:") or "/Download" in url
+            # Only web links: no mailto:, javascript: or other schemes from scraped pages.
+            if (not url or url in seen or not url.lower().startswith(("https://", "http://"))
+                    or "/Download" in url
                     or not link["text"]):
                 continue
             seen.add(url)
