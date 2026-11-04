@@ -1,0 +1,48 @@
+# UiS Atlas nginx site. deploy/setup.sh fills in @PORT@, @CERT_NAME@ and
+# @CSP_SCRIPT_HASHES@ (the hash of the inline theme script in index.html, computed
+# from the published site, so a changed script never blanks the page) and writes the
+# result to ~/atlas/deploy/nginx.conf. Edit this template, not the generated file.
+#
+# Public address: https://atlas.ux.uis.no, a UiS IT reverse proxy (caddy.ux.uis.no) that
+# holds the public certificate and forwards to this port.
+server {
+    listen @PORT@ ssl default_server;
+    listen [::]:@PORT@ ssl default_server;
+    server_name _;
+
+    root /srv/site;
+    index index.html;
+
+    ssl_certificate /etc/letsencrypt/live/@CERT_NAME@/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/@CERT_NAME@/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+
+    gzip on;
+    gzip_types application/json application/javascript application/wasm text/css image/svg+xml;
+    gzip_min_length 1024;
+
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+    # Idea search (transformers.js): model from Hugging Face (redirects to *.hf.co), ONNX
+    # runtime from jsdelivr, WebAssembly and blob: workers.
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' @CSP_SCRIPT_HASHES@ 'wasm-unsafe-eval' https://cdn.jsdelivr.net blob:; worker-src 'self' blob:; connect-src 'self' https://huggingface.co https://*.huggingface.co https://*.hf.co https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'" always;
+
+    # Hash routing: everything is a real file, so no SPA fallback is needed.
+    location / {
+        try_files $uri $uri/ =404;
+    }
+
+    # Caching via `expires` (not add_header, which would drop the headers above).
+    # Vite's hashed bundles never change.
+    location /assets/ {
+        expires 1y;
+    }
+
+    # Data and index.html change with every update: always revalidate.
+    location ~ ^/(data/|index\.html$|$) {
+        expires -1;
+        try_files $uri $uri/ =404;
+    }
+}

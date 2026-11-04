@@ -58,177 +58,86 @@ Then open the project in Claude Code and start with milestone 1 in `docs/SPEC.md
 `data/public/` and publishes it on every push to `main` (enable once under
 Settings → Pages → Source: GitHub Actions). To update the online data, rerun
 the pipeline locally, then commit and push `data/public/`.
-For running the atlas on the UiS server instead, see the next section.
+The live atlas is served from the UiS server (next section); the Pages site keeps
+the data last pushed from the laptop and can be turned off under Settings → Pages.
 
-## Deployment on the UiS server (Ubuntu 24.04)
+## Deployment: https://atlas.ux.uis.no
 
-The server serves the website with nginx and updates itself every week with a
-systemd timer. Everything it needs is in `deploy/`:
+The atlas runs on **sensing4health.ux.uis.no**, a server shared with the
+sensing4health site, behind UiS IT's reverse proxy (`atlas.ux.uis.no`). An nginx
+container serves it on port 8443, and a systemd user timer updates it every week.
+**Full setup, repair and troubleshooting: [docs/SERVER.md](docs/SERVER.md).** Never
+install a system nginx on that server: ports 80/443 belong to sensing4health.
 
-| File | What it does |
+Everything the server needs is in `deploy/`; the three commands you need:
+
+| Command (in `~/atlas/uis_atlas` on the server) | What it does |
 |---|---|
-| `deploy/install.sh` | Installs the nginx site and the weekly timer (run once, with sudo) |
-| `deploy/atlas-weekly.service` | One weekly update: `pipeline/run_weekly.py`, then copies `web/dist/` to the web folder |
-| `deploy/atlas-weekly.timer` | Starts that update every Saturday at 01:00 |
-| `deploy/nginx-atlas.conf` | The nginx site (compression, caching, security headers) |
-| `deploy/status.sh` | Shows whether the site is up and when the last update ran and succeeded |
+| `deploy/status.sh` | Is the site up? Next run, last run, last success; end of the log if the last run failed |
+| `deploy/update.sh` | Pull the latest code from GitHub, rebuild and publish the site, start a weekly run |
+| `deploy/setup.sh` | First setup or repair: web server container, weekly timer, published site (safe to rerun) |
 
-The commands below assume the repository is at `~/atlas/uis_atlas` and the Python
-environment at `~/venvs/atlas`; run them as your own user (not root).
+### Prerequisites
 
-### 1. Prerequisites
-
-- Ubuntu 24.04 on the UiS network (Scopus only answers UiS addresses), sudo rights.
-  One CPU core, 2 GB free RAM and about 4 GB of free disk are enough.
+- Ubuntu 24.04 on the UiS network (Scopus only answers UiS addresses). One CPU core,
+  2 GB free RAM and about 4 GB of free disk are enough.
 - Outbound HTTPS to: `api.elsevier.com`, `api.anthropic.com`, `www.uis.no`,
   `api.nva.unit.no`, `www.forskningsradet.no`, `api.tech.ec.europa.eu`, `ec.europa.eu`,
   `erc.europa.eu`, `marie-sklodowska-curie-actions.ec.europa.eu`, `huggingface.co`,
-  `registry.npmjs.org`, `download.pytorch.org`, `deb.nodesource.com`, `github.com`,
-  and `api.telegram.org` if Telegram messages are set up.
-- Inbound: port 80 (and 443 once HTTPS is set up) from the users' networks.
+  `registry.npmjs.org`, `download.pytorch.org`, `raw.githubusercontent.com` (nvm),
+  `github.com`, and `api.telegram.org` if Telegram messages are set up.
+- Python 3.12 with the packages from `requirements-cpu.lock` (the same versions as
+  `requirements.lock`, with PyTorch's CPU build: the server has no GPU), Node.js 22,
+  Docker, rsync.
 
-```bash
-sudo apt update
-sudo apt install -y git python3.12-venv nginx rsync curl
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -   # Node.js 22
-sudo apt install -y nodejs
-sudo ufw status | grep -q active && sudo ufw allow 'Nginx Full'      # only if the firewall is on
-```
+### Configuration and data
 
-### 2. Code
+**Secrets** go in `.env` in the repository folder (mode 600, never committed):
+`SCOPUS_API_KEY`, `ANTHROPIC_API_KEY`, `ATLAS_FUNDING_PASSWORD` and `ATLAS_FIRST_YEAR`
+(the same values as on the laptop); optional `SCOPUS_INSTTOKEN`, `TELEGRAM_BOT_TOKEN`,
+`TELEGRAM_CHAT_ID` (docs/DEPLOY.md, step 6).
 
-```bash
-mkdir -p ~/atlas && cd ~/atlas
-git clone https://github.com/FlorencDemrozi/uis_atlas.git     # or: cd uis_atlas && git pull
-cd ~/atlas/uis_atlas
-```
-
-### 3. Python environment and web dependencies
-
-`requirements-cpu.lock` has the same package versions as the laptop, with the CPU
-build of PyTorch (the server has no GPU; the GPU build would add about 5 GB).
-
-```bash
-python3.12 -m venv ~/venvs/atlas
-~/venvs/atlas/bin/pip install -r requirements-cpu.lock
-(cd web && npm ci)
-```
-
-### 4. Configuration and data
-
-**Secrets** go in `.env` in the repository folder (never committed). Copy it from
-the laptop (below) or create it from the template:
-
-```bash
-cp .env.example .env && chmod 600 .env && nano .env
-```
-
-It needs `SCOPUS_API_KEY`, `ANTHROPIC_API_KEY`, `ATLAS_FUNDING_PASSWORD` and
-`ATLAS_FIRST_YEAR` (the same values as on the laptop); `SCOPUS_INSTTOKEN`,
-`TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are optional (docs/DEPLOY.md, step 6).
-
-**Data:** copy `data/raw/` and `data/interim/` from the laptop, so the first run does
-not repeat months of Scopus collection, AI summaries and e-mail look-ups. They hold
-licensed and personal data: copy them only over the UiS network (scp/rsync), never
-by e-mail or cloud storage. From the laptop, in PowerShell in the repository folder
-(replace `<server>` by the server's name, e.g. `sensing4health.uis.no`):
+**Data:** a new server can either collect everything (about 5 hours for the first
+run) or start from the laptop's `data/raw/` and `data/interim/`. They hold licensed
+and personal data: copy them only over the UiS network (scp/rsync), never by e-mail
+or cloud storage. From the laptop, in PowerShell in the repository folder:
 
 ```powershell
-scp -r data\raw data\interim u2929531@<server>:~/atlas/uis_atlas/data/
-scp .env u2929531@<server>:~/atlas/uis_atlas/.env
+scp -r data\raw data\interim u2929531@sensing4health.ux.uis.no:~/atlas/uis_atlas/data/
+scp .env u2929531@sensing4health.ux.uis.no:~/atlas/uis_atlas/.env
 ```
-
-Then on the server: `chmod 600 ~/atlas/uis_atlas/.env`.
-
-### 5. Build the website once
-
-The repository already holds the latest public data (`data/public/`), so the site
-can go online before the first update:
-
-```bash
-(cd web && npm run build)        # -> web/dist/
-```
-
-### 6. Start: web server and weekly timer
-
-```bash
-sudo deploy/install.sh                     # optionally: sudo deploy/install.sh atlas.uis.no
-```
-
-The script checks steps 3–5, copies `web/dist/` to `/var/www/atlas`, installs
-and enables the nginx site and the weekly timer, and prints the next scheduled run.
-It is safe to run again (e.g. after a `git pull` that changed `deploy/`).
-
-Then run the first update now instead of waiting for Saturday (30–60 minutes):
-
-```bash
-sudo systemctl start --no-block atlas-weekly.service
-journalctl -u atlas-weekly -f              # follow it; Ctrl+C stops watching, not the update
-```
-
-### 7. Check that the atlas is running
-
-```bash
-curl -sI http://localhost/ | head -1                   # HTTP/1.1 200 OK
-curl -s http://localhost/data/meta.json | head -c 120; echo   # "generated": date of the data
-deploy/status.sh                                       # site, schedule, last run, last success
-```
-
-Then open `http://<server>/` in a browser on the UiS network and check: a search
-returns researchers; a profile shows the e-mail and the "International
-collaboration" map; the collaboration network loads; the Funding page opens with
-the password. The browser console (F12) should show no errors.
 
 ### Weekly update
 
-**Schedule:** every **Saturday at 01:00** (server time), by `atlas-weekly.timer`. A
-run missed while the server was off starts at the next boot. One update:
+**Schedule:** every **Saturday at 01:00** (server time), by the user timer
+`atlas-weekly.timer`; a run missed while the server was off starts at the next boot.
+One update (about an hour):
 
 1. collects Scopus, NVA, the UiS employee directory, RCN calls and EU topics
    (a collector that fails is reported and the previous data is used);
 2. rebuilds profiles, partner institutions, summaries, embeddings, the public
    export and the funding matches (`pipeline/run_all.py`);
 3. stops before publishing if researchers or papers dropped by more than 15 %;
-4. builds the website, and only if everything succeeded copies it to
-   `/var/www/atlas`. A failed run leaves the published site unchanged.
+4. builds the website and, only if everything succeeded, publishes it
+   (`deploy/publish.sh`). A failed run leaves the site unchanged.
 
 | Task | Command |
 |---|---|
-| Next and previous run | `systemctl list-timers atlas-weekly.timer` |
-| Run an update now | `sudo systemctl start --no-block atlas-weekly.service` |
-| Is an update running? | `systemctl status atlas-weekly.service` |
 | When did the last update succeed? | `deploy/status.sh` (or `cat logs/last-success.json`) |
 | Did the last run fail, and why? | `deploy/status.sh` shows the end of its log |
+| Run an update now | `systemctl --user start --no-block atlas-weekly.service` |
+| Follow a run | `journalctl --user -u atlas-weekly -f` |
 | Full log of a run | `ls -t logs/weekly-*.log \| head` then `less logs/weekly-<date>.log` |
-| systemd's view (start, exit code) | `journalctl -u atlas-weekly -n 100 --no-pager` |
-| Failed services | `systemctl --failed` |
-| Change the time | `sudo systemctl edit atlas-weekly.timer` (e.g. `OnCalendar=Sun *-*-* 03:00:00`) |
-| Pause / resume the weekly update | `sudo systemctl disable --now atlas-weekly.timer` / `enable --now` |
+| Next and previous run | `systemctl --user list-timers atlas-weekly.timer` |
+| Change the time | `systemctl --user edit atlas-weekly.timer` (e.g. `OnCalendar=Sun *-*-* 03:00:00`) |
+| Pause / resume | `systemctl --user disable --now atlas-weekly.timer` / `enable --now` |
 
-Logs are in `logs/` (local only, last 26 runs kept). `logs/last-run.json` and
-`logs/last-success.json` hold the time, outcome and log file name of the last run
-and of the last successful run. With `TELEGRAM_*` set in `.env`, each run also
-sends a short message (OK, or the step that stopped it).
-
-**If a run fails:** read the end of its log (`deploy/status.sh`). Typical causes:
-Scopus 401/403 or quota (the site keeps the last data; the next run resumes), a
-missing key in `.env`, or "sharp drop" (a collector returned too little; if the
-drop is intended, run once by hand with
-`~/venvs/atlas/bin/python pipeline/run_weekly.py --allow-drop`, then
-`rsync -a --delete web/dist/ /var/www/atlas/`).
-
-**New code:** `git pull`, then `~/venvs/atlas/bin/pip install -r requirements-cpu.lock`
-and `(cd web && npm ci)` if those files changed, and `sudo deploy/install.sh` if
-`deploy/` changed. The next weekly run builds and publishes the new site; to publish
-at once, run an update now (table above).
-
-**HTTPS:** ask UiS IT for a host name and certificate, then add a `listen 443 ssl`
-server block (example in docs/DEPLOY.md, "Web server").
-
-**GitHub Pages:** the server does not push data to GitHub, so the Pages site keeps
-the last data pushed from the laptop. Turn it off (Settings → Pages) once the
-server's site is in use. Backups of `data/raw/` and `data/interim/`:
-docs/DEPLOY.md, "Backups".
+Logs are in `logs/` (local only, last 26 runs kept); `logs/last-run.json` and
+`logs/last-success.json` hold the time, outcome and log file of the last run and of
+the last successful run. With `TELEGRAM_*` set in `.env`, each run also sends a short
+message. Typical failures (Scopus 401/403 or quota, a missing key, "sharp drop") and
+their fixes: docs/SERVER.md, "Troubleshooting". Backups of `data/raw/` and
+`data/interim/`: docs/DEPLOY.md, "Backups".
 
 > **Status (2026-10-22):** the project owner decided to publish the test version
 > with real data before the UiS Library and data protection officer have

@@ -1,5 +1,6 @@
-# UiS Researcher Atlas: run the weekly update every Saturday at 01:00 (server time).
-# Persistent=true: a run missed while the machine was off starts at the next boot.
+# UiS Atlas: run the weekly update every Saturday at 01:00 (server time); a run missed
+# while the server was off starts at the next boot. Installed by deploy/setup.sh into
+# ~/.config/systemd/user/ (needs "loginctl enable-linger" so it runs without a login).
 [Unit]
 Description=UiS Researcher Atlas weekly update (Saturdays 01:00)
 

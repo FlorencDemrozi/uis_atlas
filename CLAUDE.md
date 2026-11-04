@@ -32,6 +32,7 @@ You are helping build the **UiS Researcher Atlas**: a public dashboard where any
 - `build_profiles.py`, `export_public.py` and the website (search, overview, network, profile; faculty/department picker) are implemented for all six faculties.
 - `summarize.py` (needs `ANTHROPIC_API_KEY`) and `embed.py` are implemented; both use only papers from the last 5 years (`config.ACTIVE_YEARS`). Vectors stay local (not published).
 - Funding Intelligence (RCN calls and EU Funding & Tenders topics via `collect_eu.py`/`eu.py`, matching, internal collaborators; password protected): `collect_rcn.py`, `build_calls.py`, `profile_calls.py`, `match_funding.py`, `export_funding.py`, web views `Funding`/`Call` and the profile section. See `docs/FUNDING.md`. `run_weekly.py` runs everything incl. the web build (optional Telegram message).
+- Live at https://atlas.ux.uis.no: the shared server sensing4health.ux.uis.no (nginx container on port 8443 behind UiS IT's reverse proxy, weekly systemd user timer). Setup, update and status scripts in `deploy/`; everything in docs/SERVER.md. Never install a system nginx there (ports 80/443 belong to sensing4health).
 - Project idea → calls: `call_vectors.py`, shortlist on the Funding page (model in the browser), `idea_match.py` for an AI-checked answer (docs/FUNDING.md).
 
 ## Commands

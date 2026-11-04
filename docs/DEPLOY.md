@@ -1,8 +1,10 @@
 # Deploying the weekly update on a UiS (Linux) server
 
-> **Step-by-step installation:** README.md, "Deployment on the UiS server". It uses the
-> ready-made files in `deploy/` (nginx site, systemd service and timer, install and
-> status scripts) and corresponds to option B below. This page has the background.
+> **The live server (https://atlas.ux.uis.no):** docs/SERVER.md has its complete setup,
+> using the scripts in `deploy/` (`setup.sh`, `update.sh`, `status.sh`, `publish.sh`).
+> This page has the background: what a run does, backups, maintenance. The nginx and
+> systemd examples further down are generic (a server of its own, system nginx on
+> ports 80/443); on the shared sensing4health server use docs/SERVER.md instead.
 
 `pipeline/run_weekly.py` does the whole update in one command: collectors (Scopus,
 UiS employee directory, RCN calls, EU topics), processing (`run_all.py`) and the

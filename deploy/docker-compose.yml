@@ -1,0 +1,18 @@
+# UiS Atlas web server: copied by deploy/setup.sh to ~/atlas/deploy/, which also holds
+# the .env with the paths and the generated nginx.conf. Independent of the
+# sensing4health stack: own compose project "atlas", listens only on ATLAS_PORT (host
+# networking), reads that stack's Let's Encrypt certificate read-only.
+# By hand: cd ~/atlas/deploy && docker compose -p atlas up -d
+services:
+  atlas-nginx:
+    image: nginx:stable-alpine
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      # The published copy of web/dist (deploy/publish.sh), not the build folder itself,
+      # so the site stays whole while a build runs or if it fails.
+      - ${ATLAS_SITE_DIR:?set ATLAS_SITE_DIR in .env}:/srv/site:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ${CERTBOT_CONF_DIR:?set CERTBOT_CONF_DIR in .env}:/etc/letsencrypt:ro
+    # Reload every 12 h so certificates renewed by the sensing4health certbot are used.
+    command: ["/bin/sh", "-c", "while :; do sleep 12h; nginx -s reload; done & exec nginx -g 'daemon off;'"]

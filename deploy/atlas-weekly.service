@@ -1,24 +1,18 @@
-# UiS Researcher Atlas: the weekly update (installed by deploy/install.sh, which fills
-# in the @...@ values). Started by atlas-weekly.timer; by hand:
-#   sudo systemctl start atlas-weekly.service
+# UiS Atlas weekly update: a systemd *user* service, installed by deploy/setup.sh into
+# ~/.config/systemd/user/ (it fills in @REPO@ and @VENV@). Started by atlas-weekly.timer;
+# by hand: systemctl --user start --no-block atlas-weekly.service
+# Node.js comes from nvm, which only a login shell loads, so it is sourced first.
 [Unit]
 Description=UiS Researcher Atlas weekly update
-Wants=network-online.target
-After=network-online.target
 
 [Service]
 Type=oneshot
-User=@USER@
 WorkingDirectory=@REPO@
-# Collect, process and build web/dist (pipeline/run_weekly.py; log in @REPO@/logs/).
-ExecStart=@VENV@/bin/python pipeline/run_weekly.py
-# Only after a successful run: copy the new site to the folder nginx serves. A failed
-# run leaves the published site as it was.
-ExecStartPost=/usr/bin/rsync -a --delete @REPO@/web/dist/ @WEBROOT@/
+# The nginx container reads the site as another user.
+UMask=0022
 TimeoutStartSec=12h
 Nice=10
-# Hardening: the job may write only its own folder, its caches and the web folder.
-NoNewPrivileges=yes
-PrivateTmp=yes
-ProtectSystem=strict
-ReadWritePaths=@REPO@ @HOME@/.cache @HOME@/.npm @WEBROOT@
+ExecStart=/bin/bash -c '. "$HOME/.nvm/nvm.sh" && exec "@VENV@/bin/python" pipeline/run_weekly.py'
+# Only after a successful run: copy web/dist to the folder nginx serves. A failed run
+# (collector, processing or build) leaves the published site as it was.
+ExecStartPost=@REPO@/deploy/publish.sh
