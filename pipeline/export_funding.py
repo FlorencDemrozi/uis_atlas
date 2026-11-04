@@ -25,6 +25,13 @@ all matches; the call page loads the rest – official text passages, documents,
 AI profile, history – from the call's detail shard. All files use the same salt
 and key (the password is typed once) with a new random IV each; no call or match
 is left out.
+
+Unchanged files are not rewritten. While the password stays the same, the salt
+and key of the previous export are reused, and a file whose content is the same
+as before (ignoring the export time) is left as it is. Every new encryption looks
+completely different, so rewriting unchanged files would add megabytes of new,
+incompressible data to the git history every week. A new password gives a new
+salt, and then every file is rewritten.
 Only fields allowed below are exported; no abstracts or raw Scopus data
 (DATA_POLICY §2) – papers are referenced by id and resolved against the public
 papers.json.
@@ -37,6 +44,7 @@ import os
 import secrets
 import sys
 from datetime import datetime
+from pathlib import Path
 
 import config
 
@@ -118,6 +126,46 @@ def encrypt(plain: bytes, key: bytes, salt: bytes) -> dict:
     return {"format": "atlas-funding-1",
             "kdf": {"name": "PBKDF2", "hash": "SHA-256", "iterations": ITERATIONS, "salt": b64(salt)},
             "cipher": {"name": "AES-GCM", "iv": b64(iv)}, "compression": "gzip", "data": b64(data)}
+
+
+def decrypt(file: dict, key: bytes) -> bytes:
+    """Plain text of an encrypted file (raises if the key is wrong or the file is damaged)."""
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    data = AESGCM(key).decrypt(base64.b64decode(file["cipher"]["iv"]), base64.b64decode(file["data"]), None)
+    return gzip.decompress(data)
+
+
+def previous_key(password: str) -> tuple[bytes, bytes] | None:
+    """(salt, key) of the previous export if it was made with this password, else None."""
+    try:
+        old = json.loads(OUT.read_text(encoding="utf-8"))
+        if old["kdf"]["iterations"] != ITERATIONS:
+            return None
+        salt = base64.b64decode(old["kdf"]["salt"])
+        key = derive_key(password, salt)
+        decrypt(old, key)
+        return salt, key
+    except Exception:   # no previous file, another password, or an unreadable file
+        return None
+
+
+def comparable(text: str):
+    """Content to compare with the previous export: everything except the export time."""
+    obj = json.loads(text)
+    if isinstance(obj, dict) and isinstance(obj.get("meta"), dict):
+        obj["meta"].pop("generated", None)
+    return obj
+
+
+def unchanged(path: Path, plain: str, key: bytes, salt: bytes) -> bool:
+    """True if the file on disk was encrypted with this salt and holds the same content."""
+    try:
+        old = json.loads(path.read_text(encoding="utf-8"))
+        if base64.b64decode(old["kdf"]["salt"]) != salt:
+            return False
+        return comparable(decrypt(old, key).decode("utf-8")) == comparable(plain)
+    except Exception:
+        return False
 
 
 def check_policy(text: str) -> None:
@@ -246,14 +294,27 @@ def main() -> None:
               + ([ideas] if ideas else [])]
     for plain in plains:
         check_policy(plain)
-    salt = secrets.token_bytes(16)
-    key = derive_key(password, salt)
+    previous = previous_key(password)
+    if previous:
+        salt, key = previous
+    else:
+        salt = secrets.token_bytes(16)
+        key = derive_key(password, salt)
     files = ([OUT] + [DETAIL_OUT.with_name(DETAIL_OUT.name.format(n)) for n in range(DETAIL_SHARDS)]
              + ([IDEAS_OUT] if ideas else []))
+    rewritten = 0
     for path, plain in zip(files, plains):
+        if previous and unchanged(path, plain, key, salt):
+            continue
         path.write_text(json.dumps(encrypt(plain.encode("utf-8"), key, salt)), encoding="utf-8")
+        rewritten += 1
     head = json.loads(OUT.read_text(encoding="utf-8"))
-    HEAD_OUT.write_text(json.dumps({"format": head["format"], "kdf": head["kdf"]}), encoding="utf-8")
+    head_text = json.dumps({"format": head["format"], "kdf": head["kdf"]})
+    if not HEAD_OUT.exists() or HEAD_OUT.read_text(encoding="utf-8") != head_text:
+        HEAD_OUT.write_text(head_text, encoding="utf-8")
+    print(f"Encrypted files: {rewritten} of {len(files)} rewritten"
+          + (" (new salt: password changed or first export)." if not previous else
+             ", the others are unchanged and kept as they are."))
     enc = sum(p.stat().st_size for p in files[1:1 + DETAIL_SHARDS]) / 1e6
     print(f"Funding data: {len(index['calls'])} calls, {sum(len(v) for v in data['matches'].values())} matches -> "
           f"{OUT.name} ({OUT.stat().st_size / 1e6:.2f} MB encrypted, {len(plains[0]) / 1e6:.2f} MB plain) "

@@ -10,9 +10,16 @@ writes JSON, the static site reads it. No database, no server.
 The funding pages (list, call pages, the "Funding opportunities" section on
 profiles) are password protected. `pipeline/export_funding.py` encrypts the funding
 data (gzip → AES-256-GCM, key from the password with PBKDF2-SHA256, 600 000
-iterations, new random salt each export). The site only contains ciphertext; the
-browser derives the key once the password is typed and keeps it for the browser
-session. The password lives only in `.env` (`ATLAS_FUNDING_PASSWORD`).
+iterations, random salt; a new random IV for every file written). The site only
+contains ciphertext; the browser derives the key once the password is typed and
+keeps it for the browser session. The password lives only in `.env`
+(`ATLAS_FUNDING_PASSWORD`).
+
+The salt is kept while the password stays the same, and a file whose content has
+not changed is not rewritten, so a quiet week adds nothing to the git history. A
+new password gives a new salt and rewrites every file. The small
+`funding.head.json` holds only the format and key settings: the site reads it
+first and downloads `funding.enc.json` (about 3 MB) only when someone unlocks.
 
 Limits: this protects the data from casual visitors and from anyone reading the
 site's code. It is a shared password, not per-person login; anyone who has it can
