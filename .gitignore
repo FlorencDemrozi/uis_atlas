@@ -28,3 +28,6 @@ web/public/data/
 .DS_Store
 .vscode/
 .idea/
+
+# Claude Code worktrees (temporary checkouts)
+.claude/worktrees/
