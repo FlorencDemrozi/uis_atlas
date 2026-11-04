@@ -55,6 +55,7 @@ def doc(eid, year, authors, affiliations):
 
 def test_build_credits_other_affiliations_by_author_id(tmp_path, monkeypatch):
     monkeypatch.setattr(collect_scopus, "FINAL_FILE", tmp_path / "atlas.json")
+    monkeypatch.setattr(collect_scopus, "FIRST_YEAR", 2000)   # not the .env value: CI has no .env
     uis, verona = config.AFID, "999"
     docs = [
         doc("u1", 2024, [("A", uis), ("B", uis)], [(uis, "University of Stavanger")]),
