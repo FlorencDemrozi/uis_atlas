@@ -24,8 +24,11 @@ import config
 RESEARCHER_FIELDS = [
     "scopus_id", "name", "orcid", "faculty", "department", "position", "summary", "tags",
     "n_publications", "n_uis", "output_types", "citations", "pubs_per_year", "first_year", "last_year",
-    "top_coauthors", "collab_departments", "paper_ids", "other_paper_ids", "scopus_metrics", "links",
+    "top_coauthors", "collab_departments", "other_paper_ids", "scopus_metrics", "links",
 ]
+# Not in researchers.json (to keep it small): paper_ids. Each paper lists its authors
+# (uis_author_ids), and the site rebuilds every researcher's paper list from that,
+# newest first (web/src/data.ts), as build_profiles.py orders it.
 SCOPUS_METRICS = ["documents", "citations", "h_index"]   # as shown on the Scopus author page
 
 PAPER_FIELDS = [
@@ -34,7 +37,8 @@ PAPER_FIELDS = [
 ]
 # papers.json is keyed by paper id ("nva-..." for NVA-only outputs, whose link the
 # site builds from the id). Empty fields are left out to keep the file small; the
-# site fills them in (web/src/data.ts).
+# site fills them in (web/src/data.ts). "category" is left out where the site can
+# derive it: from "type" via meta.json "category_of", else "article".
 
 MIN_COPIED_WORDS = 8   # a public sentence this long that also occurs in an abstract fails
 
@@ -45,6 +49,11 @@ def allow(record: dict, fields: list[str]) -> dict:
 
 def compact(record: dict) -> dict:
     return {k: v for k, v in record.items() if v not in (None, [], "")}
+
+
+def default_category(paper: dict) -> str:
+    """The category the site assumes when papers.json has none (web/src/data.ts)."""
+    return config.category_of(paper["type"]) if paper.get("type") else "article"
 
 
 def links_for(r: dict, extra: dict) -> dict:
@@ -139,17 +148,28 @@ def main() -> None:
                    top_coauthors=[c for c in r["top_coauthors"] if c["scopus_id"] in included])
         researchers.append(allow(rec, RESEARCHER_FIELDS))
 
-    used = {p for r in researchers for p in r["paper_ids"]}
+    # Authors per paper from the researchers' own paper lists, so the two can never
+    # disagree (the site rebuilds the paper lists from these).
+    authors_of = defaultdict(list)
+    for r in people:
+        for eid in r["paper_ids"]:
+            authors_of[eid].append(r["scopus_id"])
+    used = set(authors_of)
     papers = {}
     for eid in sorted(used):
         p = all_papers[eid]
-        uis = sorted({canon[a] for a in p["coauthor_ids"] if a in canon})
-        rec = allow(dict(p, uis_author_ids=uis), PAPER_FIELDS)
+        rec = allow(dict(p, uis_author_ids=sorted(authors_of[eid])), PAPER_FIELDS)
         if eid.startswith("nva-"):
             rec.pop("type")   # NVA's own type names: the site shows the category
+        if rec.get("category") == default_category(rec):
+            rec.pop("category")
         papers[eid] = compact(rec)
 
     check_no_copied_text(researchers, [all_papers[e].get("abstract") for e in used])
+    # Statistics need what the slim files leave out: paper lists and every category.
+    stats = build_stats(
+        [dict(rec, paper_ids=r["paper_ids"]) for rec, r in zip(researchers, people)],
+        {e: dict(p, category=all_papers[e].get("category", "article")) for e, p in papers.items()})
 
     meta = {
         "generated": datetime.now().isoformat(timespec="seconds"),
@@ -167,11 +187,13 @@ def main() -> None:
         "summary_model": config.SUMMARY_MODEL if summaries else None,
         "has_summaries": bool(summaries),
         "has_vectors": False,
+        # Scopus document type -> output category, for papers without "category".
+        "category_of": {t: config.category_of(t) for t in sorted({p["type"] for p in papers.values() if p.get("type")})},
     }
 
     config.PUBLIC.mkdir(parents=True, exist_ok=True)
     out = {"researchers.json": researchers, "papers.json": papers,
-           "stats.json": build_stats(researchers, papers), "meta.json": meta}
+           "stats.json": stats, "meta.json": meta}
     for name, data in out.items():
         (config.PUBLIC / name).write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")),
                                           encoding="utf-8")

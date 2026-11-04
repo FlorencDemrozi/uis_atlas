@@ -27,9 +27,13 @@ export interface Researcher {
   last_year: number;
   top_coauthors: Coauthor[];
   collab_departments: Record<string, number>;
+  /** All papers, newest first; rebuilt from papers' uis_author_ids at load (not in researchers.json). */
   paper_ids: string[];
   links: Record<string, string>;
 }
+
+/** As in researchers.json (pipeline/export_public.py). */
+type StoredResearcher = Omit<Researcher, "paper_ids">;
 
 /** As in papers.json, where empty fields are left out and the id is the key. */
 type StoredPaper = Partial<Paper> & { title: string; year: string };
@@ -45,8 +49,8 @@ export interface Paper {
   citations: number | null;
   keywords: string[];
   uis_author_ids: string[];
-  /** Output category (pipeline/config.py OUTPUT_CATEGORIES); absent in older exports. */
-  category?: string;
+  /** Output category (pipeline/config.py OUTPUT_CATEGORIES); filled in at load when papers.json leaves it out. */
+  category: string;
   /** NVA record, for outputs found only in NVA. */
   url?: string | null;
 }
@@ -58,7 +62,7 @@ const PUBLICATION_CATEGORIES = new Set(["article", "book", "chapter", "conferenc
 
 /** Counted as a publication (unit statistics, papers per year); see config.PUBLICATION_CATEGORIES. */
 export function isPublication(p: Paper): boolean {
-  return PUBLICATION_CATEGORIES.has(p.category ?? "article");
+  return PUBLICATION_CATEGORIES.has(p.category);
 }
 
 export interface UnitStats {
@@ -82,6 +86,8 @@ export interface Meta {
   n_papers: number;
   has_summaries: boolean;
   has_vectors: boolean;
+  /** Scopus document type -> output category, for papers stored without "category". */
+  category_of?: Record<string, string>;
 }
 
 export interface Atlas {
@@ -133,19 +139,33 @@ export function aggregateKeywords(paperIds: string[], papers: Record<string, Pap
 }
 
 export async function loadAtlas(): Promise<Atlas> {
-  const [researchers, stored, stats, meta] = await Promise.all([
-    getJson<Researcher[]>("researchers.json"),
+  const [storedResearchers, stored, stats, meta] = await Promise.all([
+    getJson<StoredResearcher[]>("researchers.json"),
     getJson<Record<string, StoredPaper>>("papers.json"),
     getJson<Stats>("stats.json"),
     getJson<Meta>("meta.json"),
   ]);
   const papers: Record<string, Paper> = {};
+  const paperIds = new Map<string, string[]>();
+  const categoryOf = meta.category_of ?? {};
   for (const [eid, p] of Object.entries(stored)) {
+    // Same default as pipeline/export_public.py default_category().
+    const category = p.category ?? (p.type ? categoryOf[p.type] ?? "other" : "article");
     papers[eid] = {
-      venue: null, type: null, doi: null, citations: null, keywords: [], uis_author_ids: [], ...p, eid,
+      venue: null, type: null, doi: null, citations: null, keywords: [], uis_author_ids: [], ...p, eid, category,
       url: eid.startsWith("nva-") ? `https://nva.sikt.no/registration/${eid.slice(4)}` : null,
     };
+    for (const id of papers[eid].uis_author_ids) {
+      const list = paperIds.get(id);
+      if (list) list.push(eid); else paperIds.set(id, [eid]);
+    }
   }
+  // Newest first, then by id: the order of pipeline/build_profiles.py.
+  const year = (eid: string) => Number(papers[eid].year) || 0;
+  const researchers: Researcher[] = storedResearchers.map((r) => ({
+    ...r,
+    paper_ids: (paperIds.get(r.scopus_id) ?? []).sort((a, b) => year(b) - year(a) || (a < b ? -1 : a > b ? 1 : 0)),
+  }));
   const keywords = new Map<string, [string, number][]>();
   const recent = new Map<string, number>();
   for (const r of researchers) {
