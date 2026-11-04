@@ -1,4 +1,3 @@
-import type { ComponentType } from "preact";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { loadAtlas, type Atlas } from "./data";
 import { I18n, useI18n, useI18nState } from "./i18n";
@@ -9,26 +8,7 @@ import { useTheme } from "./theme";
 import { SearchView } from "./views/Search";
 import { ProfileView } from "./views/Profile";
 import { FundingContext, callTitle, useFundingState } from "./funding";
-
-/** A view whose code is downloaded the first time it is opened (Search and Profile,
- *  where most visits start, are in the main bundle). */
-function lazyView<P extends object>(load: () => Promise<ComponentType<P>>): ComponentType<P> {
-  let View: ComponentType<P> | null = null;
-  let pending: Promise<void> | null = null;
-  return function LazyView(props: P) {
-    const { t } = useI18n();
-    const [, setLoaded] = useState(!!View);
-    const [error, setError] = useState<string | null>(null);
-    useEffect(() => {
-      if (View) return;
-      pending ??= load().then((v) => { View = v; });
-      pending.then(() => setLoaded(true), (e) => { pending = null; setError(String(e)); });
-    }, []);
-    if (error) return <p class="loading">{t("app.loadError")} ({error})</p>;
-    if (!View) return <p class="loading" role="status">{t("app.loading")}</p>;
-    return <View {...props} />;
-  };
-}
+import { lazyView } from "./lazy";
 
 const OverviewView = lazyView(() => import("./views/Overview").then((m) => m.OverviewView));
 const NetworkView = lazyView(() => import("./views/Network").then((m) => m.NetworkView));

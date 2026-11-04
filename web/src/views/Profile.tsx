@@ -8,6 +8,10 @@ import { useState } from "preact/hooks";
 import { CategoryBadge, EligibilityBadge, FundingGate, MatchDetails, SourceBadge, StatusBadge, useFmt } from "../components/funding";
 import { FAMILIES, callTitle, familyOf, nextDeadline, openFieldCallsFor, pick, useFunding, type Call,
   type Funding } from "../funding";
+import { lazyView } from "../lazy";
+
+// Map and partner lists: their code and map outline load only when a profile has them.
+const PartnerSection = lazyView(() => import("../components/partners").then((m) => m.PartnerSection));
 
 /** Calls open to all research fields (e.g. FRIPRO), offered to everyone with their eligibility. */
 function OpenFieldCalls({ data, id, keep }: { data: Funding; id: string; keep: (c: Call) => boolean }) {
@@ -160,6 +164,8 @@ export function ProfileView({ atlas, id }: { atlas: Atlas; id: string }) {
             <br /><span class="muted small">{t("p.autoSummary")}</span></p>
           : <p class="summary pending">{t("r.summaryPending")}</p>}
         <div class="links">
+          {r.email && <a class="email" href={`mailto:${r.email}`} title={t("p.emailTitle", { name: r.name })}>
+            <span aria-hidden="true">✉ </span>{r.email}</a>}
           <a href={links.networkFocus(r.scopus_id)}>{t("p.exploreNetwork")}</a>
           {r.links.scopus && <a href={r.links.scopus}>{t("p.scopus")}</a>}
           {r.links.orcid && <a href={r.links.orcid}>ORCID</a>}
@@ -198,6 +204,8 @@ export function ProfileView({ atlas, id }: { atlas: Atlas; id: string }) {
           </section>
 
           <ProfileFunding atlas={atlas} id={r.scopus_id} name={r.name} />
+
+          {atlas.meta.has_partners && <PartnerSection id={r.scopus_id} />}
 
           <section class="section" aria-labelledby="h-pubs">
             <h2 id="h-pubs">{t("p.outputs", { n: r.paper_ids.length })}</h2>

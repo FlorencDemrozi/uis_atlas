@@ -33,6 +33,7 @@
   --dept-6: #008300;
   --dept-7: #4a3aa7;
   --dept-none: #898781;
+  --ext-node: #3d3c38;     /* external partner institutions (network squares) */
   /* Faculty colours: slots of the same palette (they follow its dark-mode values). */
   --fac-1: var(--dept-1); --fac-2: var(--dept-2); --fac-3: var(--dept-5);
   --fac-4: var(--dept-4); --fac-5: var(--dept-3); --fac-6: var(--dept-7);
@@ -59,7 +60,7 @@
     --dept-5: #d55181; --dept-6: #008300; --dept-7: #9085e9; --dept-none: #898781;
     --seq-1: #104281; --seq-2: #1c5cab; --seq-3: #256abf;
     --seq-4: #3987e5; --seq-5: #6da7ec; --seq-6: #9ec5f4;
-    --seq-ink-low: #ffffff; --seq-ink-high: #0b0b0b;
+    --seq-ink-low: #ffffff; --seq-ink-high: #0b0b0b; --ext-node: #d6d4cc;
     --good: #8fd8a6; --good-wash: #13291b; --caution: #f2c46b; --caution-wash: #2e2410;
     --bad: #f4a097; --bad-wash: #34171a;
   }
@@ -75,7 +76,7 @@
   --dept-5: #d55181; --dept-6: #008300; --dept-7: #9085e9; --dept-none: #898781;
   --seq-1: #104281; --seq-2: #1c5cab; --seq-3: #256abf;
   --seq-4: #3987e5; --seq-5: #6da7ec; --seq-6: #9ec5f4;
-  --seq-ink-low: #ffffff; --seq-ink-high: #0b0b0b;
+  --seq-ink-low: #ffffff; --seq-ink-high: #0b0b0b; --ext-node: #d6d4cc;
   --good: #8fd8a6; --good-wash: #13291b; --caution: #f2c46b; --caution-wash: #2e2410;
   --bad: #f4a097; --bad-wash: #34171a;
 }
@@ -599,3 +600,38 @@ details.table-view summary { cursor: pointer; color: var(--accent); width: fit-c
 .idea-search textarea { width: 100%; font: inherit; color: var(--ink); resize: vertical; }
 .idea-hits { padding-left: 1.4em; display: flex; flex-direction: column; gap: 8px; }
 .aff-other { font-size: 12px; padding: 1px 7px; border-radius: 4px; background: var(--surface-2); color: var(--ink-2); white-space: nowrap; }
+
+/* External partners in the network: squares on an outer ring, dashed links. */
+.net-wrap .inst-node { fill: var(--ext-node); stroke: var(--surface); cursor: pointer; transition: opacity 0.2s; }
+.net-wrap .inst-node.dim { opacity: 0.15; }
+.net-wrap .inst-node.focus { stroke: var(--accent); }
+.net-wrap .edge.ext { stroke-dasharray: 3 2; stroke-opacity: 0.3; }
+.net-wrap .edge.ext.hl { stroke-opacity: 0.85; }
+.net-wrap .node-label.inst { font-style: italic; }
+.square { width: 10px; height: 10px; border-radius: 2px; background: var(--ext-node); display: inline-block; flex: none; margin-right: 6px; vertical-align: middle; }
+.legend-ext { display: inline-flex; align-items: center; padding: 2px 8px; color: var(--ink-2); }
+@media (prefers-reduced-motion: reduce) { .net-wrap .inst-node { transition: none; } }
+
+/* World map of partner countries (profile). */
+.world-map { position: relative; margin: 8px 0 4px; }
+.world-map svg { display: block; height: auto; }
+.world-map .country { fill: var(--grid); stroke: var(--surface); stroke-width: 0.5; }
+.world-map .country.dot { stroke-width: 1.5; }
+.world-map .seq-1 { fill: var(--seq-1); } .world-map .seq-2 { fill: var(--seq-2); } .world-map .seq-3 { fill: var(--seq-3); }
+.world-map .seq-4 { fill: var(--seq-4); } .world-map .seq-5 { fill: var(--seq-5); } .world-map .seq-6 { fill: var(--seq-6); }
+.world-map .country[class*="seq-"]:hover { stroke: var(--ink); stroke-width: 1; }
+.world-map .home circle { fill: var(--ink); stroke: var(--surface); stroke-width: 2; }
+.world-map .home text { fill: var(--ink); font-size: 12px; font-weight: 600; paint-order: stroke; stroke: var(--surface); stroke-width: 3; }
+.partner-lists { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 24px; margin-top: 16px; }
+.partner-lists h3 { font-size: 16px; margin: 0 0 8px; }
+.partner-lists .link-btn { margin-top: 8px; }
+.partner-inst li { font-size: 14px; }
+.partner-inst .num { white-space: nowrap; }
+@media (max-width: 700px) { .partner-lists { grid-template-columns: 1fr; } }
+
+/* Home page: where the data comes from. */
+.data-sources { margin-top: 14px; font-size: 14px; }
+.data-sources details summary { cursor: pointer; color: var(--accent); width: fit-content; }
+.data-sources ul { margin: 8px 0 0; padding-left: 20px; color: var(--ink-2); }
+.data-sources li { margin: 4px 0; }
+.links a.email { font-weight: 600; }

@@ -96,6 +96,7 @@ export function SearchView({ atlas, route }: { atlas: Atlas; route: Route }) {
         </div>
         <p class="note">{t("search.syntax")}</p>
         {!atlas.meta.has_vectors && <p class="note">{t("search.keywordOnly")}</p>}
+        <DataSources atlas={atlas} />
       </section>
 
       <OrgFilter atlas={atlas}>
@@ -141,6 +142,38 @@ export function SearchView({ atlas, route }: { atlas: Atlas; route: Route }) {
         </p>
       )}
     </>
+  );
+}
+
+const SOURCES: [string, string, string][] = [   // [key, name, link]
+  ["scopus", "Scopus", "https://www.scopus.com/"],
+  ["nva", "NVA", "https://nva.sikt.no/"],
+  ["pubmed", "PubMed", "https://pubmed.ncbi.nlm.nih.gov/"],
+  ["directory", "UiS", "https://www.uis.no/nb/sok/ansatte"],
+  ["rcn", "RCN", "https://www.forskningsradet.no/utlysninger/"],
+  ["eu", "EU F&T", "https://ec.europa.eu/info/funding-tenders/opportunities/portal/"],
+];
+
+/** Where the data comes from and how often it is refreshed (home page). */
+function DataSources({ atlas }: { atlas: Atlas }) {
+  const { t, lang } = useI18n();
+  const date = new Date(atlas.meta.generated).toLocaleDateString(lang === "nb" ? "nb-NO" : "en-GB",
+    { day: "numeric", month: "long", year: "numeric" });
+  return (
+    <div class="data-sources" aria-labelledby="h-sources">
+      <h2 id="h-sources" class="visually-hidden">{t("src.title")}</h2>
+      <p class="note"><span aria-hidden="true">⟳ </span>{t("src.weekly", { date })}</p>
+      <details>
+        <summary>{t("src.lead")}: {SOURCES.map(([, name]) => name).join(" · ")}</summary>
+        <ul>
+          {SOURCES.map(([key, , href]) => {
+            // "Name (detail): description" -> the name part links to the source.
+            const [head, ...rest] = t(`src.${key}`, { from: String(atlas.meta.period.first_year) }).split(": ");
+            return <li key={key}><a href={href}>{head}</a>: {rest.join(": ")}</li>;
+          })}
+        </ul>
+      </details>
+    </div>
   );
 }
 

@@ -6,6 +6,8 @@ export interface Researcher {
   scopus_id: string;
   name: string;
   orcid: string | null;
+  /** Work e-mail from the UiS employee directory (absent for people not found there). */
+  email?: string | null;
   faculty: string;
   department: string;
   position: { nb: string | null; en: string | null } | null;
@@ -86,6 +88,8 @@ export interface Meta {
   n_papers: number;
   has_summaries: boolean;
   has_vectors: boolean;
+  /** partners.json exists (external partner institutions, pipeline/build_partners.py). */
+  has_partners?: boolean;
   /** Scopus document type -> output category, for papers stored without "category". */
   category_of?: Record<string, string>;
 }

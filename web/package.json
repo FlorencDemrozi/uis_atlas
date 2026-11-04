@@ -13,12 +13,17 @@
   "dependencies": {
     "@huggingface/transformers": "^3.8.1",
     "d3-force": "^3.0.0",
+    "d3-geo": "^3.1.1",
     "minisearch": "^7.2.0",
-    "preact": "^11.0.1"
+    "preact": "^11.0.1",
+    "topojson-client": "^3.1.0",
+    "world-atlas": "^2.0.2"
   },
   "devDependencies": {
     "@preact/preset-vite": "^2.10.6",
     "@types/d3-force": "^3.0.10",
+    "@types/d3-geo": "^3.1.0",
+    "@types/topojson-client": "^3.1.5",
     "typescript": "^7.0.2",
     "vite": "^8.3.5"
   }
