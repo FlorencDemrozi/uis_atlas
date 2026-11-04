@@ -554,5 +554,15 @@
   "src.scopus": "Scopus (Elsevier): fagfellevurderte artikler, konferansebidrag, bøker og kapitler med UiS-tilknytning siden {from}, siteringer og medforfatternes institusjoner.",
   "src.nva": "NVA (Nasjonalt vitenarkiv, Sikt): alle registrerte forskningsresultater fra UiS, også bøker, rapporter, kunstneriske arbeider, foredrag og formidling i media.",
   "src.pubmed": "PubMed / MEDLINE: biomedisinske og helsefaglige publikasjoner er med gjennom Scopus, som indekserer alle MEDLINE-tidsskrifter.",
-  "src.directory": "UiS' ansattkatalog (uis.no): hvem som jobber ved UiS i dag, institutt, stilling, profilside og jobb-e-post."
+  "src.directory": "UiS' ansattkatalog (uis.no): hvem som jobber ved UiS i dag, institutt, stilling, profilside og jobb-e-post.",
+  "nav.feedback": "Tilbakemelding",
+  "fb.title": "Tilbakemelding",
+  "fb.lede": "Hjelp oss å gjøre UiS Forskeratlas mer nyttig. Spørreskjemaet tar omtrent to minutter.",
+  "fb.what": "Fortell oss",
+  "fb.point1": "hva du brukte atlaset til, og om du fant det du lette etter;",
+  "fb.point2": "hva som mangler, er uklart eller kunne fungert bedre;",
+  "fb.point3": "om feil eller manglende opplysninger på en forskerprofil, så vi kan rette dem.",
+  "fb.open": "Åpne spørreskjemaet",
+  "fb.newTab": "Microsoft Forms, åpnes i en ny fane",
+  "fb.privacy": "Spørreskjemaet driftes av Universitetet i Stavanger i Microsoft Forms. Ikke oppgi sensitive personopplysninger i svarene."
 }

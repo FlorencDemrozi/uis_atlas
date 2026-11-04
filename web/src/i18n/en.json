@@ -554,5 +554,15 @@
   "src.scopus": "Scopus (Elsevier): peer-reviewed articles, conference papers, books and chapters with a UiS affiliation since {from}, citations, and the institutions of co-authors.",
   "src.nva": "NVA (Nasjonalt vitenarkiv, Sikt): all registered research output of UiS, including books, reports, artistic work, lectures and media contributions.",
   "src.pubmed": "PubMed / MEDLINE: biomedical and health publications are included through Scopus, which indexes all MEDLINE journals.",
-  "src.directory": "UiS employee directory (uis.no): who works at UiS today, their department, position, profile page and work e-mail."
+  "src.directory": "UiS employee directory (uis.no): who works at UiS today, their department, position, profile page and work e-mail.",
+  "nav.feedback": "Feedback",
+  "fb.title": "Feedback",
+  "fb.lede": "Help us make the UiS Researcher Atlas more useful. The questionnaire takes about two minutes.",
+  "fb.what": "Tell us",
+  "fb.point1": "what you used the atlas for, and whether you found what you were looking for;",
+  "fb.point2": "what is missing, unclear or could work better;",
+  "fb.point3": "about wrong or missing information on a researcher's profile, so we can correct it.",
+  "fb.open": "Open the questionnaire",
+  "fb.newTab": "Microsoft Forms, opens in a new tab",
+  "fb.privacy": "The questionnaire is run by the University of Stavanger in Microsoft Forms. Please do not include sensitive personal information in your answers."
 }

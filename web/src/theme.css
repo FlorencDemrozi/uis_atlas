@@ -640,3 +640,9 @@ details.table-view summary { cursor: pointer; color: var(--accent); width: fit-c
 .net-wrap svg.pointing g.base { opacity: 0.18; transition: opacity 0.15s; }
 .net-wrap g.overlay { pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .net-wrap svg.pointing g.base { transition: none; } }
+
+/* Feedback page */
+.feedback-panel { max-width: 720px; padding: 20px 24px; }
+.feedback-panel h2 { font-size: 18px; margin: 0 0 8px; }
+.feedback-panel ul { margin: 0 0 18px; padding-left: 20px; }
+.feedback-panel li { margin: 4px 0; }

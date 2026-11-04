@@ -15,6 +15,7 @@ const NetworkView = lazyView(() => import("./views/Network").then((m) => m.Netwo
 const ShortlistView = lazyView(() => import("./views/Shortlist").then((m) => m.ShortlistView));
 const FundingView = lazyView(() => import("./views/Funding").then((m) => m.FundingView));
 const CallView = lazyView(() => import("./views/Call").then((m) => m.CallView));
+const FeedbackView = lazyView(() => import("./views/Feedback").then((m) => m.FeedbackView));
 
 export function App() {
   const i18n = useI18nState();
@@ -62,6 +63,7 @@ export function App() {
   else if (route.view === "shortlist") content = <ShortlistView atlas={atlas} route={route} />;
   else if (route.view === "profile") content = <ProfileView atlas={atlas} id={route.id!} key={route.id} />;
   else if (route.view === "funding") content = <FundingView atlas={atlas} route={route} />;
+  else if (route.view === "feedback") content = <FeedbackView />;
   else if (route.view === "call") content = <CallView atlas={atlas} id={route.id!} key={route.id} />;
   else content = <SearchView atlas={atlas} route={route} />;
 
@@ -90,6 +92,7 @@ function Header({ view }: { view: View }) {
   const [theme, toggleTheme] = useTheme();
   const { ids } = useShortlist();
   const items: [View, string][] = [["search", links.search()], ["overview", links.overview], ["network", links.network],
+    ["feedback", links.feedback],
     ["funding", links.funding()], ["shortlist", links.shortlist()]];
   return (
     <header class="topbar">
