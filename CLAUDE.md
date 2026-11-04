@@ -42,7 +42,7 @@ When running commands non-interactively, call `C:\python-envs\.atlas\Scripts\pyt
 ```powershell
 py -3.12 -m venv C:\python-envs\.atlas                # once; already created
 C:\python-envs\.atlas\Scripts\Activate.ps1            # activate (PowerShell)
-pip install -r requirements.txt
+pip install -r requirements.lock
 Copy-Item .env.example .env                           # then fill in keys
 python pipeline/collect_scopus.py                     # stage 1 (UiS network)
 python pipeline/collect_scopus.py --build-only        # rebuild stage 1 output offline (after mapping changes)

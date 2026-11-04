@@ -25,10 +25,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Licence guard (no abstracts or raw affiliations in data/public)
+      - name: Tests, incl. the licence guard (no abstracts or raw affiliations in data/public)
+        # Only what the tests import, at the versions in requirements.lock (no torch).
         run: |
-          pip install pytest python-dotenv
-          pytest tests/test_policy.py -q
+          pip install -c requirements.lock pytest python-dotenv numpy cryptography requests
+          pytest -q
       - uses: actions/setup-node@v4
         with:
           node-version: 22

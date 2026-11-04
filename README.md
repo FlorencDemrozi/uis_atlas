@@ -45,7 +45,7 @@ at `C:\python-envs\.atlas`, using Python 3.12:
 ```powershell
 py -3.12 -m venv C:\python-envs\.atlas
 C:\python-envs\.atlas\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install -r requirements.lock
 Copy-Item .env.example .env          # add your Scopus API key (never commit .env)
 python pipeline/collect_scopus.py    # on the UiS network or VPN
 ```
