@@ -22,9 +22,12 @@ Everything printed is also written to logs/weekly-<date>.log (local only).
 Exit code 0 only if everything after step 1 succeeded; collector problems are
 listed at the end. Run with the project's Python, e.g.:
   C:\\python-envs\\.atlas\\Scripts\\python.exe pipeline\\run_weekly.py
-Options: --skip-scopus (off the UiS network), --no-web (data only), --publish.
+Options: --skip-scopus (off the UiS network), --no-web (data only), --publish,
+--allow-drop (accept a sharp drop in researchers or papers, which otherwise stops
+the run before the website is rebuilt; see config.MAX_COUNT_DROP).
 """
 import argparse
+import json
 import os
 import shutil
 import subprocess
@@ -35,7 +38,7 @@ from pathlib import Path
 
 import notify
 import runlock
-from config import LOGS, ROOT, STEP_TIMEOUT, WEB_BUILD_TIMEOUT
+from config import LOGS, MAX_COUNT_DROP, ROOT, STEP_TIMEOUT, WEB_BUILD_TIMEOUT
 
 HERE = Path(__file__).resolve().parent
 WEB = ROOT / "web"
@@ -104,6 +107,26 @@ def publish() -> bool:
         and git("push")
 
 
+def count_drops(old: dict, new: dict, max_drop: float = MAX_COUNT_DROP) -> list[str]:
+    """Counts in meta.json that fell by more than max_drop (e.g. "papers 56418 -> 30000")."""
+    drops = []
+    for key, label in (("n_researchers", "researchers"), ("n_papers", "papers")):
+        before, after = old.get(key) or 0, new.get(key) or 0
+        if before and after < before * (1 - max_drop):
+            drops.append(f"{label} {before} -> {after}")
+    return drops
+
+
+def sanity_check() -> list[str]:
+    """Compare the new data/public/meta.json with the last committed one."""
+    committed = subprocess.run(["git", "show", "HEAD:data/public/meta.json"], cwd=ROOT,
+                               capture_output=True, text=True, encoding="utf-8")
+    new_meta = ROOT / "data" / "public" / "meta.json"
+    if committed.returncode != 0 or not new_meta.exists():
+        return []   # first export: nothing to compare with
+    return count_drops(json.loads(committed.stdout), json.loads(new_meta.read_text(encoding="utf-8")))
+
+
 def prune_logs() -> None:
     for old in sorted(LOGS.glob("weekly-*.log"))[:-KEEP_LOGS]:
         old.unlink()
@@ -116,6 +139,8 @@ def main() -> None:
     ap.add_argument("--no-web", action="store_true", help="update the data only, do not build the website")
     ap.add_argument("--publish", action="store_true",
                     help="commit and push data/public/ so GitHub Pages redeploys (server with push access)")
+    ap.add_argument("--allow-drop", action="store_true",
+                    help="build and publish even if researchers or papers dropped sharply (an intended change)")
     args = ap.parse_args()
     sys.stdout.reconfigure(errors="replace")   # a name the console cannot show must not stop the run
     started = datetime.now()
@@ -139,6 +164,13 @@ def main() -> None:
 
     if not run([sys.executable, str(HERE / "run_all.py")], timeout=None):   # each stage has its own limit
         stop("Weekly update stopped: a processing stage failed (see above). The website was not rebuilt.")
+    drops = sanity_check()
+    if drops and not args.allow_drop:
+        stop(f"Weekly update stopped: sharp drop compared with the published data ({'; '.join(drops)}). "
+             "The website was not rebuilt or published. If this is intended, run again with --allow-drop; "
+             "otherwise check the collectors in the log.")
+    elif drops:
+        say(f"Sharp drop accepted with --allow-drop: {'; '.join(drops)}.")
     if not args.no_web:
         npm = shutil.which("npm") or shutil.which("npm.cmd")
         if not npm or not run([npm, "run", "build"], cwd=WEB, timeout=WEB_BUILD_TIMEOUT):

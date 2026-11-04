@@ -218,6 +218,10 @@ RUN_LOCK = LOGS / ".run.lock"           # one pipeline run at a time (run_weekly
 # run. Generous: a first full Scopus collection or regenerating all summaries takes hours.
 STEP_TIMEOUT = 4 * 3600                 # seconds per collector and per run_all.py stage
 WEB_BUILD_TIMEOUT = 30 * 60             # npm run build
+# Sanity check before the website is rebuilt or published (run_weekly.py): stop if
+# researchers or papers drop by more than this share compared with the last
+# committed data/public/ (a collector that silently returned too little).
+MAX_COUNT_DROP = 0.15
 
 EXCLUSIONS = CONFIG_DIR / "exclusions.json"
 OVERRIDES = CONFIG_DIR / "overrides.json"
