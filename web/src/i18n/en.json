@@ -154,6 +154,8 @@
   "view.exportCsv": "Export {n} as CSV",
   "csv.position": "Position",
   "csv.match": "Match",
+  "csv.email": "E-mail",
+  "csv.atlas": "Atlas profile",
   "sl.title": "Shortlist",
   "sl.add": "Add to shortlist",
   "sl.remove": "Remove from shortlist",

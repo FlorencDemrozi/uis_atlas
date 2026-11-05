@@ -153,6 +153,8 @@
   "view.latest": "Siste publikasjoner",
   "view.exportCsv": "Eksporter {n} som CSV",
   "csv.position": "Stilling",
+  "csv.email": "E-post",
+  "csv.atlas": "Atlas-profil",
   "csv.match": "Treff",
   "sl.title": "Kortliste",
   "sl.add": "Legg til i kortlisten",
