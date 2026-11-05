@@ -74,6 +74,8 @@ FUNDERS = {
            "them for the fields, not for topics or competencies. Obligations such as open-source licences, "
            "standardisation feedback, dissemination or cooperation with other EU projects are not research "
            "topics: leave them out of topics, technologies and competencies."),
+    "nordforsk": ("NordForsk (Nordic research funding, often jointly with national research councils)", ""),
+    "nordicenergy": ("Nordic Energy Research (Nordic energy research funding)", ""),
 }
 
 STR = {"type": "string"}
@@ -197,13 +199,13 @@ def main() -> None:
     cache = json.loads(config.CALL_PROFILES.read_text(encoding="utf-8")) if config.CALL_PROFILES.exists() else {}
     best = best_scores()
     todo = [c for c in calls if c["fields"]["status"]["v"] != "closed"
-            and (c["source"] == "rcn" or eu_wanted(c, best, cache))]
+            and (c["source"] != "eu" or eu_wanted(c, best, cache))]
     print(f"Call profiles: {sum(c['source'] == 'eu' for c in todo)} EU topics pass the pre-filter "
           f"(best score >= {config.EU_PROFILE_MIN_SCORE} or profiled before).")
     made = 0
     for i, call in enumerate(todo, 1):
         text = call_text(call)
-        version = PROMPT_VERSION if call["source"] == "rcn" else f"eu{EU_PROMPT_VERSION}"
+        version = f"eu{EU_PROMPT_VERSION}" if call["source"] == "eu" else PROMPT_VERSION
         h = hashlib.sha256(f"{config.SUMMARY_MODEL}|{version}|{text}".encode()).hexdigest()
         if cache.get(call["id"], {}).get("source_hash") == h:
             continue

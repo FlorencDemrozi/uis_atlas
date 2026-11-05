@@ -374,6 +374,21 @@ EU_CLOSED_MONTHS = 6          # closed topics kept for history: deadline within 
 EU_DETAIL_MAX_AGE_DAYS = 28   # refetch an unchanged open topic's text at least this often
 EU_SLEEP = 0.5                # seconds between requests
 
+# ---- Nordic funders (NordForsk, Nordic Energy Research) --------------------
+# Both publish their calls as structured data on their public websites (checked
+# 2026-11-05; robots.txt allows it, no key). NordForsk's application portal
+# (funding.nordforsk.org) needs a login and is not used: the website links to it.
+# Nordic Energy Research also lists procurement tenders; they are left out.
+RAW_NORDIC = DATA / "raw" / "nordic"              # one JSON file per source + sync_status.json
+NORDFORSK_SITE = "https://www.nordforsk.org"
+NORDFORSK_API = NORDFORSK_SITE + "/jsonapi/node/call"           # Drupal JSON:API, content type "call"
+NORDFORSK_CALLS_PAGE = NORDFORSK_SITE + "/calls"
+NER_SITE = "https://www.nordicenergy.org"
+NER_API = NER_SITE + "/wp-json/wp/v2/"                           # WordPress REST API, post type "funding"
+NER_CALLS_PAGE = NER_SITE + "/funding/"
+NORDIC_CLOSED_MONTHS = 6      # closed calls kept for history: deadline within this many months
+NORDIC_SLEEP = 1.0            # seconds between requests
+
 CALLS = INTERIM / "calls.json"                    # structured calls (build_calls.py)
 CALLS_HISTORY = INTERIM / "calls_history.json"    # detected changes per call
 CALL_PROFILES = INTERIM / "call_profiles.json"    # AI call profiles (profile_calls.py)

@@ -33,6 +33,7 @@ You are helping build the **UiS Researcher Atlas**: a public dashboard where any
 - `summarize.py` (needs `ANTHROPIC_API_KEY`) and `embed.py` are implemented; both use only papers from the last 5 years (`config.ACTIVE_YEARS`). Vectors stay local (not published).
 - Funding Intelligence (RCN calls and EU Funding & Tenders topics via `collect_eu.py`/`eu.py`, matching, internal collaborators; password protected): `collect_rcn.py`, `build_calls.py`, `profile_calls.py`, `match_funding.py`, `export_funding.py`, web views `Funding`/`Call` and the profile section. See `docs/FUNDING.md`. `run_weekly.py` runs everything incl. the web build (optional Telegram message).
 - Live at https://atlas.ux.uis.no: the shared server sensing4health.ux.uis.no (nginx container on port 8443 behind UiS IT's reverse proxy, weekly systemd user timer). Setup, update and status scripts in `deploy/`; everything in docs/SERVER.md. Never install a system nginx there (ports 80/443 belong to sensing4health).
+- Nordic funders: `collect_nordic.py` (NordForsk and Nordic Energy Research, public website APIs, any network) and `nordic.py`; merged by `build_calls.py`. The Funding page filters funders with grouped checkboxes (docs/FUNDING.md).
 - Project idea → calls: `call_vectors.py`, shortlist on the Funding page (model in the browser), `idea_match.py` for an AI-checked answer (docs/FUNDING.md).
 
 ## Commands
@@ -53,6 +54,7 @@ python pipeline/collect_directory.py                  # stage 1b (UiS employee d
 python pipeline/collect_nva.py                        # stage 1f (NVA research output, any network)
 python pipeline/collect_rcn.py                        # stage 1c (RCN funding calls, any network)
 python pipeline/collect_eu.py                         # stage 1d (EU funding topics, any network)
+python pipeline/collect_nordic.py                     # stage 1g (NordForsk + Nordic Energy Research calls, any network)
 python pipeline/run_all.py                            # stages 2–5 + funding stages
 python pipeline/run_weekly.py                         # everything + web build (scheduled job)
 python pipeline/idea_match.py "project idea"          # which open calls fit an idea (AI-checked; --no-ai)

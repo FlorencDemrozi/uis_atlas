@@ -71,6 +71,8 @@ SOURCES = {
     "rcn": {"name": "Research Council of Norway", "url": "https://www.forskningsradet.no/utlysninger/"},
     "eu": {"name": "EU Funding & Tenders Portal",
            "url": "https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/calls-for-proposals"},
+    "nordforsk": {"name": "NordForsk", "url": config.NORDFORSK_CALLS_PAGE},
+    "nordicenergy": {"name": "Nordic Energy Research", "url": config.NER_CALLS_PAGE},
 }
 
 

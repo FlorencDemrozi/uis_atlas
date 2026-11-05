@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-Stage 2c – Turn the collected RCN pages and EU topics into structured funding call
-records (one list, one field model; "source" says where a record comes from).
+Stage 2c – Turn the collected RCN pages, EU topics and Nordic calls into structured
+funding call records (one list, one field model; "source" says where a record comes from).
 
 Input:  config.RAW_RCN/calls/*.json, config.RAW_RCN/sync_status.json,
         config.RAW_EU/topics/*.json, config.RAW_EU/sync_status.json (EU topics are
-        built by eu.py), config/funding_overrides.json (manual corrections)
+        built by eu.py), config.RAW_NORDIC/*.json (NordForsk and Nordic Energy
+        Research, built by nordic.py), config/funding_overrides.json (manual corrections)
 Output: config.CALLS          one record per call (see below)
         config.CALLS_HISTORY  append-only list of detected changes per call
 
@@ -29,10 +30,12 @@ from datetime import date, datetime
 
 import config
 import eu
+import nordic
 import rcn
 from callfields import doc_links, field, missing
 
 CALLS_DIR = config.RAW_RCN / "calls"
+SOURCES = ("rcn", "eu", "nordforsk", "nordicenergy")  # every funding source, in display order
 FUNDER = {"nb": "Norges forskningsråd", "en": "Research Council of Norway"}
 
 # Sections of the call text, recognised by their heading (Norwegian or English).
@@ -390,6 +393,9 @@ def main() -> None:
     eu_raw = [read(p) for p in sorted((config.RAW_EU / "topics").glob("*.json"))]
     names = eu.programme_names(eu_raw)
     records += [(raw, True, lambda r: eu.build_topic(r, names)) for raw in eu_raw if raw["id"] in eu_listed]
+    nordic_status = read(config.RAW_NORDIC / "sync_status.json")
+    records += [(rec, True, lambda r: r) for rec in nordic.records(read(config.RAW_NORDIC / "nordforsk.json") or None,
+                                                                   read(config.RAW_NORDIC / "nordicenergy.json") or None)]
 
     calls = []
     for raw, is_listed, build in records:
@@ -417,10 +423,10 @@ def main() -> None:
     config.CALLS.write_text(json.dumps({
         "generated": today,
         "sync": {src: {k: st.get(k) for k in ("last_attempt", "last_success", "errors")}
-                 for src, st in (("rcn", status), ("eu", eu_status)) if st},
+                 for src, st in (("rcn", status), ("eu", eu_status), *nordic_status.items()) if st},
         "calls": calls}, ensure_ascii=False), encoding="utf-8")
     config.CALLS_HISTORY.write_text(json.dumps(history, ensure_ascii=False, indent=1), encoding="utf-8")
-    for src in ("rcn", "eu"):
+    for src in SOURCES:
         mine = [c for c in calls if c["source"] == src]
         n_status = {s: sum(c["fields"]["status"]["v"] == s for c in mine) for s in ("open", "planned", "closed")}
         print(f"{src.upper()}: {len(mine)} ({n_status}); {sum(bool(c['review']) for c in mine)} flagged for review.")

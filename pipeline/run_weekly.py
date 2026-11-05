@@ -6,7 +6,8 @@ all JSON files, build the website. No database, no server process – just files
   1. Collectors: Scopus (needs the UiS network; refreshes recent years once the full
      search is done; then the researchers' publications at other affiliations and their
      Scopus metrics, collect_scopus_authors.py), NVA (collect_nva.py), UiS employee
-     directory, RCN calls, EU topics. A collector that fails is
+     directory, RCN calls, EU topics, Nordic calls (NordForsk, Nordic Energy Research).
+     A collector that fails is
      reported, and the previous raw data is used, so a temporary outage never
      empties the site.
   2. run_all.py: profiles, summaries, embeddings, public export, funding calls,
@@ -154,7 +155,7 @@ def main() -> None:
     if args.publish and not git("pull", "--ff-only"):
         stop("Weekly update stopped: could not update the repository (git pull --ff-only).")
 
-    collectors = ["collect_nva.py", "collect_directory.py", "collect_rcn.py", "collect_eu.py"]
+    collectors = ["collect_nva.py", "collect_directory.py", "collect_rcn.py", "collect_eu.py", "collect_nordic.py"]
     if not args.skip_scopus:
         # UiS publications, then the same researchers' publications elsewhere and their
         # Scopus metrics, then the combined atlas_data.json again (offline).

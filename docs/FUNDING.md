@@ -193,9 +193,37 @@ horizon, erc, msca, eic, missions, partnerships, other_eu; RCN calls are `nfr`).
   `institution_level` with its basis; listed with a note to contact the research
   office, not matched or offered to researchers.
 
-Not done yet (later phases): other sources (COST, NordForsk, Eureka, ERA-LEARN, Interreg; Phase 3),
+Not done yet (later phases): other sources (COST, Eureka, ERA-LEARN, Interreg; Phase 3; NordForsk
+and Nordic Energy Research were added 2026-11-05, see below),
 CORDIS projects and external collaborators (Phase 4, from Scopus co-authors as
 decided – needs clearance under DATA_POLICY.md), consortium suggestions (Phase 5).
+
+## Nordic funders: NordForsk and Nordic Energy Research (2026-11-05)
+- **Collect** (`collect_nordic.py` → `data/raw/nordic/`, stage 1g, any network, no key):
+  both publish their calls as structured data on their public websites, so everything
+  is fetched on every run (a few requests). NordForsk: Drupal JSON:API, content type
+  `call` (`config.NORDFORSK_API`), with topics and programme. Nordic Energy Research:
+  WordPress REST API, post type `funding` (`config.NER_API`), with its Open/Closed and
+  Call/Tender tags. NordForsk's application portal (funding.nordforsk.org) needs a
+  login and is not read; the call pages link to it. A failing site keeps its old file.
+- **Build** (`nordic.py`, called by `build_calls.py`): the shared field model, English
+  text only. NordForsk's status follows its structured opening date and deadline.
+  Nordic Energy Research gives its status as a tag and its deadline only in the call
+  text: the latest date in a sentence that says "deadline" (or else "submission"),
+  never one about questions, webinars or the project period; a date without a year is
+  the first such date after the publication date (stored as inferred). "Closes when the
+  budget is exhausted" makes a call rolling. Tenders (procurement) are left out.
+  Kept: open and planned calls, and those closed within `config.NORDIC_CLOSED_MONTHS`.
+  Outlook "safelinks" wrappers in links are unwrapped; a call whose application runs
+  on a partner's site (e.g. SSHRC in Canada) is flagged for review.
+- **Profiles and matching:** like RCN calls (every open call gets an AI profile).
+- **Website:** the Funding page's funder filter is a set of checkboxes grouped by
+  region (Norway, Nordic, EU with its programme families), each with the number of
+  calls the other filters leave; several can be chosen (`?fam=nfr,nordforsk`; the
+  old `?fam=eu` still means every EU programme).
+- Checked and not added (2026-11-05): Innovasjon Norge and EUREKA block automated
+  requests; most other candidates (Helse Vest, Dam, Nordplus, COST, HK-dir, Nordic
+  Innovation, Novo Nordisk Foundation, …) are possible later, see the project notes.
 
 ## Export files and status in the browser (2026-10-29)
 - **Index and detail files.** `funding.enc.json` holds every call (open and closed,

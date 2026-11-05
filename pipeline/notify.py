@@ -25,8 +25,9 @@ def counts() -> list[str]:
     try:
         calls = json.loads(config.CALLS.read_text(encoding="utf-8"))["calls"]
         active = [c for c in calls if c["fields"]["status"]["v"] != "closed"]
-        by_src = {s: sum(c["source"] == s for c in active) for s in ("rcn", "eu")}
-        lines.append(f"Open/planned calls: {by_src['rcn']} RCN, {by_src['eu']} EU")
+        labels = {"rcn": "RCN", "eu": "EU", "nordforsk": "NordForsk", "nordicenergy": "Nordic Energy Research"}
+        by_src = {s: sum(c["source"] == s for c in active) for s in labels}
+        lines.append("Open/planned calls: " + ", ".join(f"{n} {labels[s]}" for s, n in by_src.items() if n))
     except (OSError, ValueError, KeyError):
         pass
     try:
