@@ -81,7 +81,10 @@ One command after new commits on GitHub `main`:
    every run rewrites it, so a plain `git pull` would refuse);
 3. installs Python or web packages only if their lock files changed;
 4. re-applies the server configuration and rebuilds and publishes the site, so the
-   new code is live at once, still with the server's data;
+   new code is live at once, still with the server's data. If the last weekly run
+   failed, its `data/public/` may not have passed the checks: the site is then left as
+   it is, and the weekly run started next publishes the new code once it succeeds
+   (`deploy/setup.sh --build --force-data` publishes at once anyway);
 5. starts a weekly run, which rebuilds the data with the new code (`--no-run` skips
    this).
 

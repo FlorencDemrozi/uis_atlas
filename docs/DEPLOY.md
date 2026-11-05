@@ -25,8 +25,9 @@ website build. This page sets it up as a weekly job on a Linux server at UiS.
 3. **Processing**: profiles, summaries (Anthropic API, only for changed researchers),
    embeddings, public export, funding calls, matching, encrypted funding export.
 4. **Sanity check**: if researchers or papers dropped by more than
-   `config.MAX_COUNT_DROP` (15 %) compared with the `data/public/` committed in git,
-   the run stops before the website is rebuilt or published (a collector that
+   `config.MAX_COUNT_DROP` (15 %) compared with the last successful run
+   (`logs/last-success-meta.json`; before the first one, the `data/public/` committed
+   in git), the run stops before the website is rebuilt or published (a collector that
    silently returned too little). After an intended drop, run once with `--allow-drop`.
 5. **Website** build to `web/dist/`.
 6. **Publishing** (only with `--publish`): the licence guard (`tests/test_policy.py`)
@@ -44,6 +45,7 @@ only, last 26 runs kept).
   institutional token (`SCOPUS_INSTTOKEN`) from the UiS Library.
 - Outbound HTTPS to: `api.elsevier.com`, `api.anthropic.com`, `www.uis.no`,
   `www.forskningsradet.no`, `api.tech.ec.europa.eu` and `ec.europa.eu` (EU topics),
+  `www.nordforsk.org` and `www.nordicenergy.org` (Nordic calls), `api.nva.unit.no` (NVA),
   `huggingface.co` (first download of the embedding model), `registry.npmjs.org`
   (`npm ci`), `github.com` (only with `--publish`).
 - Python 3.12 (with `venv`), Node.js 22, Git.
@@ -107,8 +109,8 @@ fast-forward, the run stops.
 Apache) at `~atlas/uis_atlas/web/dist`, or copy that folder to the web server after
 the run (`rsync -a --delete web/dist/ webhost:/var/www/atlas/`). Nothing is then
 committed each week, so the git history stops growing with data. The sanity check
-still compares with the `data/public/` in git; that baseline only moves when you
-commit data, which is fine for catching a sudden drop.
+compares with the last successful run (`logs/last-success-meta.json`), so it works
+without commits too.
 
 The encrypted funding files are only rewritten when their content changes (same
 password), so with option A a quiet week adds little to the git history.

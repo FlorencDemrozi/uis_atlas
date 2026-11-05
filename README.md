@@ -1,43 +1,48 @@
 # UiS Researcher Atlas
 
 Find the right researcher at the University of Stavanger. Describe what you are
-looking for in your own words, and the atlas ranks researchers from the Faculty
-of Science and Technology by how well their published work matches, with a
-short overview of each person.
+looking for in your own words, and the atlas ranks researchers from all six
+faculties by how well their published work matches, with a short overview of each
+person. A password-protected Funding section matches open RCN, EU and Nordic
+funding calls with researchers.
 
 - **What and why:** [docs/SPEC.md](docs/SPEC.md)
 - **Data, licensing and privacy rules:** [docs/DATA_POLICY.md](docs/DATA_POLICY.md)
+- **Funding Intelligence:** [docs/FUNDING.md](docs/FUNDING.md)
+- **Server and weekly update:** [docs/SERVER.md](docs/SERVER.md), [docs/DEPLOY.md](docs/DEPLOY.md)
 - **Brief for Claude Code:** [CLAUDE.md](CLAUDE.md)
 
 ## Structure
 
 ```
-uis-researcher-atlas/
-├── CLAUDE.md               Brief for Claude Code (read automatically)
-├── README.md
-├── docs/
-│   ├── SPEC.md             Full project specification
-│   └── DATA_POLICY.md      Secrets, Scopus licence, GDPR
+uis_atlas/
+├── CLAUDE.md                 Brief for Claude Code (read automatically)
+├── docs/                     SPEC, DATA_POLICY, FUNDING, SERVER, DEPLOY
 ├── config/
-│   ├── exclusions.json     Researchers who opted out
-│   └── overrides.json      Manual corrections
-├── pipeline/               Offline data pipeline (Python)
-│   ├── config.py           All settings and paths
-│   ├── collect_scopus.py   1. Scopus → data/raw/       (implemented)
-│   ├── build_profiles.py   2. → researcher profiles    (stub)
-│   ├── summarize.py        3. → AI overviews + tags    (stub)
-│   ├── embed.py            4. → semantic vectors       (stub)
-│   ├── export_public.py    5. → data/public/ (licence gate)  (stub)
-│   └── run_all.py          Runs stages 2–5
+│   ├── exclusions.json       Researchers who opted out
+│   ├── overrides.json        Manual corrections
+│   └── funding_overrides.json
+├── pipeline/                 Offline data pipeline (Python); settings in config.py
+│   ├── collect_*.py          1. Collectors → data/raw/: Scopus (UiS network), Scopus
+│   │                            authors, NVA, UiS employee directory, RCN, EU, Nordic
+│   ├── build_profiles.py     2. → researcher profiles (Scopus + NVA + directory)
+│   ├── build_partners.py        → partner institutions of co-authors
+│   ├── summarize.py          3. → AI overviews + tags (Anthropic API)
+│   ├── embed.py              4. → semantic vectors (local only)
+│   ├── export_public.py      5. → data/public/ (licence gate, allow-list)
+│   ├── build_calls.py … export_funding.py   funding calls, matching, encrypted export
+│   ├── run_all.py            Runs stages 2–5 and the funding stages
+│   └── run_weekly.py         Collectors + run_all + website build (scheduled job)
 ├── data/
-│   ├── raw/                Licensed Scopus data – local only, gitignored
-│   ├── interim/            Licensed intermediate data – local only, gitignored
-│   └── public/             Licence-safe data used by the website
-├── web/                    Static website (Vite + TypeScript, to be built)
-└── tests/                  Policy guards and search evaluation
+│   ├── raw/                  Licensed and personal data – local only, gitignored
+│   ├── interim/              Licensed intermediate data – local only, gitignored
+│   └── public/               Licence-safe data used by the website (committed)
+├── web/                      Static website (Vite + TypeScript + Preact)
+├── deploy/                   Server scripts: setup, update, status, publish, systemd units
+└── tests/                    Unit tests and the licence guard (test_policy.py)
 ```
 
-## Quick start
+## Quick start (laptop)
 
 The Python environment is kept outside the repository (which lives in OneDrive),
 at `C:\python-envs\.atlas`, using Python 3.12:
@@ -46,11 +51,16 @@ at `C:\python-envs\.atlas`, using Python 3.12:
 py -3.12 -m venv C:\python-envs\.atlas
 C:\python-envs\.atlas\Scripts\Activate.ps1
 pip install -r requirements.lock
-Copy-Item .env.example .env          # add your Scopus API key (never commit .env)
-python pipeline/collect_scopus.py    # on the UiS network or VPN
+Copy-Item .env.example .env              # fill in the keys (never commit .env)
+python pipeline/run_weekly.py --no-web   # all collectors + processing (Scopus: UiS network/VPN)
+python pipeline/run_weekly.py --skip-scopus --no-web   # off the UiS network
+pytest                                   # tests, incl. the licence guard
+cd web; npm ci; npm run dev              # website at http://localhost:5173
 ```
 
-Then open the project in Claude Code and start with milestone 1 in `docs/SPEC.md`.
+Each stage can also be run on its own (`python pipeline/<stage>.py`); the full list
+of commands is in [CLAUDE.md](CLAUDE.md) ("Commands"). `run_all.py` reruns the
+processing stages from the data already collected.
 
 ## Deployment (GitHub Pages)
 
@@ -83,6 +93,7 @@ Everything the server needs is in `deploy/`; the three commands you need:
   2 GB free RAM and about 4 GB of free disk are enough.
 - Outbound HTTPS to: `api.elsevier.com`, `api.anthropic.com`, `www.uis.no`,
   `api.nva.unit.no`, `www.forskningsradet.no`, `api.tech.ec.europa.eu`, `ec.europa.eu`,
+  `www.nordforsk.org`, `www.nordicenergy.org`,
   `erc.europa.eu`, `marie-sklodowska-curie-actions.ec.europa.eu`, `huggingface.co`,
   `registry.npmjs.org`, `download.pytorch.org`, `raw.githubusercontent.com` (nvm),
   `github.com`, and `api.telegram.org` if Telegram messages are set up.
@@ -113,11 +124,12 @@ scp .env u2929531@sensing4health.ux.uis.no:~/atlas/uis_atlas/.env
 `atlas-weekly.timer`; a run missed while the server was off starts at the next boot.
 One update (about an hour):
 
-1. collects Scopus, NVA, the UiS employee directory, RCN calls and EU topics
+1. collects Scopus, NVA, the UiS employee directory, RCN calls, EU topics and Nordic calls
    (a collector that fails is reported and the previous data is used);
 2. rebuilds profiles, partner institutions, summaries, embeddings, the public
    export and the funding matches (`pipeline/run_all.py`);
-3. stops before publishing if researchers or papers dropped by more than 15 %;
+3. stops before publishing if researchers or papers dropped by more than 15 % compared
+   with the last successful run;
 4. builds the website and, only if everything succeeded, publishes it
    (`deploy/publish.sh`). A failed run leaves the site unchanged.
 
