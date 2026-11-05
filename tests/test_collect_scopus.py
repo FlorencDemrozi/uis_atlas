@@ -87,3 +87,94 @@ def test_author_query_excludes_uis_papers_and_parses_metrics():
     assert ca.parse_metrics(many)["1"] == {"documents": 54, "citations": 827, "cited_by": None, "h_index": 12}
     assert ca.parse_metrics(one)["2"]["h_index"] == 2
     assert [len(b) for b in ca.batches([str(i) for i in range(60)])] == [25, 25, 10]
+
+
+def test_author_ids_drop_nva_pseudo_ids(tmp_path, monkeypatch):
+    import collect_scopus_authors as ca
+    profiles = tmp_path / "profiles.json"
+    profiles.write_text(json.dumps({"researchers": [{"scopus_ids": ["123", "nva-4567"]},
+                                                    {"scopus_ids": ["89", "123"]},
+                                                    {"scopus_ids": ["nva-1"]}]}), encoding="utf-8")
+    monkeypatch.setattr(config, "PROFILES", profiles)
+    assert ca.author_ids() == ["123", "89"]
+
+
+# ------------------------------------------------ interrupted writes, 404s, expired cursors
+def test_readers_skip_a_broken_last_line_and_appends_start_a_new_line(tmp_path, monkeypatch):
+    docs = tmp_path / "docs.jsonl"
+    docs.write_text(json.dumps({"eid": "a"}) + "\n" + '{"eid": "b", "dc:ti', encoding="utf-8")   # killed mid-line
+    assert [e["eid"] for e in collect_scopus.load_docs(docs)] == ["a"]
+    collect_scopus.fsutil.append_jsonl(docs, [{"eid": "c"}])
+    assert sorted(e["eid"] for e in collect_scopus.load_docs(docs)) == ["a", "c"]
+
+    refresh = tmp_path / "refresh.jsonl"
+    refresh.write_text(json.dumps({"eid": "d"}) + "\n{broken", encoding="utf-8")
+    assert collect_scopus.merge_refresh(docs, refresh) == (1, 3)
+    assert sorted(e["eid"] for e in read_jsonl(docs)) == ["a", "c", "d"]   # broken lines are gone
+
+    details = tmp_path / "details.jsonl"
+    details.write_text(json.dumps({"eid": "a", "authors": {"1": ["x"]}}) + "\n{\"eid\":", encoding="utf-8")
+    monkeypatch.setattr(collect_scopus, "DETAILS_FILE", details)
+    assert collect_scopus.load_details() == {"a": {"1": ["x"]}}
+
+
+class FakeResponse:
+    def __init__(self, status, body=None, headers=None):
+        self.status_code, self._body, self.headers, self.text = status, body, headers or {}, ""
+
+    def json(self):
+        return self._body
+
+    def raise_for_status(self):
+        import requests
+        if self.status_code >= 400:
+            raise requests.HTTPError(f"{self.status_code}", response=self)
+
+
+class FakeSession:
+    def __init__(self, responses):
+        self.responses = list(responses)
+
+    def get(self, url, params=None, timeout=None):
+        return self.responses.pop(0)
+
+
+def test_missing_paper_is_recorded_empty_and_not_fatal(tmp_path, monkeypatch):
+    details = tmp_path / "details.jsonl"
+    monkeypatch.setattr(collect_scopus, "DETAILS_FILE", details)
+    monkeypatch.setattr(collect_scopus, "SLEEP", 0)
+    assert collect_scopus.lookup_details(FakeSession([FakeResponse(404)]), "2-s2.0-1") == {}
+    assert collect_scopus.load_details() == {"2-s2.0-1": {}}      # done: not asked again
+    with pytest.raises(Exception):                                # other lookups still raise on 404
+        collect_scopus.get(FakeSession([FakeResponse(404)]), "u", {})
+
+
+def test_rejected_saved_cursor_restarts_search_once(tmp_path, monkeypatch):
+    import requests
+    out = tmp_path / "docs.jsonl"
+    seen = []
+
+    def fake_get(s, url, params, missing_ok=False):
+        seen.append(params["cursor"])
+        if params["cursor"] != "*":
+            raise requests.HTTPError("400", response=FakeResponse(400))
+        return {"search-results": {"entry": [{"eid": "a"}], "cursor": {"@next": "*"}}}
+
+    monkeypatch.setattr(collect_scopus, "get", fake_get)
+    state = {"cursor": "old", "done": False, "count": 50}
+    collect_scopus.search(None, "q", state, out, lambda: None)
+    assert seen == ["old", "*"] and state["done"] and state["count"] == 1
+    assert [e["eid"] for e in read_jsonl(out)] == ["a"]
+
+    def always_400(s, url, params, missing_ok=False):
+        raise requests.HTTPError("400", response=FakeResponse(400))
+
+    monkeypatch.setattr(collect_scopus, "get", always_400)
+    with pytest.raises(requests.HTTPError):                       # only one restart
+        collect_scopus.search(None, "q", {"cursor": "old", "done": False, "count": 0}, out, lambda: None)
+
+
+def test_retry_after_is_honoured_and_capped():
+    assert collect_scopus.retry_after(FakeResponse(429, headers={"Retry-After": "7"}), 2) == 7
+    assert collect_scopus.retry_after(FakeResponse(429, headers={"Retry-After": "99999"}), 2) == config.MAX_RETRY_AFTER
+    assert collect_scopus.retry_after(FakeResponse(429, headers={"Retry-After": "Wed, 21 Oct"}), 2) == 2

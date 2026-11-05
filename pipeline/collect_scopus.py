@@ -35,9 +35,12 @@ from datetime import date, datetime
 
 import requests
 
-from config import (AFID, FIRST_YEAR, HISTORY_PERIODS, RAW, RAW_ATLAS, RAW_AUTHOR_DOCS, RAW_AUTHOR_METRICS,
-                    RAW_DETAILS, RAW_DOCS, RAW_REFRESH, RAW_SEARCH_STATE, SCOPUS_API_KEY, SCOPUS_INSTTOKEN,
-                    SCOPUS_QUERY, SCOPUS_REFRESH_YEARS)
+import fsutil
+import runlock
+from config import (AFID, FIRST_YEAR, HISTORY_PERIODS, MAX_RETRY_AFTER, RAW, RAW_ATLAS, RAW_AUTHOR_DOCS,
+                    RAW_AUTHOR_METRICS, RAW_DETAILS, RAW_DOCS, RAW_REFRESH, RAW_SEARCH_STATE, SCOPUS_ABSTRACT_URL,
+                    SCOPUS_API_KEY, SCOPUS_INSTTOKEN, SCOPUS_MAX_LOOKUPS, SCOPUS_MAX_PERIOD_TRIES,
+                    SCOPUS_MIN_DEPT_HITS, SCOPUS_QUERY, SCOPUS_REFRESH_YEARS, SCOPUS_SEARCH_URL, SCOPUS_SLEEP)
 from departments import current_department, match_dept
 
 QUERY = SCOPUS_QUERY
@@ -50,12 +53,12 @@ REFRESH_FILE = RAW_REFRESH
 REFRESH_FROM = max(FIRST_YEAR, date.today().year - SCOPUS_REFRESH_YEARS + 1)
 REFRESH_QUERY = f"AF-ID({AFID}) AND PUBYEAR > {REFRESH_FROM - 1}"
 
-SEARCH_URL = "https://api.elsevier.com/content/search/scopus"
-ABSTRACT_URL = "https://api.elsevier.com/content/abstract/eid/{}"
-SLEEP = 0.15          # stay under Elsevier's per-second throttle
-MIN_DEPT_HITS = 2     # department confirmed after this many matching papers
-MAX_LOOKUPS = 3       # give up on an author's department after this many tries
-MAX_PERIOD_TRIES = 2  # history: papers tried per author and period before giving up
+SEARCH_URL = SCOPUS_SEARCH_URL
+ABSTRACT_URL = SCOPUS_ABSTRACT_URL
+SLEEP = SCOPUS_SLEEP
+MIN_DEPT_HITS = SCOPUS_MIN_DEPT_HITS
+MAX_LOOKUPS = SCOPUS_MAX_LOOKUPS
+MAX_PERIOD_TRIES = SCOPUS_MAX_PERIOD_TRIES
 
 
 def as_list(x):
@@ -83,29 +86,45 @@ def make_session():
     return s
 
 
-def get(s, url, params):
-    for attempt in range(6):
+def retry_after(r, default: float) -> float:
+    """Seconds to wait before a retry: a numeric Retry-After header (capped), else default."""
+    value = (r.headers.get("Retry-After") or "").strip()
+    return min(float(value), MAX_RETRY_AFTER) if value.isdigit() else default
+
+
+def get(s, url, params, missing_ok=False):
+    """JSON answer of a Scopus API call, with retries. missing_ok: None on HTTP 404
+    (a record Scopus no longer serves) instead of an error."""
+    attempts = 6
+    for attempt in range(attempts):
+        last = attempt == attempts - 1   # no wait after the final attempt
         try:
             r = s.get(url, params=params, timeout=60)
         except requests.RequestException as exc:
             print(f"  network problem ({exc}); retrying…")
-            time.sleep(2 ** attempt)
+            if not last:
+                time.sleep(2 ** attempt)
             continue
         if r.status_code == 200:
             time.sleep(SLEEP)
             return r.json()
+        if r.status_code == 404 and missing_ok:
+            time.sleep(SLEEP)
+            return None
         if r.status_code == 429:
             reset = r.headers.get("X-RateLimit-Reset")
-            if reset and int(reset) - time.time() > 3600:
+            if reset and reset.isdigit() and int(reset) - time.time() > 3600:
                 sys.exit(f"\nWeekly API quota used up. Progress is saved; run again after "
                          f"{time.ctime(int(reset))}.")
-            time.sleep(2 ** attempt * 2)
+            if not last:
+                time.sleep(retry_after(r, 2 ** attempt * 2))
             continue
         if r.status_code in (401, 403):
             sys.exit(f"\nAccess denied ({r.status_code}). Check that you are on the UiS network or VPN. "
                      f"If you are, UiS may need an institutional token from Elsevier.\n{r.text[:400]}")
         if r.status_code >= 500:
-            time.sleep(2 ** attempt)
+            if not last:
+                time.sleep(2 ** attempt)
             continue
         print(f"\nScopus returned {r.status_code}: {r.text[:400]}")
         r.raise_for_status()
@@ -115,43 +134,48 @@ def get(s, url, params):
 # ---------------------------------------------------------------- Phase 1: search
 def search(s, query, cursor_state, out_file, save):
     """Page through a search, appending records to out_file. cursor_state holds
-    cursor/count/done; save() persists the state file after every page."""
-    with out_file.open("a", encoding="utf-8") as f:
-        while True:
+    cursor/count/done; save() persists the state file after every page.
+    A saved cursor Scopus no longer accepts (HTTP 400, e.g. expired) restarts the
+    search once from the beginning; readers drop the duplicate records by EID."""
+    restarted = False
+    while True:
+        try:
             data = get(s, SEARCH_URL, {"query": query, "view": "COMPLETE",
                                        "count": 25, "cursor": cursor_state["cursor"]})
-            res = data.get("search-results", {})
-            entries = [e for e in as_list(res.get("entry")) if "error" not in e]
-            for e in entries:
-                f.write(json.dumps(e, ensure_ascii=False) + "\n")
-            f.flush()
-            cursor_state["count"] += len(entries)
-            nxt = res.get("cursor", {}).get("@next")
-            print(f"  {cursor_state['count']} / {res.get('opensearch:totalResults', '?')} publications")
-            if not entries or not nxt or nxt == cursor_state["cursor"]:
-                cursor_state["done"] = True
-                save()
-                return
-            cursor_state["cursor"] = nxt
+        except requests.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else None
+            if status != 400 or cursor_state["cursor"] == "*" or restarted:
+                raise
+            print("  Scopus rejected the saved cursor; restarting this search from the beginning "
+                  "(records already saved are kept, duplicates are dropped by EID).")
+            cursor_state.update(cursor="*", count=0, done=False)
+            restarted = True
             save()
+            continue
+        res = data.get("search-results", {})
+        entries = [e for e in as_list(res.get("entry")) if "error" not in e]
+        fsutil.append_jsonl(out_file, entries)
+        cursor_state["count"] += len(entries)
+        nxt = res.get("cursor", {}).get("@next")
+        print(f"  {cursor_state['count']} / {res.get('opensearch:totalResults', '?')} publications")
+        if not entries or not nxt or nxt == cursor_state["cursor"]:
+            cursor_state["done"] = True
+            save()
+            return
+        cursor_state["cursor"] = nxt
+        save()
 
 
 def merge_refresh(docs_file, refresh_file):
     """Fold a finished refresh into docs_file: refreshed records replace older copies
-    of the same EID and duplicates are dropped. Written to a temp file, then swapped
-    in, so an interruption never loses records. Returns (new EIDs, total EIDs)."""
-    docs = {}
-    with docs_file.open(encoding="utf-8") as f:
-        for line in f:
-            docs[json.loads(line).get("eid")] = line.rstrip("\n") + "\n"
+    of the same EID and duplicates are dropped. Written atomically, so an
+    interruption never loses records; a broken line (a killed append) is skipped.
+    Returns (new EIDs, total EIDs)."""
+    docs = {e.get("eid"): e for e in fsutil.read_jsonl(docs_file)} if docs_file.exists() else {}
     known = set(docs)
-    with refresh_file.open(encoding="utf-8") as f:
-        for line in f:
-            docs[json.loads(line).get("eid")] = line.rstrip("\n") + "\n"
-    tmp = docs_file.with_suffix(".tmp")
-    with tmp.open("w", encoding="utf-8") as f:
-        f.writelines(docs.values())
-    tmp.replace(docs_file)
+    for e in fsutil.read_jsonl(refresh_file):
+        docs[e.get("eid")] = e
+    fsutil.write_jsonl(docs_file, docs.values())
     refresh_file.unlink()
     return len(docs.keys() - known), len(docs)
 
@@ -162,7 +186,7 @@ def phase_refresh(s, state):
         ref = state["refresh"] = {"cursor": "*", "done": False, "count": 0, "query": REFRESH_QUERY}
         REFRESH_FILE.unlink(missing_ok=True)
     print(f"Phase 1: refreshing recent publications: {REFRESH_QUERY}")
-    save = lambda: SEARCH_STATE.write_text(json.dumps(state))
+    save = lambda: fsutil.write_json(SEARCH_STATE, state)
     search(s, REFRESH_QUERY, ref, REFRESH_FILE, save)
     new, total = merge_refresh(DOCS_FILE, REFRESH_FILE)
     ref["finished"] = datetime.now().isoformat(timespec="seconds")
@@ -184,7 +208,7 @@ def phase_search(s, refresh=True):
             phase_refresh(s, state)
         return
     print(f"Phase 1: searching Scopus for: {QUERY}")
-    search(s, QUERY, state, DOCS_FILE, lambda: SEARCH_STATE.write_text(json.dumps(state)))
+    search(s, QUERY, state, DOCS_FILE, lambda: fsutil.write_json(SEARCH_STATE, state))
 
 
 def load_docs(path=None):
@@ -192,10 +216,8 @@ def load_docs(path=None):
     path = path or DOCS_FILE
     if not path.exists():
         return []
-    with path.open(encoding="utf-8") as f:
-        for line in f:
-            e = json.loads(line)
-            docs[e.get("eid")] = e
+    for e in fsutil.read_jsonl(path):
+        docs[e.get("eid")] = e
     return sorted(docs.values(), key=lambda e: e.get("prism:coverDate", ""), reverse=True)
 
 
@@ -244,11 +266,21 @@ def parse_author_groups(data):
 def load_details():
     details = {}
     if DETAILS_FILE.exists():
-        with DETAILS_FILE.open(encoding="utf-8") as f:
-            for line in f:
-                rec = json.loads(line)
-                details[rec["eid"]] = rec["authors"]
+        for rec in fsutil.read_jsonl(DETAILS_FILE):
+            details[rec["eid"]] = rec["authors"]
     return details
+
+
+def lookup_details(s, eid):
+    """UiS author groups of one paper, appended to DETAILS_FILE. A paper Scopus no
+    longer serves (HTTP 404) is recorded with no authors: it is not asked for again
+    and adds nothing to the build."""
+    data = get(s, ABSTRACT_URL.format(eid), {"view": "FULL"}, missing_ok=True)
+    if data is None:
+        print(f"  {eid}: not found in Scopus (404), skipped")
+    amap = parse_author_groups(data) if data is not None else {}
+    fsutil.append_jsonl(DETAILS_FILE, [{"eid": eid, "authors": amap}])
+    return amap
 
 
 def phase_details(s, docs):
@@ -269,22 +301,19 @@ def phase_details(s, docs):
             and any(needs(a.get("authid")) for a in uis_authors(e))]
     print(f"Phase 2: finding departments (up to {len(todo)} detail lookups, usually far fewer)")
     done = 0
-    with DETAILS_FILE.open("a", encoding="utf-8") as f:
-        for e in todo:
-            if not any(needs(a.get("authid")) for a in uis_authors(e)):
-                continue
-            amap = parse_author_groups(get(s, ABSTRACT_URL.format(e["eid"]), {"view": "FULL"}))
-            f.write(json.dumps({"eid": e["eid"], "authors": amap}, ensure_ascii=False) + "\n")
-            f.flush()
-            details[e["eid"]] = amap
-            for auid, orgs in amap.items():
-                lookups[auid] += 1
-                d = match_dept(orgs, year.get(e["eid"]))
-                if d:
-                    hits[auid][d] += 1
-            done += 1
-            if done % 50 == 0:
-                print(f"  {done} lookups done")
+    for e in todo:
+        if not any(needs(a.get("authid")) for a in uis_authors(e)):
+            continue
+        amap = lookup_details(s, e["eid"])
+        details[e["eid"]] = amap
+        for auid, orgs in amap.items():
+            lookups[auid] += 1
+            d = match_dept(orgs, year.get(e["eid"]))
+            if d:
+                hits[auid][d] += 1
+        done += 1
+        if done % 50 == 0:
+            print(f"  {done} lookups done")
     print(f"  Phase 2 complete ({done} new lookups).")
     return details
 
@@ -313,26 +342,23 @@ def phase_history(s, docs, details):
     print(f"Phase 2b: department history – {len(gaps)} author/period gaps to fill "
           f"(at most that many lookups; shared papers fill several)")
     tries, done = Counter(), 0
-    with DETAILS_FILE.open("a", encoding="utf-8") as f:
-        for e in docs:                                   # newest first
-            p = period_of(year[e["eid"]])
-            if e["eid"] in details or p is None:
-                continue
-            want = [a.get("authid") for a in uis_authors(e)
-                    if (a.get("authid"), p) in gaps and tries[(a.get("authid"), p)] < MAX_PERIOD_TRIES]
-            if not want:
-                continue
-            amap = parse_author_groups(get(s, ABSTRACT_URL.format(e["eid"]), {"view": "FULL"}))
-            f.write(json.dumps({"eid": e["eid"], "authors": amap}, ensure_ascii=False) + "\n")
-            f.flush()
-            details[e["eid"]] = amap
-            for auid in want:
-                tries[(auid, p)] += 1
-            for auid in amap:
-                gaps.discard((auid, p))
-            done += 1
-            if done % 100 == 0:
-                print(f"  {done} lookups done, {len(gaps)} gaps left")
+    for e in docs:                                   # newest first
+        p = period_of(year[e["eid"]])
+        if e["eid"] in details or p is None:
+            continue
+        want = [a.get("authid") for a in uis_authors(e)
+                if (a.get("authid"), p) in gaps and tries[(a.get("authid"), p)] < MAX_PERIOD_TRIES]
+        if not want:
+            continue
+        amap = lookup_details(s, e["eid"])
+        details[e["eid"]] = amap
+        for auid in want:
+            tries[(auid, p)] += 1
+        for auid in amap:
+            gaps.discard((auid, p))
+        done += 1
+        if done % 100 == 0:
+            print(f"  {done} lookups done, {len(gaps)} gaps left")
     print(f"  Phase 2b complete ({done} new lookups, {len(gaps)} gaps without a usable paper).")
     return details
 
@@ -415,7 +441,7 @@ def build(docs, details, other_docs=(), metrics=None):
         "authors": list(authors.values()),
         "papers": papers,
     }
-    FINAL_FILE.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
+    fsutil.write_json(FINAL_FILE, out, indent=1)
     n_uis = len({p for a in authors.values() for p in a["uis_papers"]})
     print(f"\nDone. {len(authors)} UiS authors ({matched} with a department from Scopus), "
           f"{len(papers)} papers ({n_uis} with a UiS affiliation; {extra} author credits from other affiliations).")
@@ -424,6 +450,8 @@ def build(docs, details, other_docs=(), metrics=None):
 
 
 if __name__ == "__main__":
+    if not runlock.acquire():
+        sys.exit("Another pipeline run is in progress (run_weekly.py or run_all.py): not started.")
     load_metrics = lambda: (json.loads(RAW_AUTHOR_METRICS.read_text(encoding="utf-8"))
                             if RAW_AUTHOR_METRICS.exists() else {})
     if "--build-only" in sys.argv:   # rebuild from files already collected, no network

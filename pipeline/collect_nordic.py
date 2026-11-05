@@ -20,12 +20,15 @@ Usage:
   python pipeline/collect_nordic.py
 """
 import json
+import sys
 import time
 from datetime import datetime
 
 import requests
 
 import config
+import fsutil
+import runlock
 
 STATUS = config.RAW_NORDIC / "sync_status.json"
 NER_TAXONOMIES = ("current_status", "funding_type", "topics")
@@ -38,21 +41,27 @@ class Fetcher:
         self.last = 0.0
 
     def get(self, url: str) -> requests.Response:
-        for attempt in range(3):
+        attempts = 3
+        for attempt in range(attempts):
             wait = config.NORDIC_SLEEP - (time.monotonic() - self.last)
             if wait > 0:
                 time.sleep(wait)
             self.last = time.monotonic()
+            backoff = 5 * (attempt + 1)
             try:
                 r = self.session.get(url, timeout=60)
                 if r.status_code == 200:
                     return r
                 if r.status_code in (401, 403, 404, 410):
                     raise RuntimeError(f"{r.status_code} for {url}")
+                retry = (r.headers.get("Retry-After") or "").strip()
+                if r.status_code == 429 and retry.isdigit():
+                    backoff = min(int(retry), config.MAX_RETRY_AFTER)
             except requests.RequestException:
-                if attempt == 2:
+                if attempt == attempts - 1:
                     raise
-            time.sleep(5 * (attempt + 1))
+            if attempt < attempts - 1:   # no wait after the final attempt
+                time.sleep(backoff)
         raise RuntimeError(f"Could not fetch {url}")
 
 
@@ -96,9 +105,12 @@ SOURCES = {"nordforsk": nordforsk, "nordicenergy": nordicenergy}
 
 
 def main() -> None:
+    if not runlock.acquire():
+        sys.exit("Another pipeline run is in progress (run_weekly.py or run_all.py): not started.")
     config.RAW_NORDIC.mkdir(parents=True, exist_ok=True)
     status = json.loads(STATUS.read_text(encoding="utf-8")) if STATUS.exists() else {}
     fetch = Fetcher()
+    failed = []
     for name, collect in SOURCES.items():
         st = status.setdefault(name, {})
         st.update({"last_attempt": now(), "errors": []})
@@ -108,11 +120,15 @@ def main() -> None:
             st["errors"].append({"url": config.NORDFORSK_API if name == "nordforsk" else config.NER_API,
                                  "error": str(e)})
             print(f"{name}: {e} (keeping previous data)")
+            failed.append(name)
             continue
-        (config.RAW_NORDIC / f"{name}.json").write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+        fsutil.write_json(config.RAW_NORDIC / f"{name}.json", doc)
         st["last_success"] = now()
         print(f"{name}: {len(doc.get('calls') or doc.get('items'))} records")
-    STATUS.write_text(json.dumps(status, ensure_ascii=False, indent=1), encoding="utf-8")
+    fsutil.write_json(STATUS, status, indent=1)
+    if failed:
+        print(f"Failed: {', '.join(failed)} could not be read; previous data is kept.")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -197,6 +197,16 @@ RAW_AUTHOR_REFRESH = RAW / "author_refresh.jsonl"
 RAW_AUTHOR_STATE = RAW / "author_state.json"
 RAW_AUTHOR_METRICS = RAW / "author_metrics.json"
 AUTHOR_BATCH = 25                       # author ids per Scopus query
+# Scopus collector settings (collect_scopus.py, collect_scopus_authors.py).
+SCOPUS_SEARCH_URL = "https://api.elsevier.com/content/search/scopus"
+SCOPUS_ABSTRACT_URL = "https://api.elsevier.com/content/abstract/eid/{}"
+SCOPUS_AUTHOR_URL = "https://api.elsevier.com/content/author"
+SCOPUS_SLEEP = 0.15          # stay under Elsevier's per-second throttle
+SCOPUS_MIN_DEPT_HITS = 2     # department confirmed after this many matching papers
+SCOPUS_MAX_LOOKUPS = 3       # give up on an author's department after this many tries
+SCOPUS_MAX_PERIOD_TRIES = 2  # history: papers tried per author and period before giving up
+# Longest wait honoured from a server's Retry-After header (seconds), all collectors.
+MAX_RETRY_AFTER = 300
 RAW_DIRECTORY = DATA / "raw" / "uis_directory"  # UiS employee directory: personal data, local only
 DIRECTORY = RAW_DIRECTORY / "employees.json"
 DIRECTORY_EMAILS = RAW_DIRECTORY / "emails.json"   # profile URL -> work e-mail (cache)
@@ -269,6 +279,10 @@ UNCONFIRMED_MIN_RECENT_PUBLICATIONS = 3
 # ---- UiS employee directory ---------------------------------------------
 DIRECTORY_URL = "https://www.uis.no/{lang}/{path}"   # path: "sok/ansatte" (nb), "search/employees" (en)
 DIRECTORY_SLEEP = 1.0                               # seconds between requests: be polite
+DIRECTORY_PAGE_SIZE = 14                            # people per "load more" page
+# collect_directory.py stops (writes nothing) if the listing cards it can parse fall
+# below this share of the people the unit facets report (a changed page layout).
+DIRECTORY_MIN_PARSED_SHARE = 0.9
 
 # ---- Recent work (project owner, 2026-10-26) -----------------------------
 # Summaries, embeddings and funding matches use only papers from the last
@@ -295,6 +309,8 @@ NVA_ORG = "https://api.nva.unit.no/cristin/organization/217.0.0.0"
 NVA_PAGE = 100                  # 200 gives server errors on some pages
 NVA_SLEEP = 0.5                 # seconds between requests
 NVA_REFRESH_YEARS = 2           # like SCOPUS_REFRESH_YEARS: recent years are fetched again
+# A year's file is replaced only if at least this share of its totalHits came in.
+NVA_MIN_FETCHED_SHARE = 0.98
 NVA_PUBLICATION_URL = "https://nva.sikt.no/registration/{}"
 NVA_PERSON_URL = "https://nva.sikt.no/research-profile/{}"
 # Student theses: written by students, not by the atlas researchers. Not collected.
@@ -373,6 +389,7 @@ EU_STATUS = {"31094501": "planned", "31094502": "open", "31094503": "closed"}
 EU_CLOSED_MONTHS = 6          # closed topics kept for history: deadline within this many months
 EU_DETAIL_MAX_AGE_DAYS = 28   # refetch an unchanged open topic's text at least this often
 EU_SLEEP = 0.5                # seconds between requests
+EU_PAGE = 100                 # topics per search page
 
 # ---- Nordic funders (NordForsk, Nordic Energy Research) --------------------
 # Both publish their calls as structured data on their public websites (checked

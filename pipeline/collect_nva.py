@@ -22,12 +22,15 @@ Usage:
 """
 import argparse
 import json
+import sys
 import time
 from datetime import datetime
 
 import requests
 
 import config
+import fsutil
+import runlock
 from nva import trim
 
 
@@ -38,12 +41,13 @@ class Api:
         self.last = 0.0
 
     def get(self, url: str, params: dict | None = None) -> dict:
-        status = None
-        for attempt in range(5):
+        status, attempts = None, 5
+        for attempt in range(attempts):
             wait = config.NVA_SLEEP - (time.monotonic() - self.last)
             if wait > 0:
                 time.sleep(wait)
             self.last = time.monotonic()
+            backoff = 10 * (attempt + 1)
             try:
                 r = self.session.get(url, params=params, timeout=120)
                 status = r.status_code
@@ -51,15 +55,20 @@ class Api:
                     return r.json()
                 if r.status_code == 400:
                     raise RuntimeError(f"NVA rejected the query: {r.text[:300]}")
+                retry = (r.headers.get("Retry-After") or "").strip()
+                if r.status_code == 429 and retry.isdigit():
+                    backoff = min(int(retry), config.MAX_RETRY_AFTER)
             except requests.RequestException as exc:
-                if attempt == 4:
+                if attempt == attempts - 1:
                     raise
                 status = type(exc).__name__
-            time.sleep(10 * (attempt + 1))
+            if attempt < attempts - 1:   # no wait after the final attempt
+                time.sleep(backoff)
         raise RuntimeError(f"Could not fetch {url} (last status: {status}); run again to resume")
 
 
-def fetch_year(api: Api, year: int) -> list[dict]:
+def fetch_year(api: Api, year: int) -> tuple[list[dict], int]:
+    """(records, totalHits) of one publication year."""
     params = {"unit": config.NVA_ORG, "publicationYear": year, "results": config.NVA_PAGE,
               "instanceTypeNot": ",".join(config.NVA_SKIPPED_TYPES), "aggregation": "none",
               "sort": "identifier"}  # searchAfter paging needs a fixed order
@@ -73,13 +82,24 @@ def fetch_year(api: Api, year: int) -> list[dict]:
             break
         page = api.get(nxt)
     print(f"  {year}: {len(records)} outputs" + " " * 20)
-    return records
+    return records, total
+
+
+def incomplete(n_records: int, total: int, previous: int) -> str | None:
+    """Why a fetched year must not replace the stored one (None: it may)."""
+    if n_records < config.NVA_MIN_FETCHED_SHARE * total:
+        return f"only {n_records} of {total} records fetched"
+    if n_records == 0 and previous > 0:
+        return f"no records returned (the stored file has {previous})"
+    return None
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--full", action="store_true", help="fetch every year again")
     args = ap.parse_args()
+    if not runlock.acquire():
+        sys.exit("Another pipeline run is in progress (run_weekly.py or run_all.py): not started.")
 
     config.RAW_NVA.mkdir(parents=True, exist_ok=True)
     state = (json.loads(config.RAW_NVA_STATE.read_text(encoding="utf-8"))
@@ -89,17 +109,23 @@ def main() -> None:
              if args.full or str(y) not in state["years"] or y >= refresh_from]
     print(f"NVA: fetching {len(years)} year(s): {', '.join(map(str, years)) or '-'}")
     api = Api()
+    problems = []
     for year in years:
-        records = fetch_year(api, year)
-        tmp = config.RAW_NVA / f"{year}.jsonl.tmp"
-        with tmp.open("w", encoding="utf-8") as f:
-            for rec in records:
-                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
-        tmp.replace(config.RAW_NVA / f"{year}.jsonl")
+        records, total = fetch_year(api, year)
+        previous = state["years"].get(str(year), {}).get("records", 0)
+        why = incomplete(len(records), total, previous)
+        if why:   # keep the stored file (if any); the year is fetched again next run
+            problems.append(f"{year}: {why}")
+            print(f"  {year}: {why} – previous data kept")
+            continue
+        fsutil.write_jsonl(config.RAW_NVA / f"{year}.jsonl", records)
         state["years"][str(year)] = {"fetched": datetime.now().isoformat(timespec="seconds"),
                                      "records": len(records)}
-        config.RAW_NVA_STATE.write_text(json.dumps(state, indent=1), encoding="utf-8")
+        fsutil.write_json(config.RAW_NVA_STATE, state, indent=1, ensure_ascii=True)
     print(f"Done. {sum(v['records'] for v in state['years'].values())} NVA outputs in {config.RAW_NVA}")
+    if problems:
+        print(f"Incomplete NVA years (previous data kept): {'; '.join(problems)}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

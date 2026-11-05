@@ -22,13 +22,16 @@ Usage:
 """
 import argparse
 import json
+import sys
 import time
 from datetime import datetime
 
 import requests
 
 import config
+import fsutil
 import rcn
+import runlock
 
 CALLS_DIR = config.RAW_RCN / "calls"
 STATUS = config.RAW_RCN / "sync_status.json"
@@ -41,11 +44,13 @@ class Fetcher:
         self.last = 0.0
 
     def get(self, url: str) -> str:
-        for attempt in range(3):
+        attempts = 3
+        for attempt in range(attempts):
             wait = config.RCN_SLEEP - (time.monotonic() - self.last)
             if wait > 0:
                 time.sleep(wait)
             self.last = time.monotonic()
+            backoff = 5 * (attempt + 1)
             try:
                 r = self.session.get(url, timeout=60)
                 if r.status_code == 200:
@@ -53,10 +58,14 @@ class Fetcher:
                     return r.text
                 if r.status_code in (404, 410):
                     raise RuntimeError(f"{r.status_code} for {url}")
+                retry = (r.headers.get("Retry-After") or "").strip()
+                if r.status_code == 429 and retry.isdigit():
+                    backoff = min(int(retry), config.MAX_RETRY_AFTER)
             except requests.RequestException:
-                if attempt == 2:
+                if attempt == attempts - 1:
                     raise
-            time.sleep(5 * (attempt + 1))
+            if attempt < attempts - 1:   # no wait after the final attempt
+                time.sleep(backoff)
         raise RuntimeError(f"Could not fetch {url}")
 
 
@@ -85,6 +94,8 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--full", action="store_true", help="refetch completed calls too")
     args = ap.parse_args()
+    if not runlock.acquire():
+        sys.exit("Another pipeline run is in progress (run_weekly.py or run_all.py): not started.")
 
     CALLS_DIR.mkdir(parents=True, exist_ok=True)
     status = json.loads(STATUS.read_text(encoding="utf-8")) if STATUS.exists() else {}
@@ -92,6 +103,7 @@ def main() -> None:
     fetch = Fetcher()
 
     entries: dict[str, dict] = {}
+    failed_lists = []
     for n, (url, timeframe) in enumerate(config.RCN_LISTS):
         try:
             props = rcn.react_props(fetch.get(url), "ProposalListPage")
@@ -99,10 +111,10 @@ def main() -> None:
                 raise RuntimeError("call list format not recognised")
         except Exception as e:  # keep the last good data, record the problem
             status["errors"].append({"url": url, "error": str(e)})
+            failed_lists.append(url)
             print(f"List {url}: {e}")
             continue
-        (config.RAW_RCN / f"list_{n}.json").write_text(
-            json.dumps({"fetched": now(), "url": url, "props": props}, ensure_ascii=False), encoding="utf-8")
+        fsutil.write_json(config.RAW_RCN / f"list_{n}.json", {"fetched": now(), "url": url, "props": props})
         found = list_entries(props, timeframe)
         print(f"List {url}: {len(found)} calls")
         # First list wins: a call on the Norwegian and the English list keeps its
@@ -118,7 +130,7 @@ def main() -> None:
         if (old and not args.full and entry["timeframe"] == "completed"
                 and old["listing"]["timeframe"] == "completed"):
             old["listing"] = entry
-            path.write_text(json.dumps(old, ensure_ascii=False), encoding="utf-8")
+            fsutil.write_json(path, old)
             kept += 1
             continue
         try:
@@ -136,17 +148,25 @@ def main() -> None:
             status["errors"].append({"url": entry["url"], "error": str(e)})
             print(f"  [{i}/{len(entries)}] {entry['title']}: {e} (keeping previous data)")
             continue
-        path.write_text(json.dumps({"id": cid, "listing": entry, "url": entry["url"], "en_url": en_url,
-                                    "fetched": now(), "nb": nb, "en": en}, ensure_ascii=False),
-                        encoding="utf-8")
+        fsutil.write_json(path, {"id": cid, "listing": entry, "url": entry["url"], "en_url": en_url,
+                                 "fetched": now(), "nb": nb, "en": en})
         fetched += 1
         print(f"  [{i}/{len(entries)}] {entry['title']}")
 
-    if entries:
+    # calls_listed tells build_calls.py which calls RCN still lists. A partial set
+    # (one list failed) would mark live calls as "no longer listed", so it is only
+    # replaced when every list was read; otherwise the newly found calls are added.
+    if entries and not failed_lists:
         status["last_success"] = now()
         status["calls_listed"] = sorted(entries)
-    STATUS.write_text(json.dumps(status, ensure_ascii=False, indent=1), encoding="utf-8")
+    elif entries:
+        status["calls_listed"] = sorted(set(status.get("calls_listed", [])) | set(entries))
+    fsutil.write_json(STATUS, status, indent=1)
     print(f"Calls: {fetched} fetched, {kept} completed calls kept, {len(status['errors'])} errors.")
+    if failed_lists:
+        print(f"Failed: {len(failed_lists)} of {len(config.RCN_LISTS)} call lists could not be read "
+              f"({', '.join(failed_lists)}); previous data is kept.")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

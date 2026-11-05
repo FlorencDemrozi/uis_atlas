@@ -27,18 +27,23 @@ from datetime import date, datetime
 
 import collect_scopus as cs
 import config
+import fsutil
+import runlock
 
-AUTHOR_URL = "https://api.elsevier.com/content/author"
+AUTHOR_URL = config.SCOPUS_AUTHOR_URL
 REFRESH_FROM = max(config.FIRST_YEAR, date.today().year - config.SCOPUS_REFRESH_YEARS + 1)
 
 
 def author_ids() -> list[str]:
-    """Scopus author ids of the atlas researchers (all UiS authors before profiles exist)."""
+    """Scopus author ids of the atlas researchers (all UiS authors before profiles exist).
+    Only numeric ids: profiles of NVA-only people carry "nva-<Cristin id>" pseudo ids."""
     if config.PROFILES.exists():
         people = json.loads(config.PROFILES.read_text(encoding="utf-8"))["researchers"]
-        return sorted({i for r in people for i in r["scopus_ids"]})
-    atlas = json.loads(config.RAW_ATLAS.read_text(encoding="utf-8"))
-    return sorted({a["scopus_id"] for a in atlas["authors"]})
+        ids = {i for r in people for i in r["scopus_ids"]}
+    else:
+        atlas = json.loads(config.RAW_ATLAS.read_text(encoding="utf-8"))
+        ids = {a["scopus_id"] for a in atlas["authors"]}
+    return sorted({str(i) for i in ids if str(i).isdigit()})
 
 
 def query(ids: list[str], from_year: int) -> str:
@@ -58,7 +63,7 @@ def phase_search(s, ids: list[str]) -> None:
     state = json.loads(path.read_text()) if path.exists() else {}
     if state.get("from_year") != config.FIRST_YEAR:   # scope changed: search everyone again
         state = {"from_year": config.FIRST_YEAR, "done": [], "current": None}
-    save = lambda: path.write_text(json.dumps(state))
+    save = lambda: fsutil.write_json(path, state)
     done = set(state["done"])
     new = [i for i in ids if i not in done]
     print(f"Phase 1: publications at other affiliations – {len(new)} author ids to search, "
@@ -117,11 +122,13 @@ def phase_metrics(s, ids: list[str]) -> None:
         for i, m in found.items():
             metrics[i] = dict(m, fetched=stamp)
         got += len(found)
-        path.write_text(json.dumps(metrics, indent=1), encoding="utf-8")
+        fsutil.write_json(path, metrics, indent=1, ensure_ascii=True)
     print(f"  {got} author profiles read ({len(ids) - got} not returned by Scopus).")
 
 
 def main() -> None:
+    if not runlock.acquire():
+        sys.exit("Another pipeline run is in progress (run_weekly.py or run_all.py): not started.")
     limit = next((int(a.split("=", 1)[1]) for a in sys.argv if a.startswith("--limit=")), None)
     ids = author_ids()[:limit] if limit else author_ids()
     session = cs.make_session()

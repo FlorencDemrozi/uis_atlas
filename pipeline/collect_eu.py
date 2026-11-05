@@ -28,16 +28,19 @@ Usage:
 import argparse
 import json
 import re
+import sys
 import time
 from datetime import date, datetime, timedelta
 
 import requests
 
 import config
+import fsutil
+import runlock
 
 TOPICS_DIR = config.RAW_EU / "topics"
 STATUS = config.RAW_EU / "sync_status.json"
-PAGE = 100
+PAGE = config.EU_PAGE
 
 
 class Portal:
@@ -53,18 +56,24 @@ class Portal:
         self.last = time.monotonic()
 
     def request(self, method: str, url: str, **kw) -> requests.Response:
-        for attempt in range(4):
+        attempts = 4
+        for attempt in range(attempts):
             self._wait()
+            backoff = 5 * (attempt + 1)
             try:
                 r = self.session.request(method, url, timeout=120, **kw)
                 if r.status_code == 200:
                     return r
                 if r.status_code in (404, 410):
                     raise LookupError(f"{r.status_code} for {url}")
+                retry = (r.headers.get("Retry-After") or "").strip()
+                if r.status_code == 429 and retry.isdigit():
+                    backoff = min(int(retry), config.MAX_RETRY_AFTER)
             except requests.RequestException:
-                if attempt == 3:
+                if attempt == attempts - 1:
                     raise
-            time.sleep(5 * (attempt + 1))
+            if attempt < attempts - 1:   # no wait after the final attempt
+                time.sleep(backoff)
         raise RuntimeError(f"Could not fetch {url}")
 
     def search(self, query: dict, sort: list[dict], page: int) -> dict:
@@ -168,6 +177,8 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--full", action="store_true", help="refetch every topic's details")
     args = ap.parse_args()
+    if not runlock.acquire():
+        sys.exit("Another pipeline run is in progress (run_weekly.py or run_all.py): not started.")
 
     TOPICS_DIR.mkdir(parents=True, exist_ok=True)
     status = json.loads(STATUS.read_text(encoding="utf-8")) if STATUS.exists() else {}
@@ -178,10 +189,9 @@ def main() -> None:
         entries = list_topics(portal)
     except Exception as e:  # keep the last good data, record the problem
         status["errors"].append({"url": config.EU_SEARCH_URL, "error": str(e)})
-        STATUS.write_text(json.dumps(status, ensure_ascii=False, indent=1), encoding="utf-8")
+        fsutil.write_json(STATUS, status, indent=1)
         raise SystemExit(f"EU topic list could not be read: {e} (previous data kept)")
-    (config.RAW_EU / "list.json").write_text(json.dumps({"fetched": now(), "topics": list(entries.values())},
-                                                        ensure_ascii=False), encoding="utf-8")
+    fsutil.write_json(config.RAW_EU / "list.json", {"fetched": now(), "topics": list(entries.values())})
     print(f"Listed: {len(entries)} topics")
 
     fetched = kept = 0
@@ -190,7 +200,7 @@ def main() -> None:
         old = json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
         if not needs_fetch(entry, old, args.full):
             old["listing"] = entry
-            path.write_text(json.dumps(old, ensure_ascii=False), encoding="utf-8")
+            fsutil.write_json(path, old)
             kept += 1
             continue
         details = None
@@ -204,17 +214,16 @@ def main() -> None:
                 # the topic text too) is the record until the page can be read.
                 record = old or {"id": ident, "fetched": now(), "details": None}
                 record["listing"] = entry
-                path.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
+                fsutil.write_json(path, record)
                 continue
-        path.write_text(json.dumps({"id": ident, "listing": entry, "fetched": now(), "details": details},
-                                   ensure_ascii=False), encoding="utf-8")
+        fsutil.write_json(path, {"id": ident, "listing": entry, "fetched": now(), "details": details})
         fetched += 1
         if fetched % 50 == 0:
             print(f"  [{i}/{len(entries)}] {fetched} topic pages fetched")
 
     status["last_success"] = now()
     status["topics_listed"] = sorted(entries)
-    STATUS.write_text(json.dumps(status, ensure_ascii=False, indent=1), encoding="utf-8")
+    fsutil.write_json(STATUS, status, indent=1)
     print(f"Topics: {fetched} fetched, {kept} unchanged, {len(status['errors'])} errors.")
 
 

@@ -30,13 +30,16 @@ import math
 import re
 import sys
 import time
+import unicodedata
 from datetime import datetime
 
 import requests
 
 import config
+import fsutil
+import runlock
 
-PAGE_SIZE = 14
+PAGE_SIZE = config.DIRECTORY_PAGE_SIZE
 LANGS = {"nb": "sok/ansatte", "en": "search/employees"}
 FACET = re.compile(r'href="[^"]*employees%5B\d%5D=department%3A(\d+)[^"]*"[^>]*>(.*?)</a>', re.S)
 CARD = re.compile(r'<a href="(/(?:nb|en)/profile/[^"]+)"[^>]*class="profile_search_card__link".*?'
@@ -63,19 +66,29 @@ def fetch(s: requests.Session, lang: str, unit: str | None = None, page: int = 0
     return fetch_url(s, config.DIRECTORY_URL.format(lang=lang, path=LANGS[lang]), params)
 
 
+def retry_after(r: requests.Response, default: float) -> float:
+    """Seconds to wait before a retry: a numeric Retry-After header (capped), else default."""
+    value = (r.headers.get("Retry-After") or "").strip()
+    return min(float(value), config.MAX_RETRY_AFTER) if value.isdigit() else default
+
+
 def fetch_url(s: requests.Session, url: str, params: dict | None = None) -> str:
-    for attempt in range(5):
+    attempts = 5
+    for attempt in range(attempts):
+        last = attempt == attempts - 1   # no wait after the final attempt
         try:
             r = s.get(url, params=params, timeout=60)
         except requests.RequestException as exc:
             print(f"  network problem ({exc}); retrying…")
-            time.sleep(2 ** attempt * 3)
+            if not last:
+                time.sleep(2 ** attempt * 3)
             continue
         time.sleep(config.DIRECTORY_SLEEP)
         if r.status_code == 200:
             return r.text
         if r.status_code >= 500 or r.status_code == 429:
-            time.sleep(2 ** attempt * 3)
+            if not last:
+                time.sleep(retry_after(r, 2 ** attempt * 3) if r.status_code == 429 else 2 ** attempt * 3)
             continue
         r.raise_for_status()
     raise RuntimeError(f"Gave up on {url} {params}")
@@ -100,13 +113,29 @@ def members(s: requests.Session, lang: str, unit: str, count: int) -> list[dict]
     return out
 
 
-def email_of(page: str) -> str | None:
-    """The person's work e-mail from their profile page (the first personal mailto link)."""
+def ascii_fold(s: str) -> str:
+    """Lower-case ASCII form of a name, as used in e-mail addresses (Ø -> o, Æ -> ae)."""
+    s = s.lower().replace("ø", "o").replace("æ", "ae").replace("å", "a")
+    return unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode()
+
+
+def email_of(page: str, name: str | None = None) -> str | None:
+    """The person's work e-mail from their profile page. With several mailto links
+    (a unit's or a project's address next to the person's), the one whose local part
+    contains a part of the person's name wins; otherwise the first non-generic one."""
+    addresses = []
     for address in MAILTO.findall(page):
         address = html.unescape(address).strip().lower()
-        if address not in GENERIC_EMAILS:
+        if address and address not in GENERIC_EMAILS and address not in addresses:
+            addresses.append(address)
+    if not addresses:
+        return None
+    tokens = [t for t in re.split(r"[^a-z]+", ascii_fold(name or "")) if len(t) >= 3]
+    for address in addresses:
+        local = address.split("@", 1)[0]
+        if any(t in local for t in tokens):
             return address
-    return None
+    return addresses[0]
 
 
 def add_emails(s: requests.Session, people: dict[str, dict]) -> None:
@@ -121,21 +150,31 @@ def add_emails(s: requests.Session, people: dict[str, dict]) -> None:
     print(f"E-mail addresses: {len(wanted) - len(new)} known, {len(new)} profile pages to read…")
     for i, url in enumerate(new, 1):
         try:
-            cache[url] = email_of(fetch_url(s, url))
+            cache[url] = email_of(fetch_url(s, url), people[url]["name"])
         except (requests.RequestException, RuntimeError) as exc:
             print(f"  could not read {url}: {exc}")
             continue
         if i % 100 == 0:
             print(f"  {i}/{len(new)}")
-            config.DIRECTORY_EMAILS.write_text(json.dumps(cache, ensure_ascii=False, indent=1), encoding="utf-8")
-    cache = {url: cache[url] for url in wanted if url in cache}   # forget people who left
-    config.DIRECTORY_EMAILS.write_text(json.dumps(cache, ensure_ascii=False, indent=1), encoding="utf-8")
+            fsutil.write_json(config.DIRECTORY_EMAILS, cache, indent=1)
+    # Forget people who left. Only called after a complete listing (see main), so a
+    # short run never empties the cache.
+    cache = {url: cache[url] for url in wanted if url in cache}
+    fsutil.write_json(config.DIRECTORY_EMAILS, cache, indent=1)
     for url in wanted:
         if cache.get(url):
             people[url]["email"] = cache[url]
 
 
+def listing_complete(parsed: int, listed: int) -> bool:
+    """True if the cards parsed from the unit pages cover enough of the people the
+    facets report; otherwise the page layout probably changed."""
+    return parsed > 0 and parsed >= config.DIRECTORY_MIN_PARSED_SHARE * listed
+
+
 def main() -> None:
+    if not runlock.acquire():
+        sys.exit("Another pipeline run is in progress (run_weekly.py or run_all.py): not started.")
     s = requests.Session()
     s.headers["User-Agent"] = "UiS Researcher Atlas (research directory prototype; contact via uis.no)"
 
@@ -160,10 +199,13 @@ def main() -> None:
         print(f"  warning: directory units in config.py not found on the site: {missing}")
 
     people: dict[str, dict] = {}   # keyed by Norwegian profile URL
+    listed = parsed = 0
     for i, uid in enumerate(leaves, 1):
         u = units[uid]
         print(f"  [{i}/{len(leaves)}] {u['nb']} ({u['count']})")
         nb = members(s, "nb", uid, u["count"])
+        listed += u["count"]
+        parsed += len(nb)
         en = {m["name"]: m for m in members(s, "en", uid, u["count"])}
         for m in nb:
             p = people.setdefault(m["url"], {"name": m["name"], "url_nb": m["url"], "units": [],
@@ -175,11 +217,17 @@ def main() -> None:
                 p.setdefault("url_en", e["url"])
                 p.setdefault("position_en", e["position"])
 
+    if not listing_complete(parsed, listed):
+        print(f"\nStopped: the unit facets list {listed} people, but only {parsed} could be read from the "
+              f"listing pages (the page layout may have changed). Nothing was written; "
+              f"the previous directory and e-mail cache are kept.")
+        sys.exit(1)
+
     config.RAW_DIRECTORY.mkdir(parents=True, exist_ok=True)
     add_emails(s, people)
     out = {"generated": datetime.now().isoformat(timespec="seconds"),
            "units": units, "employees": list(people.values())}
-    config.DIRECTORY.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
+    fsutil.write_json(config.DIRECTORY, out, indent=1)
     in_scope = sum(1 for p in people.values()
                    if any(int(u) in config.DIRECTORY_DEPARTMENTS for u in p["units"]))
     print(f"\nDone. {len(people)} employees, {in_scope} in the atlas departments.")
