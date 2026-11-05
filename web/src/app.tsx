@@ -5,7 +5,7 @@ import { I18n, useI18n, useI18nState } from "./i18n";
 import { links, parseHash, replaceHash, setOrgParam, useRoute, type View } from "./router";
 import { decodeOrg, encodeOrg, SelectionContext, type Selection } from "./selection";
 import { ShortlistContext, useShortlist, useShortlistState } from "./shortlist";
-import { useTheme } from "./theme";
+import { nextTheme, useTheme, type Theme } from "./theme";
 import { SearchView } from "./views/Search";
 import { ProfileView } from "./views/Profile";
 import { FundingContext, callTitle, useFundingState } from "./funding";
@@ -106,18 +106,42 @@ function RenderError() {
   );
 }
 
+// Icons of the theme switch (the current theme; 1.5px strokes in currentColor).
+const THEME_ICON: Record<Theme, preact.JSX.Element> = {
+  light: <><circle cx="12" cy="12" r="4" /><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8" /></>,
+  dark: <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" />,
+  sepia: <><path d="M4 5.5c2.7-1 5.3-1 8 .8 2.7-1.8 5.3-1.8 8-.8v13c-2.7-1-5.3-1-8 .8-2.7-1.8-5.3-1.8-8-.8z" /><path d="M12 6.3v13" /></>,
+};
+
 function Header({ view }: { view: View }) {
   const { t, lang, setLang } = useI18n();
-  const [theme, toggleTheme] = useTheme();
+  const [theme, cycleTheme] = useTheme();
   const { ids } = useShortlist();
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => setMenuOpen(false), [view]);   // a link was followed
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMenuOpen(false); };
+    addEventListener("keydown", onKey);
+    return () => removeEventListener("keydown", onKey);
+  }, [menuOpen]);
   const items: [View, string][] = [["search", links.search()], ["overview", links.overview], ["network", links.network],
     ["feedback", links.feedback],
     ["funding", links.funding()], ["shortlist", links.shortlist()]];
+  const switchLabel = t("theme.switch", { current: t(`theme.${theme}`), next: t(`theme.${nextTheme(theme)}`) });
   return (
     <header class="topbar">
       <div class="wrap">
-        <a class="wordmark" href={links.search()}><b>UiS</b><span>{t("app.name")}</span></a>
-        <nav class="nav" aria-label={t("nav.label")}>
+        <a class="wordmark" href={links.search()}><b>UiS</b> <span>{t("app.name")}</span></a>
+        <button type="button" class="menu-toggle" aria-expanded={menuOpen} aria-controls="main-nav"
+          onClick={() => setMenuOpen((o) => !o)}>
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor"
+            stroke-width="1.6" stroke-linecap="round">
+            {menuOpen ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
+          </svg>
+          <span>{t("nav.menu")}</span>
+        </button>
+        <nav id="main-nav" class={`nav${menuOpen ? " open" : ""}`} aria-label={t("nav.label")}>
           {items.map(([v, href]) => (
             <a key={v} href={href} aria-current={view === v || (v === "search" && view === "profile") || (v === "funding" && view === "call")
               ? "page" : undefined}>
@@ -126,16 +150,18 @@ function Header({ view }: { view: View }) {
             </a>
           ))}
         </nav>
-        <div class="lang" role="group" aria-label={t("nav.language")}>
-          <button type="button" aria-pressed={lang === "nb"} onClick={() => setLang("nb")} lang="nb">Norsk</button>
-          <button type="button" aria-pressed={lang === "en"} onClick={() => setLang("en")} lang="en">English</button>
+        <div class="topbar-tools">
+          <div class="lang" role="group" aria-label={t("nav.language")}>
+            <button type="button" aria-pressed={lang === "nb"} onClick={() => setLang("nb")} lang="nb" title="Norsk"
+              aria-label="Norsk">NB</button>
+            <button type="button" aria-pressed={lang === "en"} onClick={() => setLang("en")} lang="en" title="English"
+              aria-label="English">EN</button>
+          </div>
+          <button type="button" class="theme-toggle" onClick={cycleTheme} aria-label={switchLabel} title={switchLabel}>
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor"
+              stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">{THEME_ICON[theme]}</svg>
+          </button>
         </div>
-        <button type="button" class="theme-toggle" onClick={toggleTheme}
-          aria-label={t(theme === "dark" ? "theme.toLight" : "theme.toDark")}
-          title={t(theme === "dark" ? "theme.toLight" : "theme.toDark")}>
-          <span aria-hidden="true">{theme === "dark" ? "☀" : "☾"}</span>
-          <span class="theme-label">{t(theme === "dark" ? "theme.light" : "theme.dark")}</span>
-        </button>
       </div>
     </header>
   );

@@ -266,33 +266,63 @@ export function NetworkView({ atlas, route }: { atlas: Atlas; route: Route }) {
   // A non-passive listener, so the page does not scroll while over the graph.
   const boxRef = useRef(g.box);
   boxRef.current = g.box;
+  // Zoom by `factor` around a screen point, which stays in place (wheel and pinch).
+  const zoomAt = (clientX: number, clientY: number, factor: number) => {
+    const svg = svgRef.current;
+    const ctm = svg?.getScreenCTM();
+    if (!ctm) return;
+    const p = new DOMPoint(clientX, clientY).matrixTransform(ctm.inverse());
+    const v = viewRef.current, box = boxRef.current;
+    const k = Math.min(6, Math.max(1, v.k * factor));
+    const f = k / v.k;
+    if (f === 1) return;
+    const cx = box.x + v.x + box.w / 2, cy = box.y + v.y + box.h / 2;
+    const next = { k, x: k === 1 ? 0 : v.x + (p.x - cx) * (1 - 1 / f), y: k === 1 ? 0 : v.y + (p.y - cy) * (1 - 1 / f) };
+    viewRef.current = next;   // several pinch moves may arrive before the next render
+    setView(next);
+  };
   useEffect(() => {
     const svg = svgRef.current;
     if (!svg) return;
     const onWheel = (e: WheelEvent) => {
-      const ctm = svg.getScreenCTM();
-      if (!ctm) return;
       e.preventDefault();
       cancelAnimationFrame(anim.current);
-      const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse());
-      const v = viewRef.current, box = boxRef.current;
-      const k = Math.min(6, Math.max(1, v.k * Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0015))));
-      const f = k / v.k;
-      if (f === 1) return;
-      const cx = box.x + v.x + box.w / 2, cy = box.y + v.y + box.h / 2;
-      setView({ k, x: k === 1 ? 0 : v.x + (p.x - cx) * (1 - 1 / f), y: k === 1 ? 0 : v.y + (p.y - cy) * (1 - 1 / f) });
+      zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0015)));
     };
     svg.addEventListener("wheel", onWheel, { passive: false });
     return () => svg.removeEventListener("wheel", onWheel);
   }, []);
 
+  // Touch: one finger pans (below), two fingers pinch-zoom around their midpoint.
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<number | null>(null);   // finger distance at the last move
+  const fingerGap = () => {
+    const [a, b] = [...pointers.current.values()];
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  };
+
   const onDown = (e: PointerEvent) => {
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.current.size === 2) {   // second finger: pinch instead of pan
+      drag.current = null;
+      pinch.current = fingerGap();
+      (e.currentTarget as Element).setPointerCapture(e.pointerId);
+      return;
+    }
     if ((e.target as Element).closest(".node-g")) return;
     cancelAnimationFrame(anim.current);
     drag.current = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, moved: false };
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
   };
   const onMove = (e: PointerEvent) => {
+    if (pointers.current.has(e.pointerId)) pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch.current !== null && pointers.current.size === 2) {
+      const gap = fingerGap();
+      const [a, b] = [...pointers.current.values()];
+      if (pinch.current > 0) zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, gap / pinch.current);
+      pinch.current = gap;
+      return;
+    }
     const d = drag.current;
     const svg = svgRef.current;
     if (!d || !svg) return;
@@ -302,7 +332,13 @@ export function NetworkView({ atlas, route }: { atlas: Atlas; route: Route }) {
     const scale = vb.w / svg.clientWidth;
     setView((v) => ({ ...v, x: d.vx - dx * scale, y: d.vy - dy * scale }));
   };
-  const onUp = () => {
+  const onUp = (e: PointerEvent) => {
+    pointers.current.delete(e.pointerId);
+    if (pinch.current !== null) {   // a pinch ends when a finger lifts; no click, no pan
+      if (pointers.current.size < 2) pinch.current = null;
+      drag.current = null;
+      return;
+    }
     if (drag.current && !drag.current.moved && (focus || focusInst)) clearFocus();   // click on the background
     drag.current = null;
   };
@@ -584,7 +620,8 @@ export function NetworkView({ atlas, route }: { atlas: Atlas; route: Route }) {
             aria-label={focusNode ? t("net.focusAria", { name: focusNode.r.name })
               : focusInstNode ? t("net.focusAria", { name: focusInstNode.inst.name }) : t("net.aria")}
             class={`${drag.current?.moved ? "dragging" : ""}${pointing ? " pointing" : ""}`}
-            onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={() => { drag.current = null; }}>
+            onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
+            onPointerLeave={(e) => { if (e.pointerType === "mouse") drag.current = null; }}>
             {linkLayer}
             {nodeLayer}
             {overlay}
