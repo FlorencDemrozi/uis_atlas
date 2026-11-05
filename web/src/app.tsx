@@ -1,3 +1,4 @@
+import { Component, type ComponentChildren } from "preact";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { loadAtlas, type Atlas } from "./data";
 import { I18n, useI18n, useI18nState } from "./i18n";
@@ -77,13 +78,31 @@ export function App() {
       </a>
       <Header view={route.view} />
       <main id="main" ref={mainRef} tabIndex={-1}>
-        <div class="wrap">{content}</div>
+        <div class="wrap"><ErrorBoundary key={`${route.view}/${route.id ?? ""}`}>{content}</ErrorBoundary></div>
       </main>
       <Footer atlas={atlas} />
     </FundingContext.Provider>
     </ShortlistContext.Provider>
     </SelectionContext.Provider>
     </I18n.Provider>
+  );
+}
+
+/** A view that fails while rendering shows a message and a way home instead of a blank page. */
+class ErrorBoundary extends Component<{ children: ComponentChildren }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch(error: unknown) { console.error(error); }
+  render() { return this.state.failed ? <RenderError /> : this.props.children; }
+}
+
+function RenderError() {
+  const { t } = useI18n();
+  return (
+    <div class="page-head" role="alert">
+      <h1>{t("app.renderError")}</h1>
+      <p><a href={links.search()}>{t("app.renderErrorHome")}</a></p>
+    </div>
   );
 }
 

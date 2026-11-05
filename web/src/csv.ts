@@ -3,8 +3,10 @@ import type { Atlas, Researcher } from "./data";
 import type { I18nValue } from "./i18n";
 
 const cell = (v: unknown) => {
-  const s = v == null ? "" : String(v);
-  return /[",;\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  let s = v == null ? "" : String(v);
+  // Text starting like a formula is not run by spreadsheet programs (CSV injection).
+  if (typeof v === "string" && /^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  return /[",;\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 
 export function downloadCsv(filename: string, rows: unknown[][]) {

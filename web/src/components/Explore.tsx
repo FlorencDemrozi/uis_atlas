@@ -6,12 +6,22 @@ import { fac } from "../org";
 import { useI18n } from "../i18n";
 import { links } from "../router";
 import { inScope, useSelection } from "../selection";
-import { recentTopics, scopedStats } from "../stats";
+import { recentTopics, scopedStats, type ScopedStats } from "../stats";
+
+// Computed once per atlas and scope (it runs over every paper), not on every remount.
+const statsCache = new WeakMap<Atlas, Map<string, ScopedStats>>();
+function cachedStats(atlas: Atlas, scope: "faculty"): ScopedStats {
+  let byScope = statsCache.get(atlas);
+  if (!byScope) statsCache.set(atlas, byScope = new Map());
+  let stats = byScope.get(scope);
+  if (!stats) byScope.set(scope, stats = scopedStats(atlas, atlas.researchers, scope));
+  return stats;
+}
 
 export function Explore({ atlas }: { atlas: Atlas }) {
   const { t, num, deptName } = useI18n();
   const { sel, setSel } = useSelection();
-  const stats = useMemo(() => scopedStats(atlas, atlas.researchers, "faculty"), [atlas]);
+  const stats = useMemo(() => cachedStats(atlas, "faculty"), [atlas]);
   const trending = useMemo(() => recentTopics(atlas,
     atlas.researchers.filter((r) => inScope(sel, r.department)), 14), [atlas, sel]);
 

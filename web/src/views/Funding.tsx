@@ -47,7 +47,16 @@ function FundingList({ atlas, data, route }: { atlas: Atlas; data: Funding; rout
   // ignored). A researcher – chosen (?who=) or the only name matching what was
   // typed – gets their matched calls plus every call open to all fields, with
   // their eligibility.
-  const byName = useMemo(() => new Map(atlas.researchers.map((r) => [norm(r.name), r.scopus_id])), [atlas]);
+  // Name -> every researcher with it (two people can share a name).
+  const byName = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const r of atlas.researchers) {
+      const k = norm(r.name);
+      const ids = m.get(k);
+      if (ids) ids.push(r.scopus_id); else m.set(k, [r.scopus_id]);
+    }
+    return m;
+  }, [atlas]);
   // Titles in both languages, and EU topic identifiers ("HORIZON-CL5-2027").
   const titleHit = (c: Call) => norm(callTitle(c, "nb")).includes(q) || norm(callTitle(c, "en")).includes(q)
     || (c.source === "eu" && norm(String(c.fields.call_id.v ?? "")).includes(q));
@@ -63,10 +72,14 @@ function FundingList({ atlas, data, route }: { atlas: Atlas; data: Funding; rout
   const personOpen = useMemo(() => new Map((person ? openFieldCallsFor(data, person.scopus_id) : [])
     .map(({ call, eligibility }) => [call.id, eligibility])), [data, person]);
   const sort = (p.get("sort") ?? (person ? "relevance" : "deadline")) as typeof SORTS[number];
-  const onSearch = (value: string) => {
-    const id = byName.get(norm(value));
-    setMany(id ? { who: id, q: "" } : { q: value, who: "" });
+  // Switch to ?who= only when a name is picked from the list (not mid-typing) and is unique.
+  const onSearch = (e: Event) => {
+    const value = (e.target as HTMLInputElement).value;
+    const picked = !(e instanceof InputEvent) || e.inputType === "insertReplacementText";
+    const ids = picked ? byName.get(norm(value)) : undefined;
+    setMany(ids?.length === 1 ? { who: ids[0], q: "" } : { q: value, who: "" });
   };
+  const minAmount = Number(p.get("amt"));   // invalid ?amt= is no minimum
 
   const strong = (c: Call) => (data.matches[c.id] ?? []).filter((m) => m.category !== "low");
   const personRank = (c: Call) => personMatches.has(c.id) ? 10 + personMatches.get(c.id)!.score
@@ -90,7 +103,7 @@ function FundingList({ atlas, data, route }: { atlas: Atlas; data: Funding; rout
     if (p.get("ap") && !(pick<string[]>(f.target_groups.v, lang).value ?? []).includes(p.get("ap")!)) return false;
     if (p.get("intl") && String(!!f.international.v) !== (p.get("intl") === "yes" ? "true" : "false")) return false;
     if (p.get("or") && f.orientation.v !== p.get("or")) return false;
-    if (p.get("amt") && !((amountNok(f.max_amount.v, f.currency.v) ?? 0) >= Number(p.get("amt")))) return false;
+    if (minAmount > 0 && !((amountNok(f.max_amount.v, f.currency.v) ?? 0) >= minAmount)) return false;
     if (p.get("before")) {
       const d = nextDeadline(c);
       if (!d || d.slice(0, 10) > p.get("before")!) return false;
@@ -137,7 +150,7 @@ function FundingList({ atlas, data, route }: { atlas: Atlas; data: Funding; rout
         <label class="field grow">
           <span>{t("f.search")}</span>
           <input type="search" list="funding-people" value={p.get("q") ?? ""} placeholder={t("f.searchPlaceholder")}
-            onInput={(e) => onSearch((e.target as HTMLInputElement).value)} />
+            onInput={onSearch} />
           <datalist id="funding-people">
             {atlas.researchers.map((r) => <option key={r.scopus_id} value={r.name} />)}
           </datalist>

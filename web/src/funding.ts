@@ -275,7 +275,7 @@ export interface FundingValue {
   state: FundingState;
   /** Fetches the file and opens it with a key saved in this session, if any. */
   load: () => void;
-  /** Returns false if the password is wrong. */
+  /** Returns false if the password is wrong; rejects if the data could not be fetched. */
   unlock: (password: string) => Promise<boolean>;
   lock: () => void;
 }
@@ -312,12 +312,23 @@ function forgetKey(): void {
   try { sessionStorage.removeItem(KEY_STORE); } catch { /* ignore */ }
 }
 
+// Other modules holding decrypted data (ideas.ts) register here to forget it on lock.
+const lockListeners = new Set<() => void>();
+export function onLock(fn: () => void): void { lockListeners.add(fn); }
+
+/** Forgets every cached file and decrypted part, so a new unlock reads the current export. */
+function clearCaches(): void {
+  body = null;
+  shardFiles.clear();
+  for (const fn of lockListeners) fn();
+}
+
 export function useFundingState(): FundingValue {
   const [state, setState] = useState<FundingState>({ status: "idle" });
   const [head, setHead] = useState<FileHead | null>(null);
 
   const load = useCallback(() => {
-    if (state.status !== "idle") return;
+    if (state.status !== "idle" && state.status !== "error") return;   // "error": try again
     if (!globalThis.crypto?.subtle || typeof DecompressionStream === "undefined") {
       setState({ status: "unsupported" });
       return;
@@ -359,6 +370,7 @@ export function useFundingState(): FundingValue {
 
   const lock = useCallback(() => {
     forgetKey();
+    clearCaches();
     setState(head ? { status: "locked" } : { status: "idle" });
   }, [head]);
 

@@ -451,12 +451,18 @@ export function NetworkView({ atlas, route }: { atlas: Atlas; route: Route }) {
       </g>
     </g>
   ), [g, focus, focusInst, levels, focusDept]);
+  // Enter or Space on a focused node does what a click does.
+  const onNodeKey = (e: KeyboardEvent, go: () => void) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    go();
+  };
   const nodeLayer = useMemo(() => (
     <g class="base">
       <g>
         {g.nodes.map((n) => (
-          <g key={n.id} class="node-g"
-            onClick={() => goTo(n.id)}
+          <g key={n.id} class="node-g" tabIndex={0} role="button" aria-label={n.r.name}
+            onClick={() => goTo(n.id)} onKeyDown={(e) => onNodeKey(e, () => goTo(n.id))}
             onDblClick={() => { location.hash = links.profile(n.id); }}
             onPointerEnter={() => showTip(n)} onPointerLeave={hideTip}>
             <circle class={`node${nodeClass(n)}${peek === n.id ? " peek" : ""}`} cx={n.x} cy={n.y}
@@ -467,8 +473,8 @@ export function NetworkView({ atlas, route }: { atlas: Atlas; route: Route }) {
       </g>
       <g>
         {g.instNodes.map((n) => (
-          <g key={n.id} class="node-g"
-            onClick={() => goToInst(n.id)}
+          <g key={n.id} class="node-g" tabIndex={0} role="button" aria-label={n.inst.name}
+            onClick={() => goToInst(n.id)} onKeyDown={(e) => onNodeKey(e, () => goToInst(n.id))}
             onPointerEnter={() => showTip(n)} onPointerLeave={hideTip}>
             <rect class={`inst-node${instClass(n)}`} x={(n.x ?? 0) - half(n)} y={(n.y ?? 0) - half(n)}
               width={2 * half(n)} height={2 * half(n)} rx={1.5 / Math.sqrt(view.k)} vector-effect="non-scaling-stroke"

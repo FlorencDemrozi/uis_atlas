@@ -365,6 +365,9 @@ details.table-view summary { cursor: pointer; color: var(--accent); width: fit-c
 
 /* ------------------------------------------------------------------ network exploration */
 .net-wrap .node-g { cursor: pointer; }
+.net-wrap .node-g:focus { outline: none; }
+.net-wrap .node-g:focus-visible .node, .net-wrap .node-g:focus-visible .inst-node {
+  stroke: var(--accent); stroke-width: 3px; outline: none; }
 .net-wrap .node, .net-wrap .edge { transition: opacity 0.2s; }
 .net-wrap .node.far { opacity: 0.55; }
 .net-wrap .node.focus { stroke: var(--ink); }

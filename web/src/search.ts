@@ -1,5 +1,6 @@
-// Affinity ranking (docs/SPEC.md §4). For now keyword-only (BM25 via MiniSearch);
-// the semantic score from multilingual-e5-small is added once vectors.bin exists.
+// Affinity ranking (docs/SPEC.md §4), keyword-based: BM25 via MiniSearch over names, keywords,
+// tags, summaries and paper titles. Researcher vectors stay local (not published), so there is
+// no semantic score in the browser; semanticWeight/keywordWeight in search-config.json are unused here.
 import MiniSearch from "minisearch";
 import type { Atlas, Researcher } from "./data";
 import cfg from "./search-config.json";

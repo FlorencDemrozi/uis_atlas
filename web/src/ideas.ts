@@ -5,7 +5,7 @@
 // call_vectors.score_calls. A shortlist, not a verdict: the relevant calls are
 // usually among the first 15–20, mixed with ones that only share words.
 import cfg from "./search-config.json";
-import { fetchEncrypted, type Funding } from "./funding";
+import { fetchEncrypted, onLock, type Funding } from "./funding";
 
 export type TextKind = "scope" | "aspect" | "direction";
 
@@ -33,9 +33,19 @@ const bytes = (b64: string) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)
 
 let indexPromise: Promise<IdeaIndex> | null = null;
 
+/** Forgets the decrypted call vectors (on lock, so a later unlock reads the current export). */
+export function resetIdeaIndex(): void { indexPromise = null; }
+onLock(resetIdeaIndex);
+
+/** The part after the organisation ("Xenova/multilingual-e5-small" and "intfloat/..." are the same model). */
+const modelName = (m: string) => m.split("/").pop()!.toLowerCase();
+
 export function loadIdeaIndex(data: Funding): Promise<IdeaIndex> {
   indexPromise ??= fetchEncrypted<IdeaFile>(data, "./data/funding.ideas.enc.json").then((f) => {
-    if (f.query_prefix !== cfg.queryPrefix) throw new Error("model settings differ");
+    if (f.query_prefix !== cfg.queryPrefix || modelName(f.model ?? "") !== modelName(cfg.model)) {
+      console.warn(`Idea vectors were made with ${f.model} ("${f.query_prefix}"), the browser uses ${cfg.model} ("${cfg.queryPrefix}")`);
+      throw new Error("model settings differ");
+    }
     let start = 0;
     const calls = f.calls.map((c) => { const out = { ...c, start }; start += c.t.length; return out; });
     return { settings: f.settings, dim: f.dim, calls, values: new Int8Array(bytes(f.values).buffer),

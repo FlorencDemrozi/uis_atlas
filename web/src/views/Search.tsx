@@ -18,6 +18,8 @@ const wide = () => matchMedia("(min-width: 1000px)").matches;
 // once meaning-based search (vectors) is available.
 const examples = (text: string) => text.split("|");
 const PAGE = 20;
+/** ?min= as a number; anything else (missing, "abc", negative) is no minimum. */
+const minOf = (v: string | null) => { const n = Number(v ?? 0); return Number.isFinite(n) && n > 0 ? n : 0; };
 
 export function SearchView({ atlas, route }: { atlas: Atlas; route: Route }) {
   const { t, num } = useI18n();
@@ -25,7 +27,7 @@ export function SearchView({ atlas, route }: { atlas: Atlas; route: Route }) {
   const [q, setQ] = useState(route.params.get("q") ?? "");
   const [query, setQuery] = useState(q);
   const { sel } = useSelection();
-  const [minPubs, setMinPubs] = useState(Number(route.params.get("min") ?? 0));
+  const [minPubs, setMinPubs] = useState(minOf(route.params.get("min")));
   const roleParam = route.params.get("role");
   const [role, setRole] = useState<Role | "">(isRole(roleParam) ? roleParam : "");
   const [shown, setShown] = useState(PAGE);
@@ -40,15 +42,15 @@ export function SearchView({ atlas, route }: { atlas: Atlas; route: Route }) {
   }, []);
   const shownMode: Mode = mode === "split" && !isWide ? "list" : mode;
 
-  // Follow hash changes (example clicks, theme links from other views).
+  // Follow every hash change (example clicks, theme links from other views). Typing
+  // updates the address without an event, so a link may carry the q the route still has.
   useEffect(() => {
     const next = route.params.get("q") ?? "";
     setQ(next); setQuery(next);
-  }, [route.params.get("q")]);
-  useEffect(() => {
-    const next = route.params.get("role");
-    setRole(isRole(next) ? next : "");
-  }, [route.params.get("role")]);
+    const r = route.params.get("role");
+    setRole(isRole(r) ? r : "");
+    setMinPubs(minOf(route.params.get("min")));
+  }, [route]);
   useEffect(() => {
     const v = route.params.get("view");
     setMode(v === "split" || v === "table" ? v : "list");
@@ -92,6 +94,12 @@ export function SearchView({ atlas, route }: { atlas: Atlas; route: Route }) {
     return c;
   }, [unroled]);
   const hits = useMemo(() => role ? unroled.filter((h) => roleOf(h.researcher) === role) : unroled, [unroled, role]);
+  // A shared ?r= further down the list: show enough results to include it.
+  useEffect(() => {
+    if (!selected) return;
+    const i = hits.findIndex((h) => h.researcher.scopus_id === selected);
+    if (i >= shown) setShown(Math.ceil((i + 1) / PAGE) * PAGE);
+  }, [hits, selected]);
   const inScopeCount = useMemo(() => atlas.researchers.filter((r) => inScope(sel, r.department)).length, [atlas, sel]);
 
   return (

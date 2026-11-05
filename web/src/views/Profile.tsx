@@ -4,7 +4,7 @@ import { useI18n } from "../i18n";
 import { links } from "../router";
 import { BarList, ColumnChart } from "../components/charts";
 import { DeptLabel, Position, paperUrl } from "../components/common";
-import { useState } from "preact/hooks";
+import { useMemo, useState } from "preact/hooks";
 import { CategoryBadge, EligibilityBadge, FundingGate, MatchDetails, SourceBadge, StatusBadge, useFmt } from "../components/funding";
 import { EU_FAMILIES, FAMILIES, callTitle, familyOf, nextDeadline, openFieldCallsFor, pick, useFunding, type Call,
   type Funding } from "../funding";
@@ -120,6 +120,17 @@ export function ProfileView({ atlas, id }: { atlas: Atlas; id: string }) {
     return p.category ? t(`cat.${p.category}`) : p.type;
   };
   const r = atlas.byId.get(id);
+  // Papers per year, built once per profile.
+  const byYear = useMemo(() => {
+    const m = new Map<string, Paper[]>();
+    for (const eid of r?.paper_ids ?? []) {
+      const p = atlas.papers[eid];
+      if (!p) continue;
+      const list = m.get(p.year);
+      if (list) list.push(p); else m.set(p.year, [p]);
+    }
+    return m;
+  }, [atlas, r]);
   if (!r) {
     return (
       <div class="page-head">
@@ -138,12 +149,6 @@ export function ProfileView({ atlas, id }: { atlas: Atlas; id: string }) {
   const recent = atlas.recent.get(r.scopus_id) ?? 0;
   const other = new Set(r.other_paper_ids ?? []);
   const sm = r.scopus_metrics;
-  const byYear = new Map<string, Paper[]>();
-  for (const eid of r.paper_ids) {
-    const p = atlas.papers[eid];
-    if (!p) continue;
-    byYear.set(p.year, [...(byYear.get(p.year) ?? []), p]);
-  }
   const collabDepts = orderedDepts(Object.keys(r.collab_departments));
 
   return (

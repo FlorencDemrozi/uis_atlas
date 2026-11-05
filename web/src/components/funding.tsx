@@ -13,14 +13,17 @@ export function FundingGate({ children, compact = false }:
   { children: (data: Funding) => ComponentChildren; compact?: boolean }) {
   const { t } = useI18n();
   const { state, load } = useFunding();
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (state.status === "idle") load(); }, [load, state.status]);   // after an error: the retry button
   if (state.status === "ready") return <>{children(state.data)}</>;
   if (state.status === "idle" || state.status === "loading") {
     return compact ? null : <p class="loading" role="status">{t("f.loading")}</p>;
   }
   if (state.status === "missing") return compact ? null : <p class="muted">{t("f.missing")}</p>;
   if (state.status === "unsupported") return <p class="muted">{t("f.unsupported")}</p>;
-  if (state.status === "error") return <p class="muted">{t("f.error")} ({state.error})</p>;
+  if (state.status === "error") {
+    return <p class="muted">{t("f.error")} ({state.error}){" "}
+      <button type="button" class="btn" onClick={load}>{t("f.retry")}</button></p>;
+  }
   return <UnlockForm compact={compact} />;
 }
 
@@ -29,15 +32,20 @@ function UnlockForm({ compact }: { compact: boolean }) {
   const { unlock } = useFunding();
   const [pw, setPw] = useState("");
   const [busy, setBusy] = useState(false);
-  const [wrong, setWrong] = useState(false);
+  const [failed, setFailed] = useState<"" | "wrong" | "network">("");
+  const wrong = failed !== "";
   const submit = async (e: Event) => {
     e.preventDefault();
     if (!pw || busy) return;
     setBusy(true);
-    setWrong(false);
-    const ok = await unlock(pw);
-    setBusy(false);
-    if (!ok) setWrong(true);
+    setFailed("");
+    try {
+      if (!(await unlock(pw))) setFailed("wrong");
+    } catch {
+      setFailed("network");   // the data could not be fetched (offline, server error)
+    } finally {
+      setBusy(false);
+    }
   };
   return (
     <form class={compact ? "unlock compact" : "unlock panel"} onSubmit={submit}>
@@ -50,11 +58,12 @@ function UnlockForm({ compact }: { compact: boolean }) {
           <span>{t("f.password")}</span>
           <input type="password" autoComplete="current-password" value={pw}
             onInput={(e) => setPw((e.target as HTMLInputElement).value)}
-            aria-invalid={wrong} aria-describedby={wrong ? "unlock-error" : undefined} />
+            aria-invalid={failed === "wrong"} aria-describedby={wrong ? "unlock-error" : undefined} />
         </label>
         <button type="submit" class="btn primary" disabled={busy}>{busy ? t("f.unlocking") : t("f.unlock")}</button>
       </div>
-      {wrong && <p id="unlock-error" class="error" role="alert">{t("f.wrongPassword")}</p>}
+      {wrong && <p id="unlock-error" class="error" role="alert">
+        {t(failed === "network" ? "f.networkError" : "f.wrongPassword")}</p>}
     </form>
   );
 }
@@ -66,14 +75,19 @@ export function useFmt() {
   const date = (iso: string | null | undefined, withTime = false) => {
     if (!iso) return "";
     const d = new Date(iso.length === 10 ? `${iso}T00:00` : iso);
+    if (Number.isNaN(d.getTime())) return iso;   // not a date: show it as published
     const s = d.toLocaleDateString(locale, { day: "numeric", month: "short", year: "numeric" });
     return withTime && iso.length > 10 ? `${s}, ${d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}` : s;
   };
   const money = (n: number | null | undefined, currency = "NOK") => {
     if (n == null) return "";
     const compact = n >= 1e6;
-    return new Intl.NumberFormat(locale, { style: "currency", currency, notation: compact ? "compact" : "standard",
-      maximumFractionDigits: compact ? 1 : 0 }).format(n);
+    const opts = { notation: compact ? "compact" : "standard", maximumFractionDigits: compact ? 1 : 0 } as const;
+    try {
+      return new Intl.NumberFormat(locale, { style: "currency", currency, ...opts }).format(n);
+    } catch {   // not an ISO currency code in the data
+      return `${new Intl.NumberFormat(locale, opts).format(n)} ${currency}`;
+    }
   };
   const range = (c: Call) => {
     const f = c.fields;

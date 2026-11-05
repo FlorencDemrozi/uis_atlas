@@ -5,6 +5,11 @@ import { useEffect, useState } from "preact/hooks";
 export type View = "search" | "overview" | "network" | "profile" | "shortlist" | "funding" | "call" | "feedback";
 export interface Route { view: View; id?: string; params: URLSearchParams }
 
+/** decodeURIComponent that keeps a malformed escape (e.g. "%E0%A4") as typed instead of throwing. */
+function safeDecode(s: string): string {
+  try { return decodeURIComponent(s); } catch { return s; }
+}
+
 export function parseHash(hash: string): Route {
   const [path, qs = ""] = hash.replace(/^#/, "").split("?");
   const params = new URLSearchParams(qs);
@@ -13,9 +18,9 @@ export function parseHash(hash: string): Route {
   if (parts[0] === "network") return { view: "network", params };
   if (parts[0] === "shortlist") return { view: "shortlist", params };
   if (parts[0] === "feedback") return { view: "feedback", params };
-  if (parts[0] === "funding" && parts[1]) return { view: "call", id: decodeURIComponent(parts[1]), params };
+  if (parts[0] === "funding" && parts[1]) return { view: "call", id: safeDecode(parts[1]), params };
   if (parts[0] === "funding") return { view: "funding", params };
-  if (parts[0] === "r" && parts[1]) return { view: "profile", id: decodeURIComponent(parts[1]), params };
+  if (parts[0] === "r" && parts[1]) return { view: "profile", id: safeDecode(parts[1]), params };
   return { view: "search", params };
 }
 
@@ -56,5 +61,5 @@ export const links = {
   profile: (id: string) => build(`/r/${encodeURIComponent(id)}`),
   shortlist: (ids?: string[]) => build("/shortlist", ids?.length ? { ids: ids.join(",") } : undefined),
   funding: (params?: URLSearchParams) => build("/funding", params),
-  call: (id: string, anchor?: string) => build(`/funding/${encodeURIComponent(id)}`, anchor ? { s: anchor } : undefined),
+  call: (id: string) => build(`/funding/${encodeURIComponent(id)}`),
 };
