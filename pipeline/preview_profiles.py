@@ -10,6 +10,7 @@ import json
 import webbrowser
 
 import config
+from fsutil import write_text
 
 PAGE = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -71,7 +72,10 @@ function card(r) {
   const co = r.top_coauthors.map(c => `${esc(c.name)} (${c.n_papers})`).join(", ") || "—";
   const cd = Object.entries(r.collab_departments).map(([d, n]) => `${esc(d)} (${n})`).join(", ") || "—";
   const years = Object.entries(r.pubs_per_year).map(([y, n]) => `${y}: ${n}`).join(" · ");
-  const links = [`<a href="https://www.scopus.com/authid/detail.uri?authorId=${r.scopus_id}">Scopus</a>`,
+  // NVA-only people ("nva-<Cristin id>") have no Scopus profile: link to NVA instead.
+  const links = [r.scopus_id.startsWith("nva-") ? "" :
+      `<a href="https://www.scopus.com/authid/detail.uri?authorId=${esc(r.scopus_id)}">Scopus</a>`,
+    r.cristin_id ? `<a href="${esc(D.nva_url.replace("{}", r.cristin_id))}">NVA</a>` : "",
     r.orcid ? `<a href="https://orcid.org/${esc(r.orcid)}">ORCID</a>` : ""].filter(Boolean).join(" · ");
   return `<details><summary><b>${esc(r.name)}</b><span class="dept">${esc(r.department)}</span>
     <span class="nums">${r.n_recent} recent · ${r.n_publications} papers · ${r.citations} citations · ${r.first_year}–${r.last_year}</span></summary>
@@ -102,14 +106,14 @@ def main() -> None:
     all_papers = json.loads(config.PAPERS.read_text(encoding="utf-8"))
     used = {p for r in profiles["researchers"] for p in r["paper_ids"]}
     papers = {p: {k: all_papers[p].get(k) for k in PAPER_FIELDS} for p in used}
-    data = json.dumps({"researchers": profiles["researchers"], "papers": papers}, ensure_ascii=False)
+    data = json.dumps({"researchers": profiles["researchers"], "papers": papers,
+                       "nva_url": config.NVA_PERSON_URL}, ensure_ascii=False)
     html = (PAGE.replace("__DATA__", data.replace("</", "<\\/"))
                 .replace("__GENERATED__", profiles["generated"])
                 .replace("__MIN__", str(profiles["min_recent_publications"]))
                 .replace("__FROM__", str(profiles["recent_from"])))
     out = config.REVIEW_DIR / "preview.html"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(html, encoding="utf-8")
+    write_text(out, html)
     print(f"Wrote {out} (local only). Opening in your browser…")
     webbrowser.open(out.as_uri())
 

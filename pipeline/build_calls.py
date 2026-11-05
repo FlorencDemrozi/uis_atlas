@@ -33,6 +33,7 @@ import eu
 import nordic
 import rcn
 from callfields import doc_links, field, missing
+from fsutil import write_text
 
 CALLS_DIR = config.RAW_RCN / "calls"
 SOURCES = ("rcn", "eu", "nordforsk", "nordicenergy")  # every funding source, in display order
@@ -420,12 +421,12 @@ def main() -> None:
                 changes.append({"date": today, "field": "unlisted", "old": None, "new": None})
         calls.append(call)
 
-    config.CALLS.write_text(json.dumps({
+    write_text(config.CALLS, json.dumps({
         "generated": today,
         "sync": {src: {k: st.get(k) for k in ("last_attempt", "last_success", "errors")}
                  for src, st in (("rcn", status), ("eu", eu_status), *nordic_status.items()) if st},
-        "calls": calls}, ensure_ascii=False), encoding="utf-8")
-    config.CALLS_HISTORY.write_text(json.dumps(history, ensure_ascii=False, indent=1), encoding="utf-8")
+        "calls": calls}, ensure_ascii=False))
+    write_text(config.CALLS_HISTORY, json.dumps(history, ensure_ascii=False, indent=1))
     for src in SOURCES:
         mine = [c for c in calls if c["source"] == src]
         n_status = {s: sum(c["fields"]["status"]["v"] == s for c in mine) for s in ("open", "planned", "closed")}

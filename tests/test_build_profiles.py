@@ -82,3 +82,34 @@ def test_overrides_and_collaboration_fields():
 def test_fullest_name_prefers_written_out_given_names():
     assert fullest_name(["L. Vogt", "Lennart Vogt"]) == "Lennart Vogt"
     assert fullest_name(["Bjørn Asheim", "Björn Asheim"]) == "Bjørn Asheim"   # tie: first wins
+
+
+def test_exclusions_drop_the_person_whatever_id_is_listed():
+    papers = {"p1": paper(2025, ["a", "b", "c"]), "p2": paper(2026, ["a", "b"]), "p3": paper(2026, ["c"])}
+    authors = [author("a", "Kari Nordmann", CS, ["p1", "p2"], orcid="0000-1"),
+               author("b", "K. Nordmann", CS, ["p3"], orcid="0000-1"),   # merged with a
+               author("c", "Ola Hansen", CS, ["p1", "p3"])]
+    atlas = {"authors": authors, "papers": papers}
+    res = build(atlas, {}, {}, reference_year=2026, recent_years=2, min_recent=1, excluded={"b"})
+    people = res["people"]
+    kari = next(p for p in people.values() if "b" in p["scopus_ids"])
+    assert kari["scopus_id"] == "a" and kari["included"] is False
+    assert people["c"]["included"] and people["c"]["top_coauthors"] == []
+
+
+def test_previous_profile_id_is_kept():
+    papers = {f"p{i}": paper(2025, ["a" if i < 1 else "b"]) for i in range(3)}
+    authors = [author("a", "Kari Nordmann", CS, ["p0"], orcid="0000-1"),
+               author("b", "K. Nordmann", CS, ["p1", "p2"], orcid="0000-1")]
+    atlas = {"authors": authors, "papers": papers}
+    args = dict(reference_year=2026, recent_years=2, min_recent=1)
+    assert set(build(atlas, {}, {}, **args)["people"]) == {"b"}                   # most papers
+    assert set(build(atlas, {}, {}, previous_ids={"a"}, **args)["people"]) == {"a"}  # kept
+
+
+def test_unknown_override_department_stops_with_a_message():
+    import pytest
+    from build_profiles import check_overrides
+    check_overrides({"a": {"department": CS}, "b": {"name": "B"}})
+    with pytest.raises(SystemExit, match="Computer Scinece"):
+        check_overrides({"a": {"department": "Computer Scinece"}})

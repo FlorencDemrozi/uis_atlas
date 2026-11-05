@@ -20,6 +20,7 @@ from datetime import datetime
 from itertools import combinations
 
 import config
+from fsutil import write_text
 
 RESEARCHER_FIELDS = [
     "scopus_id", "name", "orcid", "email", "faculty", "department", "position", "summary", "tags",
@@ -106,7 +107,7 @@ def unit_stats(researchers: list[dict], papers: dict, key: str) -> dict:
         for u in units:
             years[u][p["year"]] += 1
             per_unit[u]["citations"] += p.get("citations") or 0
-            themes[u].update({k.lower() for k in p.get("keywords", [])})
+            themes[u].update(sorted({k.lower() for k in p.get("keywords", [])}))   # sorted: stable ties
         for a, b in combinations(sorted(units), 2):
             collab[(a, b)] += 1
     return {
@@ -155,7 +156,10 @@ def main() -> None:
         ov = {}
         for i in r["scopus_ids"]:
             ov.update(overrides.get(i, {}))
-        s = summaries.get(r["scopus_id"], {})
+        # A summary only while the researcher has recent papers (the summary cache may still
+        # hold one for someone whose papers all aged out).
+        active = any(config.is_active_paper(all_papers[e]) for e in r["paper_ids"] if e in all_papers)
+        s = summaries.get(r["scopus_id"], {}) if active else {}
         metrics = r.get("scopus_metrics")
         rec = dict(r, summary=ov.get("summary") or s.get("summary"), tags=s.get("tags") or [],
                    links=links_for(r, ov.get("links")),
@@ -214,8 +218,7 @@ def main() -> None:
         out["partners.json"] = export_partners(json.loads(config.PARTNERS.read_text(encoding="utf-8")),
                                                {r["scopus_id"] for r in researchers})
     for name, data in out.items():
-        (config.PUBLIC / name).write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")),
-                                          encoding="utf-8")
+        write_text(config.PUBLIC / name, json.dumps(data, ensure_ascii=False, separators=(",", ":")))
     if not config.EMBEDDINGS_DIR.exists():
         print("No embeddings yet (stage 4) – vectors.bin not written; the site uses keyword search only.")
     print(f"Exported {len(researchers)} researchers ({len(excluded)} exclusions) and "

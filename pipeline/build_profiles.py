@@ -26,6 +26,11 @@ Steps:
   department + a shared co-author. Name-only matches are not merged but listed
   for review.
 - Department: override, else directory, else Scopus affiliations.
+- Researchers in config/exclusions.json (any of their merged ids) are left out
+  entirely, so later stages (summaries, funding matches) never see their data.
+- Profile id: a Scopus id (the one with most papers) whenever the person has one;
+  an id that was already a profile id in the previous profiles.json is kept, so
+  ids (and the summaries cached under them) do not flip between runs.
 - Keep researchers with enough recent papers: confirmed staff need
   config.MIN_RECENT_PUBLICATIONS in config.RECENT_YEARS years (0: all current
   staff with a Scopus profile), others the stricter config.UNCONFIRMED_* rule,
@@ -51,6 +56,7 @@ from itertools import combinations
 import config
 import nva
 from directory import Directory
+from fsutil import read_jsonl, write_text
 
 NOT_STATED_KEYS = config.NOT_STATED_KEYS
 SCOPUS_AUTHOR_URL = "https://www.scopus.com/authid/detail.uri?authorId={}"
@@ -206,7 +212,9 @@ def place(scopus_dept: str | None, entry: dict | None) -> tuple[str | None, str]
 def build(atlas: dict, name_parts: dict, overrides: dict, reference_year: int,
           recent_years: int, min_recent: int, directory: Directory | None = None,
           unconfirmed_years: int | None = None, unconfirmed_min: int | None = None,
-          links: list | None = None) -> dict:
+          links: list | None = None, excluded: set | None = None,
+          previous_ids: set | None = None) -> dict:
+    excluded, previous_ids = excluded or set(), previous_ids or set()
     authors = {a["scopus_id"]: a for a in atlas["authors"]}
     papers = atlas["papers"]
     recent_from = reference_year - recent_years + 1
@@ -227,8 +235,9 @@ def build(atlas: dict, name_parts: dict, overrides: dict, reference_year: int,
 
     people, canon = {}, {}
     for members in clusters.values():
-        # A Scopus ID is the profile id whenever the person has one.
-        members.sort(key=lambda i: (is_nva(i), -len(authors[i]["papers"])))
+        # A Scopus ID is the profile id whenever the person has one; a previous profile
+        # id is kept so the id does not flip when another member gains papers.
+        members.sort(key=lambda i: (is_nva(i), i not in previous_ids, -len(authors[i]["papers"])))
         main_id = members[0]
         ov = {}
         for i in members:
@@ -282,6 +291,7 @@ def build(atlas: dict, name_parts: dict, overrides: dict, reference_year: int,
             "first_year": min(all_years, default=None),
             "last_year": max(all_years, default=None),
             "_include_override": ov.get("include"),
+            "_excluded": bool(excluded & set(members)),
             "_confirmed": entry is not None and not entry["excluded"],
             "_source": "override" if ov.get("department") else source,
             "_directory": (entry["name"], score) if entry else None,
@@ -295,7 +305,9 @@ def build(atlas: dict, name_parts: dict, overrides: dict, reference_year: int,
 
     for pid, person in people.items():
         forced = person.pop("_include_override")
-        if forced is not None:
+        if person["_excluded"]:   # opted out (config/exclusions.json): never in profiles.json
+            person["included"] = False
+        elif forced is not None:
             person["included"] = forced and person["department"] is not None
         elif not person["department"]:
             person["included"] = False
@@ -314,9 +326,9 @@ def build(atlas: dict, name_parts: dict, overrides: dict, reference_year: int,
                 kw_count[k.lower()] += 1
                 kw_spellings[k.lower()][k] += 1
             co = {canon[c] for c in papers[p]["coauthor_ids"] if c in canon} - {pid}
-            co_count.update(c for c in co if people[c]["included"])
-            dept_count.update({people[c]["department"] for c in co}
-                              - {person["department"], None} - NOT_STATED_KEYS)
+            co_count.update(c for c in sorted(co) if people[c]["included"])   # sorted: ties in a stable order
+            dept_count.update(sorted({people[c]["department"] for c in co}
+                                     - {person["department"], None} - NOT_STATED_KEYS))
         person["keywords"] = [
             [max(kw_spellings[k].items(), key=lambda s: (s[1], sum(c.isupper() for c in s[0])))[0], n]
             for k, n in kw_count.most_common(30)]
@@ -328,6 +340,23 @@ def build(atlas: dict, name_parts: dict, overrides: dict, reference_year: int,
     return {"people": people, "merge_log": merge_log, "candidates": candidates,
             "recent_from": recent_from, "unconfirmed_from": unconfirmed_from,
             "directory_matched": {e["id"] for e, _ in dir_match.values()}}
+
+
+def check_overrides(overrides: dict) -> None:
+    """Stop with a clear message if an override names a department the atlas does not know."""
+    bad = [(auid, ov["department"]) for auid, ov in overrides.items()
+           if ov.get("department") and ov["department"] not in config.FACULTY_OF]
+    if bad:
+        raise SystemExit("config/overrides.json: unknown department(s) – use a department name from "
+                         "config.FACULTIES:\n" + "\n".join(f"  author {a}: {d!r}" for a, d in bad))
+
+
+def previous_profile_ids() -> set[str]:
+    """Profile ids of the last run (empty if there is none or it cannot be read)."""
+    try:
+        return {r["scopus_id"] for r in json.loads(config.PROFILES.read_text(encoding="utf-8"))["researchers"]}
+    except (OSError, ValueError, KeyError, TypeError):
+        return set()
 
 
 def threshold_table(years_by_person: dict, reference_year: int) -> list[str]:
@@ -348,21 +377,19 @@ def load_raw_docs() -> tuple[dict, Counter, Counter]:
     """Surname/given name per author, plus total and per-year paper counts per UiS author."""
     name_parts, seen = {}, set()
     years_by_author = defaultdict(list)
-    with config.RAW_DOCS.open(encoding="utf-8") as f:
-        for line in f:
-            e = json.loads(line)
-            if e.get("eid") in seen:
+    for e in read_jsonl(config.RAW_DOCS):
+        if e.get("eid") in seen:
+            continue
+        seen.add(e.get("eid"))
+        y = (e.get("prism:coverDate") or "")[:4]
+        authors = e.get("author") or []
+        for a in authors if isinstance(authors, list) else [authors]:
+            auid = a.get("authid")
+            if not auid:
                 continue
-            seen.add(e.get("eid"))
-            y = (e.get("prism:coverDate") or "")[:4]
-            authors = e.get("author") or []
-            for a in authors if isinstance(authors, list) else [authors]:
-                auid = a.get("authid")
-                if not auid:
-                    continue
-                name_parts.setdefault(auid, (a.get("surname") or "", a.get("given-name") or ""))
-                if y.isdigit():
-                    years_by_author[auid].append(int(y))
+            name_parts.setdefault(auid, (a.get("surname") or "", a.get("given-name") or ""))
+            if y.isdigit():
+                years_by_author[auid].append(int(y))
     return name_parts, years_by_author
 
 
@@ -377,8 +404,7 @@ def write_csv(path, header: list[str], rows: list[list]) -> None:
 def load_nva() -> list[dict]:
     records = []
     for path in sorted(config.RAW_NVA.glob("*.jsonl")) if config.RAW_NVA.exists() else []:
-        with path.open(encoding="utf-8") as f:
-            records.extend(json.loads(line) for line in f)
+        records.extend(read_jsonl(path))
     return records
 
 
@@ -398,6 +424,8 @@ def main() -> None:
         links = []
         print("No NVA data yet (run pipeline/collect_nva.py) – Scopus only.")
     overrides = json.loads(config.OVERRIDES.read_text(encoding="utf-8")).get("authors", {})
+    check_overrides(overrides)
+    excluded = set(json.loads(config.EXCLUSIONS.read_text(encoding="utf-8")).get("scopus_ids", []))
     name_parts, years_by_author = load_raw_docs()
     if config.DIRECTORY.exists():
         dir_data = json.loads(config.DIRECTORY.read_text(encoding="utf-8"))
@@ -411,7 +439,8 @@ def main() -> None:
 
     res = build(atlas, name_parts, overrides, config.REFERENCE_YEAR,
                 config.RECENT_YEARS, config.MIN_RECENT_PUBLICATIONS, directory,
-                config.UNCONFIRMED_RECENT_YEARS, config.UNCONFIRMED_MIN_RECENT_PUBLICATIONS, links)
+                config.UNCONFIRMED_RECENT_YEARS, config.UNCONFIRMED_MIN_RECENT_PUBLICATIONS, links,
+                excluded, previous_profile_ids())
     people = res["people"]
     included = [p for p in people.values() if p["included"]]
     included.sort(key=lambda p: (p["faculty"], p["department"], p["name"]))
@@ -427,11 +456,9 @@ def main() -> None:
         "researchers": [{k: v for k, v in p.items() if not k.startswith("_") and k != "included"}
                         for p in included],
     }
-    config.PROFILES.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
-    config.MERGE_LOG.write_text(json.dumps(res["merge_log"], ensure_ascii=False, indent=1),
-                                encoding="utf-8")
-    config.PAPERS.write_text(json.dumps(atlas["papers"], ensure_ascii=False, separators=(",", ":")),
-                             encoding="utf-8")
+    write_text(config.PAPERS, json.dumps(atlas["papers"], ensure_ascii=False, separators=(",", ":")))
+    write_text(config.MERGE_LOG, json.dumps(res["merge_log"], ensure_ascii=False, indent=1))
+    write_text(config.PROFILES, json.dumps(out, ensure_ascii=False, indent=1))
 
     # ---- review files for the project owner
     listed = [p for p in people.values() if p["department"] or p["_directory"]]
@@ -440,7 +467,8 @@ def main() -> None:
                "department_source", "directory_name", "directory_match", "position",
                "n_publications", f"n_since_{res['recent_from']}", "last_year",
                "affiliation_example", "profile_url"],
-              [["included" if p["included"] else "dropped", p["scopus_id"],
+              [["excluded (opt-out)" if p["_excluded"] else "included" if p["included"] else "dropped",
+                p["scopus_id"],
                 " ".join(p["scopus_ids"][1:]), p["name"], p["faculty"], p["department"],
                 p["_source"], (p["_directory"] or ["", ""])[0], (p["_directory"] or ["", ""])[1],
                 (p["position"] or {}).get("nb"), p["n_publications"], p["n_recent"], p["last_year"],
@@ -471,8 +499,11 @@ def main() -> None:
 
     # ---- report
     confirmed = sum(1 for p in included if p["_confirmed"])
-    print(f"{len(atlas['authors'])} Scopus author IDs and NVA people → {len(people)} people after "
+    print(f"{len(atlas['authors'])} Scopus author IDs and NVA people -> {len(people)} people after "
           f"{len(res['merge_log'])} merges ({len(res['candidates'])} possible duplicates left for review).")
+    n_excluded = sum(1 for p in people.values() if p["_excluded"])
+    if n_excluded:
+        print(f"Left out {n_excluded} researcher(s) in {config.EXCLUSIONS.name}.")
     rule = (f"≥{config.MIN_RECENT_PUBLICATIONS} papers since {res['recent_from']}"
             if config.MIN_RECENT_PUBLICATIONS else "all")
     print(f"Included: {len(included)} – {confirmed} confirmed in the employee directory "

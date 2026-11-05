@@ -19,6 +19,7 @@ from collections import Counter, defaultdict
 
 import config
 from collect_scopus import as_list, is_uis
+from fsutil import read_jsonl, write_text
 
 
 def read_entries() -> dict[str, dict]:
@@ -27,11 +28,9 @@ def read_entries() -> dict[str, dict]:
     for path in (config.RAW_DOCS, config.RAW_AUTHOR_DOCS):
         if not path.exists():
             continue
-        with path.open(encoding="utf-8") as f:
-            for line in f:
-                e = json.loads(line)
-                if e.get("eid"):
-                    entries[e["eid"]] = e
+        for e in read_jsonl(path):
+            if e.get("eid"):
+                entries[e["eid"]] = e
     return entries
 
 
@@ -104,7 +103,7 @@ def main() -> None:
     profiles = json.loads(config.PROFILES.read_text(encoding="utf-8"))["researchers"]
     entries = read_entries()
     out = build(profiles, entries, config.PARTNER_MAX_AUTHORS)
-    config.PARTNERS.write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    write_text(config.PARTNERS, json.dumps(out, ensure_ascii=False, separators=(",", ":")))
     countries = {i["country"] for i in out["institutions"].values() if i["country"]}
     print(f"Partner institutions: {len(out['institutions'])} in {len(countries)} countries for "
           f"{len(out['researchers'])} researchers ({out['skipped_large']} paper credits with more than "

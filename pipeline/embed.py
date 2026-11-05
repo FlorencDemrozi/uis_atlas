@@ -19,13 +19,18 @@ Output: config.EMBEDDINGS_DIR/
 - Vectors are derived from licensed abstracts and stay local (data/interim/)
   until the UiS Library confirms they may be published (DATA_POLICY §2). The
   funding matcher (match_funding.py) uses them offline.
+- Each .npy and its .json are written atomically; the .json records the row count
+  and a checksum of the .npy, so a pair from two different runs (one write cut off)
+  is detected on load: the cache is then treated as empty, readers are told to rerun.
 """
 import hashlib
+import io
 import json
 
 import numpy as np
 
 import config
+from fsutil import write_bytes, write_text
 
 PAPERS_NPY = config.EMBEDDINGS_DIR / "papers.npy"
 PAPERS_META = config.EMBEDDINGS_DIR / "papers.json"
@@ -61,34 +66,62 @@ def text_hash(text: str) -> str:
     return hashlib.sha1(text.encode("utf-8")).hexdigest()
 
 
+def save_matrix(npy, meta_path, matrix: np.ndarray, meta: dict) -> None:
+    """Write a matrix and its metadata, each atomically, the metadata with a checksum."""
+    buf = io.BytesIO()
+    np.save(buf, matrix)
+    data = buf.getvalue()
+    write_bytes(npy, data)
+    write_text(meta_path, json.dumps(dict(meta, rows=int(matrix.shape[0]),
+                                          sha1=hashlib.sha1(data).hexdigest())))
+
+
+def load_matrix(npy, meta_path, ids_key: str = "ids") -> tuple[dict, np.ndarray] | None:
+    """(metadata, matrix), or None when either file is missing or the two do not belong
+    together (different row count, or a checksum that does not match – older files
+    without one are checked by row count only)."""
+    if not (npy.exists() and meta_path.exists()):
+        return None
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        data = npy.read_bytes()
+        matrix = np.load(io.BytesIO(data))
+    except (OSError, ValueError, EOFError):
+        return None
+    if matrix.shape[0] != len(meta.get(ids_key, [])) or (
+            "sha1" in meta and meta["sha1"] != hashlib.sha1(data).hexdigest()):
+        print(f"Warning: {npy.name} and {meta_path.name} do not match (an interrupted write).")
+        return None
+    return meta, matrix
+
+
 def load_papers() -> tuple[list[str], np.ndarray]:
     """Paper ids and their vectors (for later stages)."""
-    meta = json.loads(PAPERS_META.read_text(encoding="utf-8"))
-    return meta["ids"], np.load(PAPERS_NPY)
+    loaded = load_matrix(PAPERS_NPY, PAPERS_META)
+    if loaded is None:
+        raise SystemExit("No usable paper vectors – run: python pipeline/embed.py")
+    return loaded[0]["ids"], loaded[1]
 
 
 def embed_papers(model, texts: dict[str, str]) -> tuple[list[str], np.ndarray]:
     """Embed {id: text}, reusing cached rows whose text is unchanged."""
     cached = {}
-    if PAPERS_META.exists() and PAPERS_NPY.exists():
-        meta = json.loads(PAPERS_META.read_text(encoding="utf-8"))
+    loaded = load_matrix(PAPERS_NPY, PAPERS_META)
+    if loaded:
+        meta, old = loaded
         if meta.get("model") == config.EMBED_MODEL:
-            old = np.load(PAPERS_NPY)
             cached = {(i, h): old[k] for k, (i, h) in enumerate(zip(meta["ids"], meta["hashes"]))}
     ids = sorted(texts)
     hashes = [text_hash(texts[i]) for i in ids]
     missing = [k for k, key in enumerate(zip(ids, hashes)) if key not in cached]
     print(f"Papers: {len(ids)} recent, {len(ids) - len(missing)} cached, {len(missing)} to embed")
     new = encode(model, [texts[ids[k]] for k in missing], config.PASSAGE_PREFIX)
-    dim = new.shape[1] if len(missing) else next(iter(cached.values())).shape[0]
+    dim = new.shape[1]   # encode() gives the model's dimension also for no texts
     matrix = np.zeros((len(ids), dim), dtype=np.float32)
     fresh = dict(zip(missing, new))
     for k, key in enumerate(zip(ids, hashes)):
         matrix[k] = fresh[k] if k in fresh else cached[key]
-    config.EMBEDDINGS_DIR.mkdir(parents=True, exist_ok=True)
-    np.save(PAPERS_NPY, matrix)
-    PAPERS_META.write_text(json.dumps({"model": config.EMBED_MODEL, "ids": ids, "hashes": hashes}),
-                           encoding="utf-8")
+    save_matrix(PAPERS_NPY, PAPERS_META, matrix, {"model": config.EMBED_MODEL, "ids": ids, "hashes": hashes})
     return ids, matrix
 
 
@@ -118,10 +151,10 @@ def main() -> None:
             v = normalise(v + summary_vecs[r["scopus_id"]])
         vecs.append(v)
         n_papers.append(len(rows))
-    np.save(RESEARCHERS_NPY, np.array(vecs, dtype=np.float32))
-    RESEARCHERS_META.write_text(json.dumps({
-        "model": config.EMBED_MODEL, "ids": [r["scopus_id"] for r in people], "n_papers": n_papers,
-        "has_summary": [r["scopus_id"] in summary_vecs for r in people]}), encoding="utf-8")
+    save_matrix(RESEARCHERS_NPY, RESEARCHERS_META,
+                np.array(vecs, dtype=np.float32).reshape(len(vecs), matrix.shape[1]), {
+                    "model": config.EMBED_MODEL, "ids": [r["scopus_id"] for r in people], "n_papers": n_papers,
+                    "has_summary": [r["scopus_id"] in summary_vecs for r in people]})
     print(f"Researchers: {len(people)} with papers since {config.ACTIVE_FROM} "
           f"({len(summary_vecs)} with summary); {len(profiles) - len(people)} without.")
     print(f"Vectors in {config.EMBEDDINGS_DIR} ({matrix.nbytes / 1e6:.1f} MB float32; local only).")

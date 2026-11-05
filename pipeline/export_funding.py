@@ -16,7 +16,8 @@ gzip -> AES-256-GCM with a key derived from the password (PBKDF2-SHA256,
 HTML; the browser derives the key only after it is typed in.
 
 The password comes from ATLAS_FUNDING_PASSWORD in .env. Without it nothing is
-written and the previous file stays as it is.
+written, the previous files stay as they are and the stage ends without an error
+(the site then shows the funding pages as before, or none).
 
 Contents: call records (fields with sources and evidence, change history,
 review flags), AI call profiles when present, and matches with paper ids.
@@ -42,11 +43,11 @@ import hashlib
 import json
 import os
 import secrets
-import sys
 from datetime import datetime
 from pathlib import Path
 
 import config
+from fsutil import write_text
 
 OUT = config.PUBLIC / "funding.enc.json"
 DETAIL_SHARDS = 16
@@ -67,6 +68,11 @@ INDEX_FIELDS = {"call_id", "title", "summary", "status", "funder", "programme", 
 DETAIL_KEYS = ("profile", "history")
 ITERATIONS = 600_000
 CALL_KEYS = ["id", "source", "family", "listing_group", "tags", "fetched", "fields", "review", "listed"]
+# Match and collaborator fields the site reads (web/src/funding.ts, Match); anything
+# else match_funding.py adds stays local until it is added here.
+MATCH_KEYS = ["id", "score", "category", "components", "papers", "matched", "missing", "eligibility", "role",
+              "specialist_for", "collaborators"]
+COLLABORATOR_KEYS = ["id", "fills", "joint_papers", "other_department"]
 SOURCES = {
     "rcn": {"name": "Research Council of Norway", "url": "https://www.forskningsradet.no/utlysninger/"},
     "eu": {"name": "EU Funding & Tenders Portal",
@@ -235,8 +241,9 @@ def build() -> dict:
         for x in m["matches"]:
             if x["id"] not in public_ids or x["id"] in excluded:
                 continue
-            x = dict(x, collaborators=[k for k in x["collaborators"] if k["id"] in public_ids])
-            keep.append(x)
+            x = dict(x, collaborators=[{f: k[f] for f in COLLABORATOR_KEYS if f in k}
+                                       for k in x.get("collaborators", []) if k["id"] in public_ids])
+            keep.append({k: x[k] for k in MATCH_KEYS if k in x})
         matches[cid] = keep
 
     profiles_meta = [p["generated"] for p in profiles.values()]
@@ -276,7 +283,11 @@ def ideas_payload() -> dict | None:
     if not (config.CALL_VECTORS.exists() and config.CALL_VECTORS_META.exists()):
         return None
     import call_vectors
-    meta, V = call_vectors.load()
+    try:
+        meta, V = call_vectors.load()
+    except ValueError as e:
+        print(f"Warning: {e} – idea search data not exported.")
+        return None
     values, scales = quantise(V)
     return {"model": meta["model"], "query_prefix": config.QUERY_PREFIX, "settings": meta["settings"],
             "dim": int(V.shape[1]), "calls": [{"id": c["id"], "t": c["texts"]} for c in meta["calls"]],
@@ -286,8 +297,9 @@ def ideas_payload() -> dict | None:
 def main() -> None:
     password = os.environ.get("ATLAS_FUNDING_PASSWORD")
     if not password:
-        sys.exit("ATLAS_FUNDING_PASSWORD is not set in .env – funding data not exported "
-                 "(the previous funding.enc.json, if any, is unchanged).")
+        print("ATLAS_FUNDING_PASSWORD is not set in .env – funding data not exported, skipped "
+              "(the previous funding.enc.json, if any, is unchanged).")
+        return
     data = build()
     ideas = ideas_payload()
     data["meta"]["has_ideas"] = ideas is not None
@@ -308,12 +320,15 @@ def main() -> None:
     for path, plain in zip(files, plains):
         if previous and unchanged(path, plain, key, salt):
             continue
-        path.write_text(json.dumps(encrypt(plain.encode("utf-8"), key, salt)), encoding="utf-8")
+        write_text(path, json.dumps(encrypt(plain.encode("utf-8"), key, salt)))
         rewritten += 1
+    if not ideas and IDEAS_OUT.exists():   # no call vectors now: do not leave an old idea index
+        IDEAS_OUT.unlink()
+        print(f"Removed {IDEAS_OUT.name} (no call vectors this run).")
     head = json.loads(OUT.read_text(encoding="utf-8"))
     head_text = json.dumps({"format": head["format"], "kdf": head["kdf"]})
     if not HEAD_OUT.exists() or HEAD_OUT.read_text(encoding="utf-8") != head_text:
-        HEAD_OUT.write_text(head_text, encoding="utf-8")
+        write_text(HEAD_OUT, head_text)
     print(f"Encrypted files: {rewritten} of {len(files)} rewritten"
           + (" (new salt: password changed or first export)." if not previous else
              ", the others are unchanged and kept as they are."))

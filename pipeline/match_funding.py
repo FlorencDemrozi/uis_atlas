@@ -43,6 +43,7 @@ import numpy as np
 import config
 import embed
 import eu
+from fsutil import write_text
 
 CFG = config.FUNDING_MATCH
 # Administrative sentences say nothing about the science and are not used as aspects.
@@ -336,6 +337,11 @@ def main() -> None:
     call_profiles = (json.loads(config.CALL_PROFILES.read_text(encoding="utf-8"))
                      if config.CALL_PROFILES.exists() else {})
     paper_ids, P = embed.load_papers()
+    known = [k for k, e in enumerate(paper_ids) if e in raw_papers]
+    if len(known) < len(paper_ids):   # vectors older than papers.json: rerun embed.py to refresh
+        print(f"Warning: {len(paper_ids) - len(known)} embedded papers are no longer in "
+              f"{config.PAPERS.name} – skipped.")
+        paper_ids, P = [paper_ids[k] for k in known], P[known]
     row = {e: k for k, e in enumerate(paper_ids)}
     years = np.array([int(raw_papers[e]["year"]) for e in paper_ids])
     recency = recency_weights(years)
@@ -346,7 +352,14 @@ def main() -> None:
     rows_of = {k: v for k, v in rows_of.items() if v}
     paper_sets = {k: set(by_id[k]["paper_ids"]) for k in rows_of}
 
-    model = embed.load_model()
+    model = None   # loaded on first use: the --changed-profiles pass often needs none
+
+    def encode_queries(texts: list[str]) -> np.ndarray:
+        nonlocal model
+        if model is None:
+            model = embed.load_model()
+        return embed.encode(model, texts, config.QUERY_PREFIX)
+
     out_calls = {}
     active = [c for c in calls["calls"] if c["fields"]["status"]["v"] != "closed"]
     # --changed-profiles (second pass in run_all.py, after profile_calls.py): reuse the
@@ -392,7 +405,7 @@ def main() -> None:
             continue
         scope, aspects = call_aspects(call, profile)
         queries = [scope] + [a["text"] for a in aspects]
-        Q = embed.encode(model, queries, config.QUERY_PREFIX)
+        Q = encode_queries(queries)
         R = relevance(P @ Q.T)                       # papers × (scope + aspects)
         scope_rel = R[:, 0]
         aspect_rel = R[:, 1:] if aspects else np.zeros((len(P), 0))
@@ -493,12 +506,12 @@ def main() -> None:
     if previous:
         print(f"Reused {reused} calls whose AI profile did not change.")
 
-    config.FUNDING_MATCHES.write_text(json.dumps({
+    write_text(config.FUNDING_MATCHES, json.dumps({
         "generated": datetime.now().isoformat(timespec="seconds"),
         "algorithm": CFG["algorithm"], "settings": CFG,
         "researchers_from": profiles_doc.get("generated"), "calls_from": calls.get("generated"),
         "papers_from_year": config.ACTIVE_FROM,
-        "calls": out_calls}, ensure_ascii=False), encoding="utf-8")
+        "calls": out_calls}, ensure_ascii=False))
     print(f"Matched {len(out_calls)} open/planned calls against {len(rows_of)} researchers.")
 
 

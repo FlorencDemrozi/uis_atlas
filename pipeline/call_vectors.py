@@ -12,10 +12,14 @@ institution-level) three kinds of text are embedded with the atlas model:
   direction  example project directions from the AI profile, "query:" prefix – they
              are short ideas themselves, so idea and direction are compared like
              two queries
-Vectors are cached by text, so a weekly run only embeds what changed. The scoring
+Vectors are cached by text, so a weekly run only embeds what changed. Both files
+are written atomically; the metadata holds the row count and a checksum of the
+matrix file, so a pair from two different runs is detected on load (load() raises
+ValueError; this stage then starts from an empty cache). The scoring
 (score_calls) is shared by idea_match.py and mirrored in web/src/ideas.ts.
 """
 import hashlib
+import io
 import json
 
 import numpy as np
@@ -23,6 +27,7 @@ import numpy as np
 import config
 import embed
 import match_funding
+from fsutil import write_bytes, write_text
 
 CFG = config.IDEA_MATCH
 
@@ -55,8 +60,15 @@ def key(kind: str, text: str) -> str:
 
 
 def load() -> tuple[dict, np.ndarray]:
+    """(metadata, matrix); ValueError if the two files do not belong together."""
     meta = json.loads(config.CALL_VECTORS_META.read_text(encoding="utf-8"))
-    return meta, np.load(config.CALL_VECTORS)["v"]
+    data = config.CALL_VECTORS.read_bytes()
+    V = np.load(io.BytesIO(data))["v"]
+    if V.shape[0] != len(meta.get("keys", [])) or (
+            "sha1" in meta and meta["sha1"] != hashlib.sha1(data).hexdigest()):   # older files: rows only
+        raise ValueError(f"{config.CALL_VECTORS.name} and {config.CALL_VECTORS_META.name} do not match "
+                         "(an interrupted write) – run: python pipeline/call_vectors.py")
+    return meta, V
 
 
 def score_calls(q: np.ndarray, meta: dict, V: np.ndarray) -> list[tuple[float, str, int]]:
@@ -85,7 +97,11 @@ def main() -> None:
                 if config.CALL_PROFILES.exists() else {})
     cache: dict[str, np.ndarray] = {}
     if config.CALL_VECTORS.exists() and config.CALL_VECTORS_META.exists():
-        meta, V = load()
+        try:
+            meta, V = load()
+        except Exception as e:   # mismatched pair (ValueError) or an unreadable file
+            print(f"Warning: {e}; embedding all call texts again.")
+            meta, V = {}, None
         if meta.get("model") == config.EMBED_MODEL:
             cache = {k: V[i] for i, k in enumerate(meta["keys"])}
     entries, keys, todo = [], [], {}
@@ -106,11 +122,19 @@ def main() -> None:
             prefix = config.QUERY_PREFIX if kind == "direction" else config.PASSAGE_PREFIX
             for h, v in zip([h for h, _ in batch], embed.encode(model, [t for _, t in batch], prefix)):
                 cache[h] = v
-    V = np.stack([cache[h] for h in keys]).astype(np.float32) if keys else np.zeros((0, 384), np.float32)
-    np.savez_compressed(config.CALL_VECTORS, v=V)
-    config.CALL_VECTORS_META.write_text(json.dumps({
+    if keys:
+        V = np.stack([cache[h] for h in keys]).astype(np.float32)
+    else:   # no searchable call: an empty matrix of the model's dimension
+        dim = next(iter(cache.values())).shape[0] if cache else embed.encode(
+            model or embed.load_model(), [], config.PASSAGE_PREFIX).shape[1]
+        V = np.zeros((0, dim), np.float32)
+    buf = io.BytesIO()
+    np.savez_compressed(buf, v=V)
+    data = buf.getvalue()
+    write_bytes(config.CALL_VECTORS, data)
+    write_text(config.CALL_VECTORS_META, json.dumps({
         "model": config.EMBED_MODEL, "calls_from": calls.get("generated"), "settings": CFG,
-        "keys": keys, "calls": entries}, ensure_ascii=False), encoding="utf-8")
+        "keys": keys, "calls": entries, "sha1": hashlib.sha1(data).hexdigest()}, ensure_ascii=False))
     print(f"Call vectors: {len(entries)} calls, {len(keys)} texts ({len(todo)} newly embedded).")
 
 
