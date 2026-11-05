@@ -1,8 +1,8 @@
 import { useMemo } from "preact/hooks";
 import type { Atlas } from "../data";
 import type { Researcher } from "../data";
-import { FAMILIES, amountNok, callTitle, familyOf, isInstitutionLevel, isOpenField, nextDeadline, openFieldCallsFor, pick, type Call,
-  type Eligibility, type Funding, type Match } from "../funding";
+import { EU_FAMILIES, FAMILIES, FUNDER_GROUPS, amountNok, callTitle, familyOf, isInstitutionLevel, isOpenField, nextDeadline,
+  openFieldCallsFor, pick, type Call, type Eligibility, type Family, type Funding, type Match } from "../funding";
 import { useI18n } from "../i18n";
 import { links, replaceHash, type Route } from "../router";
 import { CategoryBadge, EligibilityBadge, FundingGate, Freshness, SourceBadge, StatusBadge, useFmt } from "../components/funding";
@@ -14,6 +14,14 @@ const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/\p{M}/gu, 
   .replace(/æ/g, "ae").replace(/\s+/g, " ").trim();
 const ELIG_RANK = { no_restriction_found: 0, check: 1, partner_only: 2, likely_ineligible: 3 };
 const SORTS = ["deadline", "amount", "published", "relevance"] as const;
+
+/** The funder selection in the address (?fam=nfr,nordforsk): absent = every funder,
+ * "none" = no funder. "eu" (older links) stands for every EU programme. */
+function parseFamilies(value: string | null): Set<Family> | null {
+  if (!value) return null;
+  const known = new Set<string>(FAMILIES);
+  return new Set(value.split(",").flatMap((x) => x === "eu" ? [...EU_FAMILIES] : known.has(x) ? [x as Family] : []));
+}
 
 export function FundingView({ atlas, route }: { atlas: Atlas; route: Route }) {
   return <FundingGate>{(data) => <FundingList atlas={atlas} data={data} route={route} />}</FundingGate>;
@@ -69,13 +77,14 @@ function FundingList({ atlas, data, route }: { atlas: Atlas; data: Funding; rout
   const themes = useMemo(() => optionsOf((c) => pick<string[]>(c.fields.themes.v, lang).value ?? []), [data, lang]);
   const applicants = useMemo(() => optionsOf((c) => pick<string[]>(c.fields.target_groups.v, lang).value ?? []), [data, lang]);
 
-  const shown = data.calls.filter((c) => {
+  const families = parseFamilies(p.get("fam"));
+  // Every filter except the funders: the funder checkboxes count these calls.
+  const passesOthers = (c: Call) => {
     const f = c.fields;
     const st = f.status.v as string;
     if (status === "current" ? st === "closed" : status !== "all" && st !== status) return false;
     if (q && anyTitleHit && !titleHit(c)) return false;
     if (openFallback && !isOpenField(c)) return false;
-    if (p.get("fam") && (p.get("fam") === "eu" ? c.source !== "eu" : familyOf(c) !== p.get("fam"))) return false;
     if (p.get("sch") && pick<string>(f.scheme.v, lang).value !== p.get("sch")) return false;
     if (p.get("th") && !(pick<string[]>(f.themes.v, lang).value ?? []).includes(p.get("th")!)) return false;
     if (p.get("ap") && !(pick<string[]>(f.target_groups.v, lang).value ?? []).includes(p.get("ap")!)) return false;
@@ -89,7 +98,9 @@ function FundingList({ atlas, data, route }: { atlas: Atlas; data: Funding; rout
     if (p.get("mt") && !strong(c).length) return false;
     if (person && !personMatches.has(c.id) && !personOpen.has(c.id)) return false;
     return true;
-  });
+  };
+  const candidates = data.calls.filter(passesOthers);
+  const shown = families ? candidates.filter((c) => families.has(familyOf(c))) : candidates;
   const far = "9999";
   shown.sort((a, b) => {
     if (sort === "amount") return (amountNok(b.fields.max_amount.v, b.fields.currency.v) ?? 0)
@@ -121,6 +132,8 @@ function FundingList({ atlas, data, route }: { atlas: Atlas; data: Funding; rout
       <IdeaSearch data={data} />
 
       <div class="filters funding-filters" role="search">
+        <FunderFilter calls={data.calls} candidates={candidates} selected={families}
+          onChange={(next) => set("fam", next === null ? "" : next.size ? [...next].join(",") : "none")} />
         <label class="field grow">
           <span>{t("f.search")}</span>
           <input type="search" list="funding-people" value={p.get("q") ?? ""} placeholder={t("f.searchPlaceholder")}
@@ -135,8 +148,6 @@ function FundingList({ atlas, data, route }: { atlas: Atlas; data: Funding; rout
             {["current", "open", "planned", "closed", "all"].map((s) => <option key={s} value={s}>{t(`f.status.${s}`)}</option>)}
           </select>
         </label>
-        {select("fam", t("f.family"), [["eu", t("f.family.eu")],
-          ...FAMILIES.filter((x) => data.calls.some((c) => familyOf(c) === x)).map((x): [string, string] => [x, t(`f.family.${x}`)])])}
         {select("sch", t("f.scheme"), schemes.map((s) => [s, s]))}
         {select("th", t("f.theme"), themes.map((s) => [s, s]))}
         {select("ap", t("f.applicant"), applicants.map((s) => [s, s]))}
@@ -196,6 +207,65 @@ function FundingList({ atlas, data, route }: { atlas: Atlas; data: Funding; rout
       )}
       <Freshness data={data} />
     </>
+  );
+}
+
+/** Funders as checkboxes, grouped by region (Norway, Nordic, EU); a group's box
+ * selects or clears all its funders. The number next to each is how many calls the
+ * other filters leave for it. Only funders with calls in the data are listed. */
+function FunderFilter({ calls, candidates, selected, onChange }: { calls: Call[]; candidates: Call[];
+  selected: Set<Family> | null; onChange: (next: Set<Family> | null) => void }) {
+  const { t, num } = useI18n();
+  const present = useMemo(() => new Set(calls.map(familyOf)), [calls]);
+  const count = new Map<Family, number>();
+  for (const c of candidates) count.set(familyOf(c), (count.get(familyOf(c)) ?? 0) + 1);
+  const groups = FUNDER_GROUPS.map((g) => ({ ...g, families: g.families.filter((x) => present.has(x)) }))
+    .filter((g) => g.families.length);
+  const every = groups.flatMap((g) => g.families);
+  const isOn = (x: Family) => !selected || selected.has(x);
+  const commit = (next: Set<Family>) => onChange(every.every((x) => next.has(x)) ? null : next);
+  const current = () => new Set(selected ?? every);
+  const toggle = (xs: readonly Family[], on: boolean) => {
+    const next = current();
+    xs.forEach((x) => on ? next.add(x) : next.delete(x));
+    commit(next);
+  };
+  const allOn = every.every(isOn);
+  return (
+    <fieldset class="funder-filter">
+      <legend>
+        <span>{t("f.funders")}</span>
+        <button type="button" class="link-btn" onClick={() => allOn ? onChange(new Set()) : onChange(null)}>
+          {t(allOn ? "f.funders.clear" : "f.funders.all")}
+        </button>
+      </legend>
+      <div class="funder-groups">
+        {groups.map((g) => {
+          const on = g.families.filter(isOn).length;
+          const n = g.families.reduce((sum, x) => sum + (count.get(x) ?? 0), 0);
+          return (
+            <fieldset key={g.key} class="org-group">
+              <legend>
+                <label class="check strong">
+                  <input type="checkbox" checked={on === g.families.length}
+                    ref={(el) => { if (el) el.indeterminate = on > 0 && on < g.families.length; }}
+                    onChange={() => toggle(g.families, on < g.families.length)} />
+                  <span>{t(`f.region.${g.key}`)}</span>
+                  <span class="muted num">{num(n)}</span>
+                </label>
+              </legend>
+              {g.families.map((x) => (
+                <label key={x} class="check">
+                  <input type="checkbox" checked={isOn(x)} onChange={() => toggle([x], !isOn(x))} />
+                  <span>{t(`f.family.${x}`)}</span>
+                  <span class="muted num">{num(count.get(x) ?? 0)}</span>
+                </label>
+              ))}
+            </fieldset>
+          );
+        })}
+      </div>
+    </fieldset>
   );
 }
 

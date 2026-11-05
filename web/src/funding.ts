@@ -38,13 +38,24 @@ export interface CallProfile {
   generated: string; model: string;
 }
 
-/** Funding source and programme family, for filters and badges (pipeline/eu.py FAMILIES). */
-export const FAMILIES = ["nfr", "horizon", "erc", "msca", "eic", "missions", "partnerships", "other_eu"] as const;
+/** Funding source and programme family, for filters and badges (pipeline/eu.py FAMILIES;
+ * a Nordic funder is its own family, pipeline/nordic.py). */
+export const FAMILIES = ["nfr", "horizon", "erc", "msca", "eic", "missions", "partnerships", "other_eu",
+  "nordforsk", "nordicenergy"] as const;
 export type Family = typeof FAMILIES[number];
+export type Source = "rcn" | "eu" | "nordforsk" | "nordicenergy";
+/** The EU programme families (all from the Funding & Tenders Portal). */
+export const EU_FAMILIES: readonly Family[] = ["horizon", "erc", "msca", "eic", "missions", "partnerships", "other_eu"];
+/** Funders grouped by where they are, for the funder filter (each family once). */
+export const FUNDER_GROUPS: readonly { key: "no" | "nordic" | "eu"; families: readonly Family[] }[] = [
+  { key: "no", families: ["nfr"] },
+  { key: "nordic", families: ["nordforsk", "nordicenergy"] },
+  { key: "eu", families: EU_FAMILIES },
+];
 
 export interface Call {
   id: string;
-  source: "rcn" | "eu";
+  source: Source;
   family: Family;
   listing_group: string;
   tags: string[];
@@ -89,7 +100,7 @@ export interface Match {
 }
 
 export interface SourceSync {
-  id: "rcn" | "eu"; name: string; url: string;
+  id: Source; name: string; url: string;
   last_attempt: string | null; last_success: string | null; errors: { url: string; error: string }[] | null;
 }
 
@@ -408,7 +419,7 @@ export function openFieldCallsFor(data: Funding, id: string): { call: Call; elig
 
 /** Programme family of a call (older exports have none). */
 export function familyOf(c: Call): Family {
-  return c.family ?? (c.source === "rcn" ? "nfr" : "other_eu");
+  return c.family ?? (c.source === "rcn" ? "nfr" : c.source === "eu" ? "other_eu" : c.source);
 }
 
 /** Indicative rate used only to compare EUR and NOK amounts in the amount filter. */

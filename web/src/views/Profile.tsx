@@ -6,7 +6,7 @@ import { BarList, ColumnChart } from "../components/charts";
 import { DeptLabel, Position, paperUrl } from "../components/common";
 import { useState } from "preact/hooks";
 import { CategoryBadge, EligibilityBadge, FundingGate, MatchDetails, SourceBadge, StatusBadge, useFmt } from "../components/funding";
-import { FAMILIES, callTitle, familyOf, nextDeadline, openFieldCallsFor, pick, useFunding, type Call,
+import { EU_FAMILIES, FAMILIES, callTitle, familyOf, nextDeadline, openFieldCallsFor, pick, useFunding, type Call,
   type Funding } from "../funding";
 import { lazyView } from "../lazy";
 
@@ -56,7 +56,7 @@ function ProfileFunding({ atlas, id, name }: { atlas: Atlas; id: string; name: s
   const [fam, setFam] = useState("");
   if (state.status === "missing") return null;
   // Source / programme filter: NFR, all EU, or one EU programme family.
-  const keep = (c: Call) => !fam || (fam === "eu" ? c.source === "eu" : familyOf(c) === fam);
+  const keep = (c: Call) => !fam || (fam === "eu" ? c.source === "eu" : familyOf(c) === fam);  // "eu": every EU programme
   return (
     <section class="section funding-profile" aria-labelledby="h-funding">
       <h2 id="h-funding">{t("f.profileTitle")}</h2>
@@ -76,7 +76,7 @@ function ProfileFunding({ atlas, id, name }: { atlas: Atlas; id: string; name: s
                 <span>{t("f.family")}</span>
                 <select value={fam} onChange={(e) => setFam((e.target as HTMLSelectElement).value)}>
                   <option value="">{t("f.any")}</option>
-                  {[...present].some((x) => x !== "nfr") && <option value="eu">{t("f.family.eu")}</option>}
+                  {[...present].some((x) => EU_FAMILIES.includes(x)) && <option value="eu">{t("f.family.eu")}</option>}
                   {FAMILIES.filter((x) => present.has(x)).map((x) => <option key={x} value={x}>{t(`f.family.${x}`)}</option>)}
                 </select>
               </label>

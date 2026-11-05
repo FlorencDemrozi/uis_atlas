@@ -491,6 +491,10 @@ details.table-view summary { cursor: pointer; color: var(--accent); width: fit-c
 
 .funding-filters { margin-bottom: 16px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
 .funding-filters .grow { flex: 1 1 220px; }
+.funder-filter { flex: 1 1 100%; min-width: 0; margin: 0 0 4px; padding: 0 0 12px; border: 0; border-bottom: 1px solid var(--grid); }
+.funder-filter > legend { display: flex; align-items: baseline; gap: 12px; padding: 0; margin-bottom: 6px;
+  font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.funder-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px 24px; }
 /* EU programme and scheme names are long: a select never grows past the panel. */
 .funding-filters .field { min-width: 0; max-width: 100%; }
 .funding-filters select { max-width: min(100%, 360px); text-overflow: ellipsis; }
