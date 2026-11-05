@@ -4,6 +4,7 @@ import { useI18n } from "../i18n";
 import { links, replaceHash, type Route } from "../router";
 import { buildIndex, search, type Hit } from "../search";
 import { inScope, isAll, useSelection } from "../selection";
+import { ROLES, isRole, roleOf, type Role } from "../role";
 import { DeptLabel, Highlight, Position, paperUrl } from "../components/common";
 import { OrgFilter } from "../components/OrgFilter";
 import { Explore } from "../components/Explore";
@@ -25,6 +26,8 @@ export function SearchView({ atlas, route }: { atlas: Atlas; route: Route }) {
   const [query, setQuery] = useState(q);
   const { sel } = useSelection();
   const [minPubs, setMinPubs] = useState(Number(route.params.get("min") ?? 0));
+  const roleParam = route.params.get("role");
+  const [role, setRole] = useState<Role | "">(isRole(roleParam) ? roleParam : "");
   const [shown, setShown] = useState(PAGE);
   const param = route.params.get("view");
   const [mode, setMode] = useState<Mode>(param === "split" || param === "table" ? param : "list");
@@ -43,6 +46,10 @@ export function SearchView({ atlas, route }: { atlas: Atlas; route: Route }) {
     setQ(next); setQuery(next);
   }, [route.params.get("q")]);
   useEffect(() => {
+    const next = route.params.get("role");
+    setRole(isRole(next) ? next : "");
+  }, [route.params.get("role")]);
+  useEffect(() => {
     const v = route.params.get("view");
     setMode(v === "split" || v === "table" ? v : "list");
     if (route.params.get("r")) setSelected(route.params.get("r"));
@@ -53,15 +60,16 @@ export function SearchView({ atlas, route }: { atlas: Atlas; route: Route }) {
     const p = new URLSearchParams();
     if (query) p.set("q", query);
     if (minPubs) p.set("min", String(minPubs));
+    if (role) p.set("role", role);
     if (mode !== "list") p.set("view", mode);
     if (mode === "split" && selected) p.set("r", selected);
     replaceHash("/", p);
-  }, [query, sel, minPubs, mode, selected]);
+  }, [query, sel, minPubs, role, mode, selected]);
   const firstRun = useRef(true);   // keep a shared ?r= on first load
   useEffect(() => {
     if (firstRun.current) { firstRun.current = false; return; }
     setShown(PAGE); setSelected(null);
-  }, [query, sel, minPubs]);
+  }, [query, sel, minPubs, role]);
 
   // Search as you type, lightly debounced.
   useEffect(() => {
@@ -69,7 +77,8 @@ export function SearchView({ atlas, route }: { atlas: Atlas; route: Route }) {
     return () => clearTimeout(id);
   }, [q]);
 
-  const hits: Hit[] = useMemo(() => {
+  // Every filter except the role: the role buttons count these researchers.
+  const unroled: Hit[] = useMemo(() => {
     const keep = (r: Researcher) => inScope(sel, r.department) && r.n_publications >= minPubs;
     if (query) return search(index, atlas, query).filter((h) => keep(h.researcher));
     return atlas.researchers.filter(keep)
@@ -77,6 +86,12 @@ export function SearchView({ atlas, route }: { atlas: Atlas; route: Route }) {
         || a.name.localeCompare(b.name))
       .map((researcher) => ({ researcher, score: 0, papers: [], terms: [] }));
   }, [index, atlas, query, sel, minPubs]);
+  const roleCounts = useMemo(() => {
+    const c = new Map<Role, number>();
+    for (const h of unroled) c.set(roleOf(h.researcher), (c.get(roleOf(h.researcher)) ?? 0) + 1);
+    return c;
+  }, [unroled]);
+  const hits = useMemo(() => role ? unroled.filter((h) => roleOf(h.researcher) === role) : unroled, [unroled, role]);
   const inScopeCount = useMemo(() => atlas.researchers.filter((r) => inScope(sel, r.department)).length, [atlas, sel]);
 
   return (
@@ -105,6 +120,16 @@ export function SearchView({ atlas, route }: { atlas: Atlas; route: Route }) {
             {[0, 5, 10, 20, 40].map((n) => <option key={n} value={String(n)}>{n ? `≥ ${n}` : t("filter.any")}</option>)}
           </select>
         </label>
+        <fieldset class="role-filter">
+          <legend>{t("filter.role")}</legend>
+          {(["", ...ROLES] as const).map((x) => (
+            <label key={x || "all"} class={`role-option${role === x ? " on" : ""}`}>
+              <input type="radio" name="role" value={x} checked={role === x} onChange={() => setRole(x)} />
+              <span>{t(x ? `role.${x}` : "role.all")}</span>
+              <span class="muted num">{num(x ? roleCounts.get(x) ?? 0 : unroled.length)}</span>
+            </label>
+          ))}
+        </fieldset>
       </OrgFilter>
 
       {!query && <Explore atlas={atlas} />}
