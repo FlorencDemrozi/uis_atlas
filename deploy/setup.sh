@@ -3,18 +3,34 @@
 # on port 8443 behind https://atlas.ux.uis.no, and the weekly update as a systemd user
 # timer. Safe to run again at any time; docs/SERVER.md explains every step.
 # Run as the account that owns the repository (not root, no sudo):
-#   deploy/setup.sh            # set up / repair, build the website only if missing
-#   deploy/setup.sh --build    # also rebuild the website from the current code
+#   deploy/setup.sh                        # set up / repair, build the website only if missing
+#   deploy/setup.sh --build                # also rebuild the website from the current code
+#   deploy/setup.sh --build --force-data   # rebuild even though the last weekly run failed
+#   deploy/setup.sh --no-publish           # server configuration only (used by publish.sh)
+# The website is built from data/public/. After a failed weekly run that folder may hold
+# data that did not pass the run's checks (e.g. a sharp drop), so the site is then
+# neither rebuilt nor republished unless --force-data is given.
 # Settings live in ~/atlas/deploy/.env (created here; defaults below).
 set -euo pipefail
 REPO=$(cd "$(dirname "$0")/.." && pwd)
 CONF=${ATLAS_DEPLOY_DIR:-$HOME/atlas/deploy}
 VENV=${ATLAS_VENV:-$HOME/venvs/atlas}
 UNITS=$HOME/.config/systemd/user
-BUILD=${1:-}
 
 say() { printf '\n== %s ==\n' "$*"; }
 fail() { echo "STOPPED: $*" >&2; exit 1; }
+
+BUILD=no; FORCE=no; PUBLISH=yes
+for arg in "$@"; do
+  case $arg in
+    --build) BUILD=yes ;;
+    --force-data) FORCE=yes ;;
+    --no-publish) PUBLISH=no ;;
+    *) fail "unknown option $arg (see the top of deploy/setup.sh)" ;;
+  esac
+done
+# True if there was no weekly run yet or the last one succeeded (logs/last-run.json).
+last_run_ok() { [[ ! -f "$REPO/logs/last-run.json" ]] || grep -q '"ok": true' "$REPO/logs/last-run.json"; }
 
 [[ $EUID -ne 0 ]] || fail "run it as your own account, not as root or with sudo."
 
@@ -61,10 +77,22 @@ grep -v '^\s*#' "$ENVF"
 
 # ---------------------------------------------------------------- 3. website
 say "Website"
-if [[ "$BUILD" == --build || ! -f "$REPO/web/dist/index.html" ]]; then
-  (cd "$REPO/web" && npm run build)
+if [[ $PUBLISH == no ]]; then
+  echo "Skipped (configuration only)."
+elif last_run_ok || [[ $FORCE == yes ]]; then
+  if [[ $BUILD == yes || ! -f "$REPO/web/dist/index.html" ]]; then
+    (cd "$REPO/web" && npm run build)
+  fi
+  ATLAS_IN_SETUP=1 "$REPO/deploy/publish.sh"   # step 4 below updates the CSP hashes itself
+elif [[ -f "$ATLAS_SITE_DIR/index.html" ]]; then
+  echo "The last weekly run FAILED (deploy/status.sh shows why), so data/public/ may hold"
+  echo "data that did not pass its checks: the website was not rebuilt and the published"
+  echo "site stays as it is. The next successful weekly run publishes the current code."
+  echo "To rebuild and publish now anyway: deploy/setup.sh --build --force-data"
+else
+  fail "nothing is published yet and the last weekly run failed (deploy/status.sh). \
+Fix the run, or publish the current data anyway: deploy/setup.sh --build --force-data"
 fi
-"$REPO/deploy/publish.sh"
 
 # ---------------------------------------------------------------- 4. nginx container
 say "nginx container (compose project atlas, port $ATLAS_PORT)"

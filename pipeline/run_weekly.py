@@ -31,12 +31,14 @@ import argparse
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import threading
 from datetime import datetime
 from pathlib import Path
 
+import fsutil
 import notify
 import runlock
 from config import LOGS, MAX_COUNT_DROP, ROOT, STEP_TIMEOUT, WEB_BUILD_TIMEOUT
@@ -46,12 +48,32 @@ WEB = ROOT / "web"
 KEEP_LOGS = 26          # about half a year of weekly runs
 LOG = None              # open log file, set in main()
 FAILED: list[str] = []  # collectors that failed (old data used)
+PUBLIC_META = ROOT / "data" / "public" / "meta.json"
+# meta.json of the last successful run, i.e. of the data that was checked and published.
+# The drop check compares with it: the server never commits data/public/, so git HEAD
+# would be a stale baseline there.
+CHECKED_META = LOGS / "last-success-meta.json"
 
 
 def say(text: str) -> None:
     print(text, flush=True)
-    LOG.write(text + "\n")
-    LOG.flush()
+    if LOG:
+        LOG.write(text + "\n")
+        LOG.flush()
+
+
+def kill_tree(p: subprocess.Popen) -> None:
+    """Stop a step and everything it started (npm runs vite as a child process, which
+    would otherwise keep running and keep the output pipe open)."""
+    if p.poll() is not None:
+        return
+    try:
+        if sys.platform == "win32":
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(p.pid)], capture_output=True)
+        else:
+            os.killpg(p.pid, signal.SIGKILL)
+    except OSError:
+        p.kill()
 
 
 def run(cmd: list[str], cwd: Path | None = None, timeout: float | None = STEP_TIMEOUT) -> bool:
@@ -59,10 +81,13 @@ def run(cmd: list[str], cwd: Path | None = None, timeout: float | None = STEP_TI
     after `timeout` seconds is killed and counts as failed (None: no limit)."""
     say(f"\n=== {Path(cmd[-1]).name if cmd[0] == sys.executable else ' '.join(cmd[1:])} ===")
     env = {**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8"}
+    # Own process group, so that a time limit stops the step's child processes too.
+    group = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if sys.platform == "win32" \
+        else {"start_new_session": True}
     try:
         p = subprocess.Popen(cmd, cwd=cwd or ROOT, env=env, stdin=subprocess.DEVNULL,
                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                             encoding="utf-8", errors="replace")
+                             encoding="utf-8", errors="replace", **group)
     except OSError as exc:
         say(f"Could not start: {exc}")
         return False
@@ -70,7 +95,7 @@ def run(cmd: list[str], cwd: Path | None = None, timeout: float | None = STEP_TI
 
     def kill() -> None:
         timed_out.set()
-        p.kill()
+        kill_tree(p)
 
     timer = threading.Timer(timeout, kill) if timeout else None
     if timer:
@@ -83,6 +108,7 @@ def run(cmd: list[str], cwd: Path | None = None, timeout: float | None = STEP_TI
     finally:
         if timer:
             timer.cancel()
+        kill_tree(p)   # the run itself was stopped (Ctrl+C, SIGTERM): stop the step as well
     if timed_out.is_set():
         say(f"Stopped: still running after {timeout // 60:.0f} min (time limit).")
         return False
@@ -118,14 +144,27 @@ def count_drops(old: dict, new: dict, max_drop: float = MAX_COUNT_DROP) -> list[
     return drops
 
 
-def sanity_check() -> list[str]:
-    """Compare the new data/public/meta.json with the last committed one."""
+def baseline_meta() -> dict | None:
+    """meta.json of the last checked data: the copy kept by the last successful run,
+    else the committed one (before the first successful run with this check)."""
+    try:
+        return json.loads(CHECKED_META.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        pass
     committed = subprocess.run(["git", "show", "HEAD:data/public/meta.json"], cwd=ROOT,
                                capture_output=True, text=True, encoding="utf-8")
-    new_meta = ROOT / "data" / "public" / "meta.json"
-    if committed.returncode != 0 or not new_meta.exists():
+    try:
+        return json.loads(committed.stdout) if committed.returncode == 0 else None
+    except ValueError:
+        return None
+
+
+def sanity_check() -> list[str]:
+    """Compare the new data/public/meta.json with the last checked one."""
+    old = baseline_meta()
+    if old is None or not PUBLIC_META.exists():
         return []   # first export: nothing to compare with
-    return count_drops(json.loads(committed.stdout), json.loads(new_meta.read_text(encoding="utf-8")))
+    return count_drops(old, json.loads(PUBLIC_META.read_text(encoding="utf-8")))
 
 
 def prune_logs() -> None:
@@ -146,11 +185,17 @@ def main() -> None:
     sys.stdout.reconfigure(errors="replace")   # a name the console cannot show must not stop the run
     started = datetime.now()
     LOGS.mkdir(parents=True, exist_ok=True)
-    LOG = (LOGS / f"weekly-{started:%Y-%m-%d_%H%M}.log").open("w", encoding="utf-8")
+    if not runlock.acquire():
+        # Not written to last-run.json or a log: the run in progress records its own outcome.
+        message = "Weekly update not started: another pipeline run is still in progress."
+        print(message, file=sys.stderr)
+        error = notify.send("UiS Atlas: " + message)
+        if error:
+            print(error, file=sys.stderr)
+        sys.exit(1)
+    LOG = (LOGS / f"weekly-{started:%Y-%m-%d_%H%M}.log").open("a", encoding="utf-8")
     prune_logs()
     say(f"Weekly update started {started:%Y-%m-%d %H:%M}")
-    if not runlock.acquire():
-        stop("Weekly update not started: another pipeline run is still in progress.")
 
     if args.publish and not git("pull", "--ff-only"):
         stop("Weekly update stopped: could not update the repository (git pull --ff-only).")
@@ -188,13 +233,16 @@ def main() -> None:
 
 def record(ok: bool, message: str) -> None:
     """logs/last-run.json after every run, logs/last-success.json after a successful one
-    (read by deploy/status.sh): when it finished, the outcome and the log file."""
+    (read by deploy/status.sh and deploy/setup.sh): when it finished, the outcome and the
+    log file. A successful run also keeps its meta.json as the next drop-check baseline."""
     status = {"finished": datetime.now().isoformat(timespec="seconds"), "ok": ok,
               "message": message, "log": Path(LOG.name).name, "collector_problems": FAILED}
     text = json.dumps(status, ensure_ascii=False, indent=1)
-    (LOGS / "last-run.json").write_text(text, encoding="utf-8")
+    fsutil.write_text(LOGS / "last-run.json", text)
     if ok:
-        (LOGS / "last-success.json").write_text(text, encoding="utf-8")
+        fsutil.write_text(LOGS / "last-success.json", text)
+        if PUBLIC_META.exists():
+            fsutil.write_text(CHECKED_META, PUBLIC_META.read_text(encoding="utf-8"))
 
 
 def tell(headline: str) -> None:
@@ -215,5 +263,23 @@ def stop(message: str) -> None:
     sys.exit(1)
 
 
+def on_sigterm(signum, frame) -> None:
+    # systemd stops the service with SIGTERM (TimeoutStartSec, "systemctl stop"): turn
+    # it into an exception, so the run is still recorded and reported.
+    raise KeyboardInterrupt
+
+
 if __name__ == "__main__":
-    main()
+    signal.signal(signal.SIGTERM, on_sigterm)
+    try:
+        main()
+    except KeyboardInterrupt:
+        if not LOG:
+            raise SystemExit(1)
+        stop("Weekly update stopped: interrupted (by hand or by the service's time limit).")
+    except Exception as exc:   # an unexpected error must still be recorded and reported
+        if not LOG:
+            raise
+        import traceback
+        say(traceback.format_exc())
+        stop(f"Weekly update stopped: unexpected error ({type(exc).__name__}: {exc}).")

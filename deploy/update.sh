@@ -52,7 +52,9 @@ if grep -qx 'web/package-lock.json' <<<"$changed"; then
   (set +eu; . "$HOME/.nvm/nvm.sh"; set -eu; cd web && npm ci)
 fi
 
-# Re-applies the server configuration (it may have changed) and rebuilds the site.
+# Re-applies the server configuration (it may have changed) and rebuilds the site; after
+# a failed weekly run the site is left as it is (setup.sh explains) and the weekly run
+# started below publishes the new code once it succeeds.
 "$REPO/deploy/setup.sh" --build
 
 if [[ $RUN == yes ]]; then

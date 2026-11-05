@@ -32,3 +32,36 @@ def test_record_writes_last_run_and_last_success(tmp_path, monkeypatch):
     ok = json.loads((tmp_path / "last-success.json").read_text(encoding="utf-8"))
     assert (last["ok"], last["message"]) == (False, "a processing stage failed")
     assert (ok["ok"], ok["log"]) == (True, "weekly-2026-11-07_0100.log")
+
+
+def test_successful_run_becomes_the_drop_baseline(tmp_path, monkeypatch):
+    """The drop check compares with the last checked run, not with git HEAD (the server
+    never commits data/public/)."""
+    import json
+    public = tmp_path / "meta.json"
+    public.write_text(json.dumps({"n_researchers": 900, "n_papers": 40000}), encoding="utf-8")
+    log = (tmp_path / "weekly-2026-11-07_0100.log").open("w", encoding="utf-8")
+    monkeypatch.setattr(run_weekly, "LOGS", tmp_path)
+    monkeypatch.setattr(run_weekly, "LOG", log)
+    monkeypatch.setattr(run_weekly, "PUBLIC_META", public)
+    monkeypatch.setattr(run_weekly, "CHECKED_META", tmp_path / "last-success-meta.json")
+    run_weekly.record(True, "Finished (drop accepted with --allow-drop)")
+    log.close()
+    assert run_weekly.baseline_meta() == {"n_researchers": 900, "n_papers": 40000}
+    assert run_weekly.sanity_check() == []
+    public.write_text(json.dumps({"n_researchers": 500, "n_papers": 40000}), encoding="utf-8")
+    assert run_weekly.sanity_check() == ["researchers 900 -> 500"]
+
+
+def test_failed_run_does_not_move_the_baseline(tmp_path, monkeypatch):
+    import json
+    public = tmp_path / "meta.json"
+    public.write_text(json.dumps({"n_researchers": 10, "n_papers": 10}), encoding="utf-8")
+    log = (tmp_path / "weekly-2026-11-07_0100.log").open("w", encoding="utf-8")
+    monkeypatch.setattr(run_weekly, "LOGS", tmp_path)
+    monkeypatch.setattr(run_weekly, "LOG", log)
+    monkeypatch.setattr(run_weekly, "PUBLIC_META", public)
+    monkeypatch.setattr(run_weekly, "CHECKED_META", tmp_path / "last-success-meta.json")
+    run_weekly.record(False, "sharp drop")
+    log.close()
+    assert not (tmp_path / "last-success-meta.json").exists()
