@@ -2,15 +2,19 @@
 // browser only (localStorage, a per-viewer convenience) and shared as a link:
 // #/shortlist?ids=<scopus id>,<scopus id>.
 import { createContext } from "preact";
-import { useCallback, useContext, useMemo, useState } from "preact/hooks";
+import { useCallback, useContext, useEffect, useMemo, useState } from "preact/hooks";
 
 const KEY = "atlas-shortlist";
 
-function load(): string[] {
+function parse(raw: string | null): string[] {
   try {
-    const v = JSON.parse(localStorage.getItem(KEY) ?? "[]");
-    return Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
+    const v = JSON.parse(raw ?? "[]");
+    return Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === "string"))] : [];
   } catch { return []; }
+}
+
+function load(): string[] {
+  try { return parse(localStorage.getItem(KEY)); } catch { return []; }
 }
 
 export interface ShortlistValue {
@@ -27,6 +31,12 @@ export function useShortlistState(): ShortlistValue {
     const unique = [...new Set(next)];
     setIds(unique);
     try { localStorage.setItem(KEY, JSON.stringify(unique)); } catch { /* storage unavailable */ }
+  }, []);
+  // Another tab changed the list (e.g. the Project builder open next to a profile).
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => { if (e.key === KEY) setIds(parse(e.newValue)); };
+    addEventListener("storage", onStorage);
+    return () => removeEventListener("storage", onStorage);
   }, []);
   return useMemo(() => ({
     ids,

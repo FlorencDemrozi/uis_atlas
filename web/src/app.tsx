@@ -5,6 +5,7 @@ import { I18n, useI18n, useI18nState } from "./i18n";
 import { links, parseHash, replaceHash, setOrgParam, useRoute, type View } from "./router";
 import { decodeOrg, encodeOrg, SelectionContext, type Selection } from "./selection";
 import { ShortlistContext, useShortlist, useShortlistState } from "./shortlist";
+import { BuilderCallsContext, useBuilderCallsState } from "./builder";
 import { nextTheme, useTheme, type Theme } from "./theme";
 import { SearchView } from "./views/Search";
 import { ProfileView } from "./views/Profile";
@@ -17,12 +18,13 @@ const ShortlistView = lazyView(() => import("./views/Shortlist").then((m) => m.S
 const FundingView = lazyView(() => import("./views/Funding").then((m) => m.FundingView));
 const CallView = lazyView(() => import("./views/Call").then((m) => m.CallView));
 const FeedbackView = lazyView(() => import("./views/Feedback").then((m) => m.FeedbackView));
-const TeamView = lazyView(() => import("./views/Team").then((m) => m.TeamView));
+const BuilderView = lazyView(() => import("./views/Builder").then((m) => m.BuilderView));
 
 export function App() {
   const i18n = useI18nState();
   const route = useRoute();
   const shortlist = useShortlistState();
+  const builderCalls = useBuilderCallsState();
   const funding = useFundingState();
   const [atlas, setAtlas] = useState<Atlas | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +68,7 @@ export function App() {
   else if (route.view === "profile") content = <ProfileView atlas={atlas} id={route.id!} key={route.id} />;
   else if (route.view === "funding") content = <FundingView atlas={atlas} route={route} />;
   else if (route.view === "feedback") content = <FeedbackView />;
-  else if (route.view === "team") content = <TeamView atlas={atlas} />;
+  else if (route.view === "builder") content = <BuilderView atlas={atlas} />;
   else if (route.view === "call") content = <CallView atlas={atlas} id={route.id!} key={route.id} />;
   else content = <SearchView atlas={atlas} route={route} />;
 
@@ -75,6 +77,7 @@ export function App() {
     <SelectionContext.Provider value={selection}>
     <ShortlistContext.Provider value={shortlist}>
     <FundingContext.Provider value={funding}>
+    <BuilderCallsContext.Provider value={builderCalls}>
       <a class="skip" href="#main" onClick={(e) => { e.preventDefault(); mainRef.current?.focus(); }}>
         {i18n.t("app.skip")}
       </a>
@@ -83,6 +86,7 @@ export function App() {
         <div class="wrap"><ErrorBoundary key={`${route.view}/${route.id ?? ""}`}>{content}</ErrorBoundary></div>
       </main>
       <Footer atlas={atlas} />
+    </BuilderCallsContext.Provider>
     </FundingContext.Provider>
     </ShortlistContext.Provider>
     </SelectionContext.Provider>
@@ -127,7 +131,7 @@ function Header({ view }: { view: View }) {
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
   }, [menuOpen]);
-  const items: [View, string][] = [["search", links.search()], ["team", links.team], ["overview", links.overview], ["network", links.network],
+  const items: [View, string][] = [["search", links.search()], ["builder", links.builder], ["overview", links.overview], ["network", links.network],
     ["feedback", links.feedback],
     ["funding", links.funding()], ["shortlist", links.shortlist()]];
   const switchLabel = t("theme.switch", { current: t(`theme.${theme}`), next: t(`theme.${nextTheme(theme)}`) });

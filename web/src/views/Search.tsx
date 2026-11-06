@@ -124,7 +124,7 @@ export function SearchView({ atlas, route }: { atlas: Atlas; route: Route }) {
         {!atlas.meta.has_vectors && <p class="note">{t("search.keywordOnly")}</p>}
         {q.trim().split(/\s+/).length >= TEAM_HINT_WORDS && (
           <p class="warn small" role="note">{t("search.teamHint")}{" "}
-            <a href={links.team} onClick={() => handTextToTeam(q.trim())}>{t("search.teamLink")}</a></p>
+            <a href={links.builder} onClick={() => handTextToTeam(q.trim())}>{t("search.teamLink")}</a></p>
         )}
         <DataSources atlas={atlas} />
       </section>

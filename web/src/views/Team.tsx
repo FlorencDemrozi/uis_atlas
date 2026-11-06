@@ -1,6 +1,6 @@
-// "Build a team": describe a project, get UiS researchers who together cover its
-// aspects. Everything runs in the browser (team.ts, team-core.ts); the description is
-// never sent anywhere. docs/SPEC.md "Build a team".
+// "Find a team" (part of the Project builder): describe a project, get UiS researchers
+// who together cover its aspects. Everything runs in the browser (team.ts, team-core.ts);
+// the description is never sent anywhere. docs/SPEC.md §5.5.
 import { useMemo, useState } from "preact/hooks";
 import type { Atlas, Researcher } from "../data";
 import { useI18n } from "../i18n";
@@ -26,7 +26,7 @@ interface Run { index: TeamIndex; aspects: string[]; rel: Float64Array[]; whole:
 const MIN_WORDS = 4;
 const short = (s: string, n = 90) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
 
-export function TeamView({ atlas }: { atlas: Atlas }) {
+export function TeamFinder({ atlas }: { atlas: Atlas }) {
   const { t, num } = useI18n();
   const { sel } = useSelection();
   const shortlist = useShortlist();
@@ -75,11 +75,9 @@ export function TeamView({ atlas }: { atlas: Atlas }) {
   const label = (j: number) => (run && j === 0 && run.whole ? t("team.whole") : run?.aspects[j] ?? "");
 
   return (
-    <>
-      <section class="page-head" aria-labelledby="team-title">
-        <h1 id="team-title">{t("team.title")} <span class="badge beta">{t("idea.beta")}</span></h1>
-        <p>{t("team.lede")}</p>
-      </section>
+    <section class="section team-finder" aria-labelledby="team-title">
+      <h2 id="team-title">{t("team.title")} <span class="badge beta">{t("idea.beta")}</span></h2>
+      <p class="sub">{t("team.lede")}</p>
 
       <form class="team-form" onSubmit={submit}>
         <label class="field grow" for="team-text">{t("team.label")}</label>
@@ -102,8 +100,8 @@ export function TeamView({ atlas }: { atlas: Atlas }) {
 
       {run && result && (
         <div aria-live="polite">
-          <section class="section" aria-labelledby="h-aspects">
-            <h2 id="h-aspects">{t("team.aspects")}</h2>
+          <section class="sub-section" aria-labelledby="h-aspects">
+            <h3 id="h-aspects">{t("team.aspects")}</h3>
             <p class="sub small muted">{t("team.aspectsHelp")}</p>
             <ul class="aspect-chips">
               {run.aspects.map((a, j) => (
@@ -128,8 +126,8 @@ export function TeamView({ atlas }: { atlas: Atlas }) {
 
           <OrgFilter atlas={atlas} />
 
-          <section class="section" aria-labelledby="h-team">
-            <h2 id="h-team">{t("team.suggested")}</h2>
+          <section class="sub-section" aria-labelledby="h-team">
+            <h3 id="h-team">{t("team.suggested")}</h3>
             <p class="warn small" role="note">{t("team.note", { y: String(run.index.fromYear) })}</p>
             {result.team.length === 0 ? <p class="muted">{t("team.noTeam")}</p> : (
               <>
@@ -153,15 +151,15 @@ export function TeamView({ atlas }: { atlas: Atlas }) {
           </section>
 
           {result.gaps.length > 0 && (
-            <section class="section" aria-labelledby="h-gaps">
-              <h2 id="h-gaps">{t("team.gaps")}</h2>
+            <section class="sub-section" aria-labelledby="h-gaps">
+              <h3 id="h-gaps">{t("team.gaps")}</h3>
               <p class="sub small muted">{t("team.gapsHelp")}</p>
               <ul>{result.gaps.map((j) => <li key={j}>{label(j)}</li>)}</ul>
             </section>
           )}
 
-          <section class="section" aria-labelledby="h-per-aspect">
-            <h2 id="h-per-aspect">{t("team.perAspect")}</h2>
+          <section class="sub-section" aria-labelledby="h-per-aspect">
+            <h3 id="h-per-aspect">{t("team.perAspect")}</h3>
             {run.aspects.map((_, j) => (
               <details key={j} class="aspect-block" open={j > 0 && j < 4}>
                 <summary><span class="aspect-n">{j + 1}</span> {label(j)}
@@ -183,14 +181,14 @@ export function TeamView({ atlas }: { atlas: Atlas }) {
           <p class="small muted">{t("team.tool")}</p>
         </div>
       )}
-    </>
+    </section>
   );
 }
 
 function PersonLine({ r }: { r: Researcher }) {
   return (
     <div class="result-title">
-      <h3><a href={links.profile(r.scopus_id)}>{r.name}</a></h3>
+      <h4><a href={links.profile(r.scopus_id)}>{r.name}</a></h4>
       <ShortlistButton r={r} compact />
       <span class="meta-line"><Position r={r} /><DeptLabel name={r.department} withFaculty /></span>
     </div>

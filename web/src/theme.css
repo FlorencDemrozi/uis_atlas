@@ -738,7 +738,10 @@ details.table-view summary { cursor: pointer; color: var(--accent); width: fit-c
 .aspect-add input { flex: 1 1 260px; }
 .team-list, .aspect-people { list-style: none; margin: 12px 0 16px; padding: 0; }
 .team-member, .aspect-people li { padding: 14px 0; border-bottom: 1px solid var(--grid); }
-.team-member .result-title h3, .aspect-people .result-title h3 { font-size: 19px; }
+.team-member .result-title h4, .aspect-people .result-title h4 { font-size: 18px; margin: 0; }
+.team-member .result-title h4 a, .aspect-people .result-title h4 a { color: var(--ink); }
+.sub-section { margin-top: 28px; }
+.sub-section > h3 { font-size: 20px; margin-bottom: 6px; }
 .team-member .result-title, .aspect-people .result-title { flex-wrap: wrap; align-items: baseline; }
 .team-member .meta-line, .aspect-people .meta-line { margin: 0; }
 .team-brings { margin: 6px 0 4px; }
@@ -747,3 +750,26 @@ details.table-view summary { cursor: pointer; color: var(--accent); width: fit-c
 .aspect-block { padding: 10px 0; border-bottom: 1px solid var(--grid); }
 .aspect-block summary { cursor: pointer; font-weight: 600; }
 .aspect-people .affinity { margin-top: 4px; }
+
+/* Project builder: the selection, and "+" buttons next to titles */
+.title-row { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; }
+.title-row h1, .title-row h2 { margin: 0; }
+.call-card .title-row h2 { flex: 1 1 auto; min-width: 0; }
+.builder-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+@media (max-width: 800px) { .builder-grid { grid-template-columns: 1fr; } }
+.builder-panel h3 { font-size: 20px; margin: 0 0 10px; }
+.builder-list { list-style: none; margin: 0; padding: 0; }
+.builder-list li { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between;
+  padding: 10px 0; border-bottom: 1px solid var(--grid); }
+.builder-list li.closed .builder-item > a { color: var(--muted); }
+.builder-item { display: flex; flex-direction: column; gap: 3px; min-width: 0; overflow-wrap: anywhere; }
+.builder-item .meta-line { margin: 0; gap: 2px 10px; }
+.builder-item .warn { margin-top: 4px; }
+.builder-list .remove {
+  text-decoration: none; color: var(--muted); font-size: 20px; line-height: 1; min-width: 32px; min-height: 32px;
+  display: inline-flex; align-items: center; justify-content: center; border-radius: 2px; flex: none;
+}
+.builder-list .remove:hover { color: var(--ink); background: var(--surface-2); }
+.panel-actions { align-items: center; }
+.btn.danger { border-color: var(--caution); color: var(--caution); background: var(--caution-wash); }
+.team-finder > h2 { margin-bottom: 6px; }

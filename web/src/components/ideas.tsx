@@ -83,7 +83,7 @@ export function IdeaSearch({ data }: { data: Funding }) {
           </ol>
           {openField > 0 && <p class="small">{t("idea.openField", { n: num(openField) })}</p>}
           <p class="small muted">{t("idea.tool")}</p>
-          <p class="small"><a href={links.team} onClick={() => handTextToTeam(state.idea)}>{t("idea.toTeam")}</a></p>
+          <p class="small"><a href={links.builder} onClick={() => handTextToTeam(state.idea)}>{t("idea.toTeam")}</a></p>
         </div>
       )}
     </details>

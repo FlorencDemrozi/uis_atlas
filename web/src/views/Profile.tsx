@@ -9,6 +9,7 @@ import { CategoryBadge, EligibilityBadge, FundingGate, MatchDetails, SourceBadge
 import { EU_FAMILIES, FAMILIES, callTitle, familyOf, nextDeadline, openFieldCallsFor, pick, useFunding, type Call,
   type Funding } from "../funding";
 import { lazyView } from "../lazy";
+import { ShortlistButton } from "../components/results";
 
 // Map and partner lists: their code and map outline load only when a profile has them.
 const PartnerSection = lazyView(() => import("../components/partners").then((m) => m.PartnerSection));
@@ -158,7 +159,10 @@ export function ProfileView({ atlas, id }: { atlas: Atlas; id: string }) {
       }}>← {t("p.back")}</a></p>
 
       <header class="profile-head">
-        <h1>{r.name}</h1>
+        <div class="title-row">
+          <h1>{r.name}</h1>
+          <ShortlistButton r={r} />
+        </div>
         <div class="meta-line">
           <Position r={r} />
           <DeptLabel name={r.department} short={false} withFaculty />

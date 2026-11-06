@@ -75,6 +75,7 @@ export function ShortlistView({ atlas, route }: { atlas: Atlas; route: Route }) 
           <button type="button" class="btn" onClick={() => downloadCsv("uis-shortlist.csv",
             researcherRows(atlas, i18n, people.map((r) => ({ r }))))}>{t("sl.csv")}</button>
           {!isShared && <button type="button" class="btn" onClick={() => mine.set([])}>{t("sl.clear")}</button>}
+          {!isShared && <a class="btn" href={links.builder}>{t("sl.toBuilder")}</a>}
         </div>
         {manual && (
           <label class="field share-field">{t("sl.copyManual")}

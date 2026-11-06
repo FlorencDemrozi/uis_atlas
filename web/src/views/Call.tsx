@@ -1,4 +1,5 @@
 import { useState } from "preact/hooks";
+import { CallBuilderButton } from "../components/builder";
 import type { Atlas } from "../data";
 import { callTitle, isInstitutionLevel, pick, useCallDetail, type Call, type Funding, type Match } from "../funding";
 import { useI18n } from "../i18n";
@@ -50,7 +51,10 @@ function CallPage({ atlas, data, id }: { atlas: Atlas; data: Funding; id: string
     <>
       <p class="small" style={{ marginBottom: "16px" }}><a href={links.funding()}>← {t("f.back")}</a></p>
       <header class="profile-head">
-        <h1>{callTitle(call, lang)}</h1>
+        <div class="title-row">
+          <h1>{callTitle(call, lang)}</h1>
+          <CallBuilderButton call={call} />
+        </div>
         <div class="meta-line">
           <StatusBadge status={status} />
           <SourceBadge call={call} />

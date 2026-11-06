@@ -1,4 +1,5 @@
 import { useMemo } from "preact/hooks";
+import { CallBuilderButton } from "../components/builder";
 import type { Atlas } from "../data";
 import type { Researcher } from "../data";
 import { EU_FAMILIES, FAMILIES, FUNDER_GROUPS, amountNok, callTitle, familyOf, isInstitutionLevel, isOpenField, nextDeadline,
@@ -321,7 +322,10 @@ function CallCard({ atlas, data, call, person }: { atlas: Atlas; data: Funding; 
   return (
     <li class="call-card">
       <div class="call-main">
-        <h2><a href={links.call(call.id)}>{callTitle(call, lang)}</a></h2>
+        <div class="title-row">
+          <h2><a href={links.call(call.id)}>{callTitle(call, lang)}</a></h2>
+          <CallBuilderButton call={call} />
+        </div>
         <p class="meta-line">
           <StatusBadge status={status} />
           <SourceBadge call={call} />
