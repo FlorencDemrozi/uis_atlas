@@ -3,8 +3,9 @@
 Find the right researcher at the University of Stavanger. Describe what you are
 looking for in your own words, and the atlas ranks researchers from all six
 faculties by how well their published work matches, with a short overview of each
-person. "Build a team" turns a project description into a suggested team of UiS
-researchers who together cover its parts. A password-protected Funding section
+person. The Project builder brings together researchers and funding calls for a
+proposal, and turns a project description into a suggested team of UiS researchers
+who together cover its parts. A password-protected Funding section
 matches open RCN, EU and Nordic funding calls with researchers.
 
 - **What and why:** [docs/SPEC.md](docs/SPEC.md)

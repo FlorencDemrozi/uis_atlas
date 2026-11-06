@@ -117,9 +117,10 @@ A detail view for one researcher: full overview, all topic tags, publication lis
 ### 5.3 Overview
 A dashboard page for the selected faculties/departments (grouped by faculty when several faculties are selected, else by department) with: researchers and publications per unit, publications per year, main research themes per department, and a collaboration network between departments (and optionally between researchers).
 
-### 5.5 Build a team (2026-11-06)
+### 5.5 Find a team (2026-11-06; first called "Build a team")
 Someone describes a project in a few sentences (e.g. a proposal abstract) and gets UiS
-researchers who **together** cover its parts. Page `#/team`, public; linked from the
+researchers who **together** cover its parts. A section of the Project builder (§5.6,
+`#/builder`; the old address `#/team` still works), public; linked from the
 search page (a hint when a query is 15 words or longer) and the Funding idea box. The
 description is handed over within the browser tab (sessionStorage), never in the URL.
 
@@ -156,6 +157,27 @@ description is handed over within the browser tab (sessionStorage), never in the
   arts in dementia care): the website's teams are plausible but noisier (long sentences,
   context-free list items); the AI-checked teams were better and name concrete gaps.
   Results are suggestions about published work, never about quality or availability.
+
+### 5.6 Project builder (2026-11-06)
+One page (`#/builder`, menu "Project builder" / "Prosjektbygger") that brings together
+what a proposal needs. Built in milestones:
+
+1. **Selection (done).** *Researchers*: the visitor's shortlist (also on the Shortlist
+   page, which stays researchers-only), added with "+ Shortlist" on search results,
+   profiles and in Find a team. *Funding calls*: added with "+ Project builder" on the
+   Funding list and the call page; shown only here and only once Funding is unlocked,
+   with funder/programme, deadline and status. Remove one entry or clear a list (a second
+   press confirms). Calls that have **closed** (status, or every deadline passed) or
+   **changed since saved** (status, deadlines, amounts, duration) are flagged; "Mark as
+   checked" accepts a change. Both lists live in the browser (localStorage), without
+   duplicates, survive reloads and stay in step across open tabs. For calls only the id,
+   the date saved and those facts are stored, no call texts (`builder-core.ts`, tested in
+   `tests/test_builder.py`).
+2. **Prepare AI prompt (next).** A subset of the selection + the visitor's preferences →
+   an editable prompt package for an external LLM (copy, .md/.txt, a supporting file for
+   large selections).
+3. **Project ideas.** Generated locally (`project_ideas.py`, Claude) from a selection
+   exported by the page, imported back to save, review and export (.docx/.md). No server.
 
 ### 5.4 Language
 User interface in **Norwegian (bokmål) and English**, switchable. Researcher summaries in English for v1 (Norwegian optional later).
