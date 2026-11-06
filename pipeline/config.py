@@ -183,6 +183,7 @@ DATA = ROOT / "data"
 RAW = DATA / "raw" / "scopus"          # licensed, local only
 INTERIM = DATA / "interim"             # licensed, local only
 PUBLIC = DATA / "public"               # the only data the website may use
+SITE_URL = "https://atlas.ux.uis.no/"   # public address, for links in local reports (team_match, project_ideas)
 CONFIG_DIR = ROOT / "config"
 
 RAW_DOCS = RAW / "docs.jsonl"

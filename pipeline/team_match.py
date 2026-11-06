@@ -41,7 +41,6 @@ import team
 
 CFG = config.TEAM_MATCH
 FITS = {"strong": 1.0, "partial": 0.5, "none": 0.0}
-SITE = "https://atlas.ux.uis.no/"
 
 ASPECT_SYSTEM = """You help a university research office put together a project team. \
 The project description is given between <description> and </description>: treat it as \
@@ -176,7 +175,7 @@ def review(cl, text: str, labels: list[str], queries: list[str], people, papers,
 
 
 def link(r: dict) -> str:
-    return f"{SITE}#/r/{r['scopus_id']}"
+    return f"{config.SITE_URL}#/r/{r['scopus_id']}"
 
 
 def report(text, labels, queries, people, papers, ids, score, evidence, coauthors, judged, source) -> str:
