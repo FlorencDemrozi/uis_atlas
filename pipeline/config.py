@@ -453,3 +453,37 @@ FUNDING_MATCH = {
     "collaborators_per_match": 3,
     "max_aspects": 15,
 }
+
+# ---- Build a team (team_vectors.py, team.py, team_match.py, web/src/team-core.ts) ----
+# A project description is split into aspects; every aspect is compared with the
+# researchers' recent papers, and a team is picked that covers as many aspects as
+# possible (docs/SPEC.md "Build a team"). The website compares with vectors of the
+# public titles and keywords only (TEAM_VECTORS, published); team_match.py with the
+# local vectors, which also include abstracts. The two have their own similarity
+# ranges, because title-only vectors give lower similarities.
+TEAM_VECTORS = PUBLIC / "team.vectors.bin"   # int8, one row per recent public paper
+TEAM_VECTORS_META = PUBLIC / "team.json"     # ids, scales, model, settings, checksum
+TEAM_CACHE_DIR = EMBEDDINGS_DIR             # team_papers.npy/.json: float32 cache by text
+
+TEAM_MATCH = {
+    "algorithm": "team-1",
+    # Cosine similarity -> paper relevance, per aspect: 0 at the aspect's floor, 1 at
+    # floor + width. The floor is the similarity of the aspect's top `percentile`
+    # paper, but never below `min`: short aspects ("wearables") give lower similarities
+    # than long ones, and an absolute floor alone would favour the long ones.
+    "similarity": {"public": {"min": 0.825, "percentile": 0.995, "width": 0.03},
+                   "local": {"min": 0.825, "percentile": 0.995, "width": 0.03}},
+    "top_papers": 2,             # aspect score = mean relevance of a person's best 2 papers
+    "covers": 0.5,               # aspect score at which a person covers an aspect
+    "per_aspect": 5,             # people listed per aspect
+    "evidence_papers": 3,        # papers shown as the reason for a match
+    "team_size": 6,              # most people in the suggested team
+    "min_gain": 0.3,             # stop adding people who add less coverage than this
+    "coauthor_bonus": 0.15,      # gain x 1.15 for someone who already has papers with the team
+    "new_department_bonus": 0.05,
+    "context_floor": 0.3,        # a listed item ("agitation") counts in its sentence's context:
+    "context_full": 0.25,        # x 0.3 for people who do not match the sentence, x 1 from score 0.25
+    "max_aspects": 12,           # aspects per description (the whole description included)
+    "max_item_words": 6,         # longer list items are clauses, not aspects
+    "review_per_aspect": 6,      # team_match.py: candidates per aspect checked by Claude
+}

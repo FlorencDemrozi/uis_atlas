@@ -12,6 +12,7 @@ import runlock
 HERE = Path(__file__).resolve().parent
 STAGES = [
     "build_profiles.py", "build_partners.py", "summarize.py", "embed.py", "export_public.py",          # researchers
+    "team_vectors.py",  # Build a team: public titles + keywords as vectors (cached by text)
     # funding calls: matching on the official text first, so profile_calls.py can pick the
     # EU topics worth an AI profile; the second pass redoes only calls whose profile changed.
     "build_calls.py", "match_funding.py", "profile_calls.py", "match_funding.py --changed-profiles",

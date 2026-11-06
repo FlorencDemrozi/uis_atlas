@@ -60,3 +60,21 @@ def test_no_directory_only_fields_in_public_data():
         text = f.read_text(encoding="utf-8")
         assert '"units"' not in text or f.name == "stats.json", f"{f.name} contains directory units"
         assert '"url_nb"' not in text and '"_directory"' not in text, f"{f.name} contains raw directory data"
+
+
+def test_team_vectors_come_from_public_titles_and_keywords():
+    """Build a team: the published paper vectors are made from title + keywords in
+    data/public/papers.json only, never from abstracts (pipeline/team_vectors.py)."""
+    import sys
+    sys.path.insert(0, str(ROOT / "pipeline"))
+    import team_vectors
+    meta_file = PUBLIC / "team.json"
+    assert "SECRET" not in team_vectors.paper_text({"title": "T", "keywords": ["k"], "abstract": "SECRET"})
+    if not meta_file.exists():
+        return
+    meta = json.loads(meta_file.read_text(encoding="utf-8"))
+    assert meta["text"] == team_vectors.TEXT_RECIPE
+    papers = json.loads((PUBLIC / "papers.json").read_text(encoding="utf-8"))
+    assert set(meta["ids"]) <= set(papers), "team vectors for papers that are not public"
+    for f in PUBLIC.glob("*.bin"):
+        assert f.name == "team.vectors.bin", f"unexpected binary file in data/public: {f.name}"
