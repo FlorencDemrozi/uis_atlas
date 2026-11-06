@@ -173,9 +173,30 @@ what a proposal needs. Built in milestones:
    duplicates, survive reloads and stay in step across open tabs. For calls only the id,
    the date saved and those facts are stored, no call texts (`builder-core.ts`, tested in
    `tests/test_builder.py`).
-2. **Prepare AI prompt (next).** A subset of the selection + the visitor's preferences →
-   an editable prompt package for an external LLM (copy, .md/.txt, a supporting file for
-   large selections).
+2. **Prepare AI prompt (done).** Once Funding is unlocked: tick the researchers and calls
+   to include (at least one of each), optionally give a research direction, application
+   area and constraints, and choose the answer language. The site loads the calls' full
+   details and assembles an English prompt (`prompt.ts` gathers, `prompt-core.ts`
+   writes; tested in `tests/test_prompt.py`):
+   - *Task and rules* for the external model: per call, assess the match on substance and
+     do not force a concept when the team does not cover the call; otherwise a concept
+     with title/acronym, summary, fit with the call, objectives and innovation,
+     evidence-based roles, work packages, outcomes, missing expertise/partners,
+     feasibility and eligibility, sources and assumptions. Facts are cited
+     ([Call 1: …], [R2: publication 3]), the rest marked [Assumption]; eligibility is
+     unverified unless the call states it; AI summaries are indications; nobody is said
+     to have agreed to take part.
+   - *Calls*: overview and deadlines, scope and objectives, expected outcomes, budget and
+     duration, eligibility and consortium, evaluation and submission, the AI reading of
+     the call (labelled), and the key requirements **not found** in the collected text.
+   - *Researchers*: position and unit, profile links, AI summary (labelled), themes, the
+     atlas match per call, and publications – those the matching found relevant to a
+     selected call first, then recent ones.
+   - *Preferences*, *sources and update dates*.
+   Shown in an editable preview with "Copy prompt" and .md/.txt downloads. A field longer
+   than 12 000 characters is shortened (listed, with the official link). Above 60 000
+   characters the package is split: a compact prompt plus a "supporting information"
+   file with everything in full. The site sends nothing; no direct transfer to AI tools.
 3. **Project ideas.** Generated locally (`project_ideas.py`, Claude) from a selection
    exported by the page, imported back to save, review and export (.docx/.md). No server.
 
