@@ -17,6 +17,7 @@ const ShortlistView = lazyView(() => import("./views/Shortlist").then((m) => m.S
 const FundingView = lazyView(() => import("./views/Funding").then((m) => m.FundingView));
 const CallView = lazyView(() => import("./views/Call").then((m) => m.CallView));
 const FeedbackView = lazyView(() => import("./views/Feedback").then((m) => m.FeedbackView));
+const TeamView = lazyView(() => import("./views/Team").then((m) => m.TeamView));
 
 export function App() {
   const i18n = useI18nState();
@@ -65,6 +66,7 @@ export function App() {
   else if (route.view === "profile") content = <ProfileView atlas={atlas} id={route.id!} key={route.id} />;
   else if (route.view === "funding") content = <FundingView atlas={atlas} route={route} />;
   else if (route.view === "feedback") content = <FeedbackView />;
+  else if (route.view === "team") content = <TeamView atlas={atlas} />;
   else if (route.view === "call") content = <CallView atlas={atlas} id={route.id!} key={route.id} />;
   else content = <SearchView atlas={atlas} route={route} />;
 
@@ -125,7 +127,7 @@ function Header({ view }: { view: View }) {
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
   }, [menuOpen]);
-  const items: [View, string][] = [["search", links.search()], ["overview", links.overview], ["network", links.network],
+  const items: [View, string][] = [["search", links.search()], ["team", links.team], ["overview", links.overview], ["network", links.network],
     ["feedback", links.feedback],
     ["funding", links.funding()], ["shortlist", links.shortlist()]];
   const switchLabel = t("theme.switch", { current: t(`theme.${theme}`), next: t(`theme.${nextTheme(theme)}`) });

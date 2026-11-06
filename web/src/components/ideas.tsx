@@ -3,6 +3,7 @@ import { callTitle, isOpenField, nextDeadline, type Funding } from "../funding";
 import { embedIdea, loadIdeaIndex, scoreIdea, type IdeaHit } from "../ideas";
 import { useI18n } from "../i18n";
 import { links } from "../router";
+import { handTextToTeam } from "../handover";
 import { SourceBadge, StatusBadge, useFmt } from "./funding";
 
 type State =
@@ -82,6 +83,7 @@ export function IdeaSearch({ data }: { data: Funding }) {
           </ol>
           {openField > 0 && <p class="small">{t("idea.openField", { n: num(openField) })}</p>}
           <p class="small muted">{t("idea.tool")}</p>
+          <p class="small"><a href={links.team} onClick={() => handTextToTeam(state.idea)}>{t("idea.toTeam")}</a></p>
         </div>
       )}
     </details>

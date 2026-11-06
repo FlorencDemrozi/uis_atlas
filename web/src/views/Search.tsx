@@ -9,6 +9,7 @@ import { DeptLabel, Highlight, Position, paperUrl } from "../components/common";
 import { OrgFilter } from "../components/OrgFilter";
 import { Explore } from "../components/Explore";
 import { Affinity, ResultsTable, ShortlistButton, SplitView } from "../components/results";
+import { handTextToTeam } from "../handover";
 import en from "../i18n/en.json";
 
 type Mode = "list" | "split" | "table";
@@ -18,6 +19,8 @@ const wide = () => matchMedia("(min-width: 1000px)").matches;
 // once meaning-based search (vectors) is available.
 const examples = (text: string) => text.split("|");
 const PAGE = 20;
+/** A query this long is a project description: "Build a team" handles it better. */
+const TEAM_HINT_WORDS = 15;
 /** ?min= as a number; anything else (missing, "abc", negative) is no minimum. */
 const minOf = (v: string | null) => { const n = Number(v ?? 0); return Number.isFinite(n) && n > 0 ? n : 0; };
 
@@ -119,6 +122,10 @@ export function SearchView({ atlas, route }: { atlas: Atlas; route: Route }) {
         </div>
         <p class="note">{t("search.syntax")}</p>
         {!atlas.meta.has_vectors && <p class="note">{t("search.keywordOnly")}</p>}
+        {q.trim().split(/\s+/).length >= TEAM_HINT_WORDS && (
+          <p class="warn small" role="note">{t("search.teamHint")}{" "}
+            <a href={links.team} onClick={() => handTextToTeam(q.trim())}>{t("search.teamLink")}</a></p>
+        )}
         <DataSources atlas={atlas} />
       </section>
 
