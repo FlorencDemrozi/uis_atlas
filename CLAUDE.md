@@ -35,6 +35,7 @@ You are helping build the **UiS Researcher Atlas**: a public dashboard where any
 - Live at https://atlas.ux.uis.no: the shared server sensing4health.ux.uis.no (nginx container on port 8443 behind UiS IT's reverse proxy, weekly systemd user timer). Setup, update and status scripts in `deploy/`; everything in docs/SERVER.md. Never install a system nginx there (ports 80/443 belong to sensing4health).
 - Nordic funders: `collect_nordic.py` (NordForsk and Nordic Energy Research, public website APIs, any network) and `nordic.py`; merged by `build_calls.py`. The Funding page filters funders with grouped checkboxes (docs/FUNDING.md).
 - Project idea → calls: `call_vectors.py`, shortlist on the Funding page (model in the browser), `idea_match.py` for an AI-checked answer (docs/FUNDING.md).
+- Build a team (public page `#/team`, SPEC §5.5): `team_vectors.py` (public title + keyword vectors → `data/public/team.json`/`team.vectors.bin`), method in `team.py` mirrored by `web/src/team-core.ts` (keep both in step: `tests/test_team.py` checks parity with Node), `team_match.py` for an AI-checked team.
 
 ## Commands
 
@@ -58,6 +59,7 @@ python pipeline/collect_nordic.py                     # stage 1g (NordForsk + No
 python pipeline/run_all.py                            # stages 2–5 + funding stages
 python pipeline/run_weekly.py                         # everything + web build (scheduled job)
 python pipeline/idea_match.py "project idea"          # which open calls fit an idea (AI-checked; --no-ai)
+python pipeline/team_match.py "project description"   # a UiS team for a project (AI-checked; --no-ai, --source public)
 pytest                                                # tests
 cd web; npm install; npm run dev                      # website (once scaffolded)
 ```

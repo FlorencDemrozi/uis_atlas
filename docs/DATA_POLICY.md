@@ -17,6 +17,7 @@ Scopus content is licensed to UiS through its subscription. Elsevier’s terms g
 | Bibliographic references: title, year, venue, DOI link, Scopus link | Public site |
 | Author identifiers: Scopus author ID, ORCID | Public site |
 | Derived content: AI-written summaries, topic tags, counts, embedding vectors | Public site, **pending UiS Library confirmation** |
+| "Build a team" paper vectors (`team_vectors.py`): made **only from the public title and keywords** in `data/public/papers.json`, never abstracts (project owner, 2026-11-06) | Public site (`team.json`, `team.vectors.bin`). Vectors from abstracts (`embed.py`) stay local. |
 | Partner institutions of co-authors outside UiS (`build_partners.py`): Scopus affiliation id, institution name, city, country, and per researcher the number of shared papers | Public site (`partners.json`), **pending UiS Library confirmation**. Institutions only: names or ids of external co-authors are never published. |
 
 `pipeline/export_public.py` is the single gate between licensed and public data. It must use an explicit **allow-list** of fields; anything not on the list is dropped. A test checks that no abstract text appears in `data/public/`.

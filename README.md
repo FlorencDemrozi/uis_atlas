@@ -3,8 +3,9 @@
 Find the right researcher at the University of Stavanger. Describe what you are
 looking for in your own words, and the atlas ranks researchers from all six
 faculties by how well their published work matches, with a short overview of each
-person. A password-protected Funding section matches open RCN, EU and Nordic
-funding calls with researchers.
+person. "Build a team" turns a project description into a suggested team of UiS
+researchers who together cover its parts. A password-protected Funding section
+matches open RCN, EU and Nordic funding calls with researchers.
 
 - **What and why:** [docs/SPEC.md](docs/SPEC.md)
 - **Data, licensing and privacy rules:** [docs/DATA_POLICY.md](docs/DATA_POLICY.md)
@@ -30,6 +31,8 @@ uis_atlas/
 │   ├── summarize.py          3. → AI overviews + tags (Anthropic API)
 │   ├── embed.py              4. → semantic vectors (local only)
 │   ├── export_public.py      5. → data/public/ (licence gate, allow-list)
+│   ├── team_vectors.py          → "Build a team": public titles + keywords as vectors
+│   ├── team.py, team_match.py   team method (mirrored in web/src/team-core.ts), AI-checked CLI
 │   ├── build_calls.py … export_funding.py   funding calls, matching, encrypted export
 │   ├── run_all.py            Runs stages 2–5 and the funding stages
 │   └── run_weekly.py         Collectors + run_all + website build (scheduled job)

@@ -63,6 +63,7 @@ Why static: it can be hosted anywhere (GitHub Pages, UiS web server), costs noth
 | 3. Summarize | `summarize.py` | profiles → `data/interim/summaries.json` | Uses the Claude API **offline** to write a 2–3 sentence overview and 3–6 topic tags per researcher. Cached and only regenerated when a profile changes. |
 | 4. Embed | `embed.py` | profiles + summaries → `data/interim/embeddings.npy` | Semantic vectors for each researcher and for each paper (see §4). |
 | 5. Export | `export_public.py` | interim → `data/public/` | Writes **only licence-safe fields** (see `DATA_POLICY.md`). This is the only data the website sees. |
+| 5b. Team vectors | `team_vectors.py` | `data/public/papers.json` → `data/public/team.json`, `team.vectors.bin` | "Build a team" (§5.5): vectors of the **public** title + keywords of recent papers (int8, ~6 MB), cached by text. Never abstracts. |
 
 Each stage is a standalone script that can be rerun independently. `pipeline/run_all.py` runs stages 2–5. Stage 1 is run separately because it needs the UiS network.
 
@@ -115,6 +116,46 @@ A detail view for one researcher: full overview, all topic tags, publication lis
 
 ### 5.3 Overview
 A dashboard page for the selected faculties/departments (grouped by faculty when several faculties are selected, else by department) with: researchers and publications per unit, publications per year, main research themes per department, and a collaboration network between departments (and optionally between researchers).
+
+### 5.5 Build a team (2026-11-06)
+Someone describes a project in a few sentences (e.g. a proposal abstract) and gets UiS
+researchers who **together** cover its parts. Page `#/team`, public; linked from the
+search page (a hint when a query is 15 words or longer) and the Funding idea box. The
+description is handed over within the browser tab (sessionStorage), never in the URL.
+
+- **Aspects.** The text is split by rule (`team.split_aspects`): the whole description,
+  each sentence, and the things a sentence lists ("such as dementia or Parkinson's
+  disease"; "wearables, environmental sensors, gamified tasks and …"). Shown as chips the
+  visitor can remove, and own aspects can be added; results update at once.
+- **Score.** Each aspect is embedded in the browser ("query:") and compared with the
+  title + keyword vectors of every paper since `ACTIVE_FROM`. Relevance per paper is 0 at
+  the aspect's floor (its top 0.5 % paper, at least 0.825) and 1 at floor + 0.03, so short
+  and long aspects are treated alike. A person's aspect score is the mean relevance of
+  their **2** best papers. A listed item counts in the context of its sentence: people who
+  do not match that sentence keep 30 % of their score ("agitation" in a dementia-care
+  sentence should not find chemists).
+- **Team.** Greedy coverage (`team.build_team`): repeatedly add the eligible person who
+  adds most above what the team already covers (at least 0.3), up to 6; co-authors of the
+  team (×1.15) and new departments (×1.05) are preferred when gains are close. Also shown:
+  the 5 best people per aspect with the papers behind each match, and **gaps** (aspects
+  nobody covers: a case for an external partner). The faculty/department picker limits
+  who is considered.
+- **One method, two places.** `pipeline/team.py` and `web/src/team-core.ts` are mirrors;
+  `tests/test_team.py` runs both on the same inputs (Node) and checks they agree. Settings:
+  `config.TEAM_MATCH`, copied into `team.json`.
+- **AI-checked version (local).** `python pipeline/team_match.py "description"`: Claude
+  lists the expertise the project needs (4–10 aspects), matching uses the local vectors
+  (with abstracts), and Claude judges the 6 best people per aspect from their numbered
+  paper titles and summary (strong / partial / none, citing a paper number; a strong fit
+  without a valid citation is lowered to partial). Team and gaps from the judgements.
+  Sends the description, paper titles/keywords and public summaries (no abstracts) to the
+  Anthropic API, a few US cents per run; `--no-ai` sends nothing, `--source public`
+  reproduces the website exactly.
+- **Evaluation (2026-11-06).** Five abstracts (digital biomarkers in dementia/Parkinson's,
+  offshore wind digital twin + hydrogen, generative AI in schools, EU sustainable finance,
+  arts in dementia care): the website's teams are plausible but noisier (long sentences,
+  context-free list items); the AI-checked teams were better and name concrete gaps.
+  Results are suggestions about published work, never about quality or availability.
 
 ### 5.4 Language
 User interface in **Norwegian (bokmål) and English**, switchable. Researcher summaries in English for v1 (Norwegian optional later).
