@@ -9,6 +9,8 @@ import { useI18n } from "../i18n";
 import { useShortlist } from "../shortlist";
 import { download, preparePrompt } from "../prompt";
 import { toPlainText, type PromptInput, type PromptPackage } from "../prompt-core";
+import { callFacts } from "../builder-core";
+import { makeSelection } from "../ideas-core";
 
 type Status = { kind: "idle" } | { kind: "working" } | { kind: "error"; error: string } | { kind: "done" };
 
@@ -68,6 +70,14 @@ function PromptForm({ atlas, data }: { atlas: Atlas; data: Funding }) {
     catch { setCopied("manual"); }
   };
   const day = new Date().toISOString().slice(0, 10);
+  // For pipeline/project_ideas.py: exactly the ticked entries, with each call's key facts now.
+  const downloadSelection = () => {
+    if (!ready) return;
+    const sel = makeSelection(chosenPeople, chosenCalls.map((id) => ({ id, facts: callFacts(data.byId.get(id)!.fields) })),
+      prefs, language, { atlas: atlas.meta.generated.slice(0, 10), funding: data.meta.generated.slice(0, 10) },
+      new Date().toISOString());
+    download(`uis-atlas-selection-${day}.json`, JSON.stringify(sel, null, 1), "application/json");
+  };
   const tokens = useMemo(() => Math.round((prompt.length + support.length) / 4), [prompt, support]);
 
   if (!people.length || !saved.length) {
@@ -117,8 +127,10 @@ function PromptForm({ atlas, data }: { atlas: Atlas; data: Funding }) {
           <button type="submit" class="btn primary" disabled={!ready || status.kind === "working"}>
             {t(pkg ? "prompt.again" : "prompt.prepare")}
           </button>
-          {pkg && <span class="muted small"> {t("prompt.againNote")}</span>}
+          {" "}
+          <button type="button" class="btn" disabled={!ready} onClick={downloadSelection}>{t("ideas.downloadSelection")}</button>
         </p>
+        {pkg && <p class="muted small">{t("prompt.againNote")}</p>}
       </form>
 
       {status.kind === "working" && <p class="loading" role="status">{t("prompt.working")}</p>}

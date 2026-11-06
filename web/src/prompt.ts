@@ -136,8 +136,8 @@ export async function preparePrompt(atlas: Atlas, data: Funding, researcherIds: 
   });
 }
 
-export function download(name: string, content: string, type: string): void {
-  const url = URL.createObjectURL(new Blob([content], { type: `${type};charset=utf-8` }));
+export function download(name: string, content: string | Uint8Array<ArrayBuffer>, type: string): void {
+  const url = URL.createObjectURL(new Blob([content], { type: typeof content === "string" ? `${type};charset=utf-8` : type }));
   const a = Object.assign(document.createElement("a"), { href: url, download: name });
   document.body.append(a);
   a.click();
