@@ -131,14 +131,17 @@ function Header({ view }: { view: View }) {
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
   }, [menuOpen]);
-  const items: [View, string][] = [["search", links.search()], ["builder", links.builder], ["overview", links.overview], ["network", links.network],
+  // No "Find researchers" item: the wordmark leads there (and is marked as the current page).
+  const items: [View, string][] = [["builder", links.builder], ["overview", links.overview], ["network", links.network],
     ["feedback", links.feedback],
     ["funding", links.funding()], ["shortlist", links.shortlist()]];
   const switchLabel = t("theme.switch", { current: t(`theme.${theme}`), next: t(`theme.${nextTheme(theme)}`) });
   return (
     <header class="topbar">
       <div class="wrap">
-        <a class="wordmark" href={links.search()}><b>UiS</b> <span>{t("app.name")}</span></a>
+        <a class="wordmark" href={links.search()} title={t("nav.search")}
+          aria-current={view === "search" || view === "profile" ? "page" : undefined}>
+          <b>UiS</b> <span>{t("app.name")}</span><span class="visually-hidden"> – {t("nav.search")}</span></a>
         <button type="button" class="menu-toggle" aria-expanded={menuOpen} aria-controls="main-nav"
           onClick={() => setMenuOpen((o) => !o)}>
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor"
@@ -149,7 +152,7 @@ function Header({ view }: { view: View }) {
         </button>
         <nav id="main-nav" class={`nav${menuOpen ? " open" : ""}`} aria-label={t("nav.label")}>
           {items.map(([v, href]) => (
-            <a key={v} href={href} aria-current={view === v || (v === "search" && view === "profile") || (v === "funding" && view === "call")
+            <a key={v} href={href} aria-current={view === v || (v === "funding" && view === "call")
               ? "page" : undefined}>
               {t(`nav.${v}`)}
               {v === "shortlist" && ids.length > 0 && <span class="nav-count">{ids.length}</span>}
