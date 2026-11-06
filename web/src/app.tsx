@@ -132,9 +132,8 @@ function Header({ view }: { view: View }) {
     return () => removeEventListener("keydown", onKey);
   }, [menuOpen]);
   // No "Find researchers" item: the wordmark leads there (and is marked as the current page).
-  const items: [View, string][] = [["builder", links.builder], ["overview", links.overview], ["network", links.network],
-    ["feedback", links.feedback],
-    ["funding", links.funding()], ["shortlist", links.shortlist()]];
+  const items: [View, string][] = [["overview", links.overview], ["network", links.network], ["feedback", links.feedback],
+    ["shortlist", links.shortlist()], ["funding", links.funding()], ["builder", links.builder]];
   const switchLabel = t("theme.switch", { current: t(`theme.${theme}`), next: t(`theme.${nextTheme(theme)}`) });
   return (
     <header class="topbar">
