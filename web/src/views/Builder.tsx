@@ -12,6 +12,7 @@ import { DeptLabel } from "../components/common";
 import { FundingGate, SourceBadge, StatusBadge, useFmt } from "../components/funding";
 import { ConfirmButton } from "../components/builder";
 import { TeamFinder } from "./Team";
+import { PromptBuilder } from "../components/PromptBuilder";
 
 export function BuilderView({ atlas }: { atlas: Atlas }) {
   const { t } = useI18n();
@@ -29,6 +30,7 @@ export function BuilderView({ atlas }: { atlas: Atlas }) {
           <CallsPanel />
         </div>
       </section>
+      <PromptBuilder atlas={atlas} />
       <TeamFinder atlas={atlas} />
     </>
   );

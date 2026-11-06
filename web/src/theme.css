@@ -773,3 +773,13 @@ details.table-view summary { cursor: pointer; color: var(--accent); width: fit-c
 .panel-actions { align-items: center; }
 .btn.danger { border-color: var(--caution); color: var(--caution); background: var(--caution-wash); }
 .team-finder > h2 { margin-bottom: 6px; }
+
+/* Project builder: Prepare AI prompt */
+.prompt-form { display: flex; flex-direction: column; gap: 14px; max-width: 900px; }
+.prompt-form .field textarea { width: 100%; font: inherit; color: var(--ink); resize: vertical; }
+.field.narrow { max-width: 260px; }
+.pick-list { border: 1px solid var(--grid); border-radius: 4px; padding: 10px 14px; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.pick-list legend { font-weight: 600; padding: 0 4px; }
+.pick-list .check { align-items: flex-start; }
+.prompt-result { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; max-width: 900px; }
+.prompt-text { width: 100%; font: 13px/1.5 var(--font-mono); color: var(--ink); resize: vertical; white-space: pre-wrap; }
