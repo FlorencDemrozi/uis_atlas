@@ -197,8 +197,28 @@ what a proposal needs. Built in milestones:
    than 12 000 characters is shortened (listed, with the official link). Above 60 000
    characters the package is split: a compact prompt plus a "supporting information"
    file with everything in full. The site sends nothing; no direct transfer to AI tools.
-3. **Project ideas.** Generated locally (`project_ideas.py`, Claude) from a selection
-   exported by the page, imported back to save, review and export (.docx/.md). No server.
+3. **Project ideas (done).** No server: generated locally, saved and exported on the site.
+   - *Selection file*: "Download selection for project ideas" (in Prepare AI prompt, same
+     ticks and preferences) → `uis-atlas-selection-<date>.json`: researcher ids, each call
+     id with its key facts at that moment, preferences, answer language, data dates.
+   - *Generator*: `python pipeline/project_ideas.py <selection>.json` (`--dry-run`: what
+     would be sent). One Claude request per call with the official call text, its key
+     facts, the AI reading (labelled) and, per researcher, profile and summary (labelled)
+     and numbered publications – relevant to that call first, abstract excerpts for the
+     first five. Claude judges the fit (good / partial / poor) and writes a concept only
+     when the team covers the call; a poor fit never gets one (reasons and missing
+     expertise instead). Checked afterwards: evidence must cite a publication or profile
+     shown for that researcher, quotes must occur in the call text, eligibility is
+     "stated" only with a verified quote, roles and leads must be selected researchers,
+     "R2" in prose becomes the name, text that repeats an abstract is flagged; the source
+     list is built from known links, not by the model. Output
+     `project-ideas-<date>.json`.
+   - *Site*: "Import ideas file" → saved in the browser (kept when the selection changes),
+     shown per idea with fit, call, date and researchers, labelled as an AI draft; the call
+     is flagged when it has closed or changed since generation (facts from the selection
+     file). Export per idea as Word (.docx, written in the browser by `docx.ts`, real
+     heading styles) or Markdown; delete with a second press. Formats and rendering in
+     `ideas-core.ts`; tests in `tests/test_ideas.py`.
 
 ### 5.4 Language
 User interface in **Norwegian (bokmål) and English**, switchable. Researcher summaries in English for v1 (Norwegian optional later).

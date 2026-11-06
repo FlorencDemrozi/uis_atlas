@@ -51,6 +51,11 @@ Researcher profiles are personal data, even though they describe professional ac
 - Labelled on the site as automatically generated from publications.
 - Spot-checked by the project owner before first launch; researchers can request corrections through the override file.
 
+## 4b. Project ideas (Project builder)
+
+- Generated offline by `pipeline/project_ideas.py` with the Claude API from the call texts, the selected researchers' public profile data, publication titles and keywords, and abstract excerpts of a few publications (as for the summaries in §4), plus the user's preferences.
+- The result is a file that stays with the user and is imported into their own browser; nothing is published on the site. Ideas are labelled as AI-generated drafts, never say that anyone has agreed to take part, and are checked against the researchers' listed publications and the call text (see SPEC §5.6).
+
 ## 5. Funding calls (docs/FUNDING.md)
 
 - Source: public call pages of the Research Council of Norway, collected politely (robots.txt respected; call PDFs under `*/Download` are not fetched). Raw pages stay in `data/raw/rcn/`.
