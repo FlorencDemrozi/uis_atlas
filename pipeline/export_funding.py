@@ -2,7 +2,7 @@
 """
 Stage 5c – Export the Funding Intelligence data for the website, encrypted.
 
-Input:  config.CALLS, config.CALLS_HISTORY, config.CALL_PROFILES (optional),
+Input:  config.CALLS, config.CALLS_HISTORY, config.CALL_PROFILES (optional), config.FIRST_SEEN,
         config.FUNDING_MATCHES, config.PROFILES
 Output: data/public/funding.enc.json (index: every call and every match),
         data/public/funding.detail-NN.enc.json (call details, in DETAIL_SHARDS files),
@@ -46,6 +46,7 @@ import secrets
 from datetime import datetime
 from pathlib import Path
 
+import build_changes
 import config
 from fsutil import write_text
 
@@ -261,6 +262,11 @@ def build() -> dict:
             "weights": matches_doc["settings"]["weights"],
             "categories": matches_doc["settings"]["categories"],
             "has_ai_profiles": bool(profiles),
+            # What's new (build_changes.py): open/planned calls first seen in the last weeks.
+            "new_calls": build_changes.new_calls(
+                build_changes.load_state(),
+                {c["id"] for c in calls_doc["calls"] if c["fields"]["status"]["v"] != "closed"},
+                datetime.now().date().isoformat()),
         },
         "calls": calls,
         "matches": matches,

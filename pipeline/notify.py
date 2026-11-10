@@ -40,6 +40,16 @@ def counts() -> list[str]:
         lines.append(f"AI call profiles: {len(json.loads(config.CALL_PROFILES.read_text(encoding='utf-8')))}")
     except (OSError, ValueError):
         pass
+    try:  # what's new in this run (build_changes.py): counts only
+        changes = json.loads((config.PUBLIC / "changes.json").read_text(encoding="utf-8"))
+        today = changes["generated"]
+        state = json.loads(config.FIRST_SEEN.read_text(encoding="utf-8"))
+        n_r = sum(len(w["ids"]) for w in changes["researchers"] if w["date"] == today)
+        base, source = state["baseline"]["calls"], state.get("call_source", {})
+        n_c = sum(d == today and base.get(source.get(c), d) < d for c, d in state["calls"].items())
+        lines.append(f"New this run: {n_r} researchers, {n_c} calls")
+    except (OSError, ValueError, KeyError):
+        pass
     return lines
 
 

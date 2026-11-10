@@ -410,6 +410,11 @@ NORDIC_SLEEP = 1.0            # seconds between requests
 CALLS = INTERIM / "calls.json"                    # structured calls (build_calls.py)
 CALLS_HISTORY = INTERIM / "calls_history.json"    # detected changes per call
 CALL_PROFILES = INTERIM / "call_profiles.json"    # AI call profiles (profile_calls.py)
+# "What's new" (build_changes.py): when each researcher and call was first seen.
+# Local only: it keeps e-mail addresses as identity keys. The public changes.json
+# lists profile ids only; new calls go into the encrypted funding index.
+FIRST_SEEN = INTERIM / "first_seen.json"
+CHANGES_DAYS = 56                                 # additions shown on the website (8 weekly runs)
 FUNDING_MATCHES = INTERIM / "funding_matches.json"
 CALL_VECTORS = INTERIM / "call_vectors.npz"        # idea search: call texts as vectors (call_vectors.py)
 CALL_VECTORS_META = INTERIM / "call_vectors.json"

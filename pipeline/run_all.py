@@ -17,6 +17,7 @@ STAGES = [
     # EU topics worth an AI profile; the second pass redoes only calls whose profile changed.
     "build_calls.py", "match_funding.py", "profile_calls.py", "match_funding.py --changed-profiles",
     "call_vectors.py",  # idea search: call texts as vectors (cached by text)
+    "build_changes.py",  # what's new: researchers and calls first seen (public ids + funding index)
     "export_funding.py",
 ]
 
