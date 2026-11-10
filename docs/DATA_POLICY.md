@@ -39,7 +39,13 @@ NVA (Nasjonalt vitenarkiv, run by Sikt) publishes its metadata openly through a 
 Researcher profiles are personal data, even though they describe professional activity. Before launch:
 
 - Confirm the legal basis and approach with the UiS data protection officer (personvernombud).
-- Publish a short privacy notice on the site: what is shown, where it comes from, how often it is updated.
+- Publish a short privacy notice on the site: what is shown, where it comes from, how often it is updated. Done as the page "Privacy and cookies" (`#/privacy`, `web/src/views/Privacy.tsx`, texts `priv.*`), linked from the footer; marked as a draft until the data protection officer has reviewed it. Keep it in step with §3a.
+
+## 3a. Visitors: no cookies, no tracking, no third parties
+
+- The site sets **no cookies** and uses no analytics. Browser storage (`localStorage`, `sessionStorage`, the cache) holds only what is strictly necessary for a function the visitor uses (ekomloven § 3-15): language, theme, shortlist, Project builder, project ideas, the date of the last "What's new" update seen, the funding key for the open tab, and the language model. Nothing of it is sent anywhere. Adding anything else (statistics, embedded videos, external maps or fonts) needs consent and a cookie banner: ask the project owner first, and update the privacy page.
+- The visitor's browser contacts **only the Atlas server**. The language model and the ONNX runtime are fetched at build time (`web/scripts/fetch-model.mjs`) and served from the site; the Content-Security-Policy (`deploy/nginx.conf.template`, `connect-src 'self'`) enforces this. Do not load scripts, fonts, models or data from other hosts.
+- "What's new" (`pipeline/build_changes.py`): the public `changes.json` holds profile ids and dates only; new calls go into the encrypted funding index. The first-seen state with e-mail addresses as identity keys (`data/interim/first_seen.json`) stays local.
 - Provide a way for researchers to **correct or opt out** (for v1: a contact email plus `config/exclusions.json` and `config/overrides.json`, which the pipeline respects).
 - The UiS employee directory (`collect_directory.py`) is used to confirm current staff and their unit. The raw copy (`data/raw/uis_directory/`) stays local and is never committed. Only name, position, faculty/department, the UiS profile link and the work e-mail address (as shown on the person's public UiS profile page; decided by the project owner, 2026-11-04) may reach the public site, and only for researchers who are in the atlas.
 - Summaries describe research only. Never generate personal judgements, rankings of quality, or anything beyond published work.

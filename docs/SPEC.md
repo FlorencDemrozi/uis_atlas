@@ -63,6 +63,7 @@ Why static: it can be hosted anywhere (GitHub Pages, UiS web server), costs noth
 | 3. Summarize | `summarize.py` | profiles → `data/interim/summaries.json` | Uses the Claude API **offline** to write a 2–3 sentence overview and 3–6 topic tags per researcher. Cached and only regenerated when a profile changes. |
 | 4. Embed | `embed.py` | profiles + summaries → `data/interim/embeddings.npy` | Semantic vectors for each researcher and for each paper (see §4). |
 | 5. Export | `export_public.py` | interim → `data/public/` | Writes **only licence-safe fields** (see `DATA_POLICY.md`). This is the only data the website sees. |
+| 5c. What's new | `build_changes.py` | `data/public/researchers.json`, calls → `data/public/changes.json` (+ `new_calls` in the encrypted funding index) | First-seen date per researcher (keys: profile id, work e-mail, Cristin id, so a changed id is not "new") and per call, in `data/interim/first_seen.json`. The first run, and the first run of each funding source, is the baseline. See §5.7. |
 | 5b. Team vectors | `team_vectors.py` | `data/public/papers.json` → `data/public/team.json`, `team.vectors.bin` | "Build a team" (§5.5): vectors of the **public** title + keywords of recent papers (int8, ~6 MB), cached by text. Never abstracts. |
 
 Each stage is a standalone script that can be rerun independently. `pipeline/run_all.py` runs stages 2–5. Stage 1 is run separately because it needs the UiS network.
@@ -219,6 +220,12 @@ what a proposal needs. Built in milestones:
      file). Export per idea as Word (.docx, written in the browser by `docx.ts`, real
      heading styles) or Markdown; delete with a second press. Formats and rendering in
      `ideas-core.ts`; tests in `tests/test_ideas.py`.
+
+### 5.7 What's new (2026-11-10)
+A bell in the header (`#/new`) shows how many researcher profiles and open/planned funding calls appeared since the visitor last looked (the date is kept in the browser, `news.ts`); the page lists them per weekly update for the last `config.CHANGES_DAYS` days (8 weeks). Profiles are "new in the Atlas", not necessarily new at UiS. Calls are shown only after the funding password, as on the Funding page. Telegram reports "New this run: n researchers, m calls".
+
+### 5.8 Privacy and cookies (2026-11-10)
+Footer link to `#/privacy`: no cookies, what is kept in the browser and why, the server log, no third parties (the model is served from the site), where profiles come from and how to ask for correction or opt-out. No cookie banner is needed while the site only stores what is strictly necessary (DATA_POLICY §3a).
 
 ### 5.4 Language
 User interface in **Norwegian (bokmål) and English**, switchable. Researcher summaries in English for v1 (Norwegian optional later).

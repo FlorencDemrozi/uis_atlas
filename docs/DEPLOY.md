@@ -46,7 +46,7 @@ only, last 26 runs kept).
 - Outbound HTTPS to: `api.elsevier.com`, `api.anthropic.com`, `www.uis.no`,
   `www.forskningsradet.no`, `api.tech.ec.europa.eu` and `ec.europa.eu` (EU topics),
   `www.nordforsk.org` and `www.nordicenergy.org` (Nordic calls), `api.nva.unit.no` (NVA),
-  `huggingface.co` (first download of the embedding model), `registry.npmjs.org`
+  `huggingface.co` (first download of the embedding model, for the pipeline and once for the website build: web/scripts/fetch-model.mjs), `registry.npmjs.org`
   (`npm ci`), `github.com` (only with `--publish`).
 - Python 3.12 (with `venv`), Node.js 22, Git.
 - A service account (e.g. `atlas`) that owns the files and runs the job.
@@ -144,7 +144,7 @@ server {
     add_header Strict-Transport-Security "max-age=31536000" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-    add_header Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; connect-src 'self' https://huggingface.co https://*.huggingface.co https://*.hf.co; img-src 'self' data:; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; frame-ancestors 'none'" always;
+    add_header Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; frame-ancestors 'none'" always;
 
     # Optional extra layer for the funding pages: only from the UiS network/VPN.
     # The files stay encrypted either way; this also stops outside password guessing.

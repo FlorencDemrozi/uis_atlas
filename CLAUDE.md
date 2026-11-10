@@ -37,6 +37,8 @@ You are helping build the **UiS Researcher Atlas**: a public dashboard where any
 - Project idea → calls: `call_vectors.py`, shortlist on the Funding page (model in the browser), `idea_match.py` for an AI-checked answer (docs/FUNDING.md).
 - Project builder (`#/builder`, SPEC §5.6): selected researchers (the shortlist) and saved funding calls (`builder.ts`/`builder-core.ts`, browser only, change flags); all 3 milestones done: selection; "Prepare AI prompt" (`prompt.ts`/`prompt-core.ts`); project ideas (selection file → `project_ideas.py` → import, save, Word/Markdown export: `ideas-core.ts`, `docx.ts`, `projectIdeas.ts`).
 - Find a team (a section of the Project builder, SPEC §5.5; `#/team` still works): `team_vectors.py` (public title + keyword vectors → `data/public/team.json`/`team.vectors.bin`), method in `team.py` mirrored by `web/src/team-core.ts` (keep both in step: `tests/test_team.py` checks parity with Node), `team_match.py` for an AI-checked team.
+- What's new (SPEC §5.7): `build_changes.py` (first-seen state in `data/interim/first_seen.json`, public `changes.json` with profile ids only, new calls inside the encrypted funding index); bell in the header and page `#/new` (`news.ts`, `views/News.tsx`).
+- Privacy page `#/privacy` (SPEC §5.8, DATA_POLICY §3a): no cookies, no tracking, no third parties. The language model and ONNX runtime are served from the site (`web/scripts/fetch-model.mjs`, run by `npm run dev`/`build`); the CSP allows `connect-src 'self'` only.
 
 ## Commands
 
