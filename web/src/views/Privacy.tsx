@@ -14,7 +14,6 @@ export function PrivacyView() {
         <h1>{t("priv.title")}</h1>
         <p>{t("priv.lede")}</p>
       </div>
-      <p class="note">{t("priv.draft")}</p>
 
       <h2>{t("priv.storageTitle")}</h2>
       <p>{t("priv.storageText")}</p>
@@ -41,9 +40,8 @@ export function PrivacyView() {
       <p>{t("priv.profilesText")}</p>
 
       <h2>{t("priv.rightsTitle")}</h2>
-      <p>{t("priv.rightsText")}{" "}
-        <a href={links.feedback}>{t("nav.feedback")}</a> · <a href="mailto:personvernombud@uis.no">personvernombud@uis.no</a>
-        {" "}· <a href="https://www.datatilsynet.no/">Datatilsynet</a></p>
+      <p>{t("priv.rightsText")}</p>
+      <p><a href={links.feedback}>{t("nav.feedback")}</a></p>
     </div>
   );
 }

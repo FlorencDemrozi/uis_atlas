@@ -106,8 +106,8 @@
   "p.collabDepts": "Collaborating departments",
   "p.collabDeptsSub": "Papers with co-authors from other departments.",
   "footer.prototype": "Prototype",
-  "footer.prototypeText": "Test version under development. Data use and researcher profiles are awaiting confirmation from the UiS Library and data protection officer.",
-  "footer.source": "Sources: Scopus (Elsevier), NVA, PubMed/MEDLINE (through Scopus) and the UiS employee directory. Publications since {from}. Updated weekly, last on {date}.",
+  "footer.prototypeText": "Test version under development.",
+  "footer.source": "Updated weekly, last on {date}.",
   "footer.summaries": "Researcher overviews are generated automatically from publications and describe research only. Researchers can request corrections or opt out.",
   "footer.designerRole": "Professor in Biomedical Sensing Systems, University of Stavanger.",
   "net.whole": "Whole network",
@@ -757,7 +757,6 @@
   "footer.privacy": "Privacy and cookies",
   "priv.title": "Privacy and cookies",
   "priv.lede": "The Atlas sets no cookies and uses no analytics or tracking. This page explains what is kept in your browser, what the server records and where the researcher profiles come from.",
-  "priv.draft": "Draft: this statement is awaiting review by the UiS data protection officer.",
   "priv.storageTitle": "Storage in your browser",
   "priv.storageText": "The Atlas uses no cookies. It keeps a few settings and your own work in your browser's storage (localStorage and sessionStorage). This is never sent to UiS or to anyone else and is only used for the functions you use. Such storage needs no consent under the Norwegian Electronic Communications Act (ekomloven § 3-15), because it is strictly necessary for a service you have asked for.",
   "priv.colWhat": "What",
@@ -784,7 +783,7 @@
   "priv.thirdTitle": "No third parties",
   "priv.thirdText": "All files, including the language model, come from the UiS server: your browser does not contact other services while you use the Atlas. What you type in the search, idea and team boxes is processed in your browser and is not sent anywhere. Links to other sites (Scopus, NVA, ORCID, funders, the feedback questionnaire in Microsoft Forms) take you to those services, where their own privacy terms apply.",
   "priv.profilesTitle": "Researcher profiles",
-  "priv.profilesText": "The profiles show researchers at the University of Stavanger: name, position, unit and work e-mail from the public UiS employee directory, and publication data from Scopus (Elsevier) and NVA (Sikt). The short overviews are written automatically by an AI language model from each researcher's publications and describe research only. The University of Stavanger is the controller. The processing is being reviewed by the UiS Library and the data protection officer.",
+  "priv.profilesText": "The profiles show researchers at the University of Stavanger: name, position, unit and work e-mail from the public UiS employee directory, and publication data from Scopus (Elsevier) and NVA (Sikt). The short overviews are written automatically by an AI language model from each researcher's publications and describe research only. The University of Stavanger is the controller.",
   "priv.rightsTitle": "Your rights",
-  "priv.rightsText": "Researchers can ask for corrections or to be left out of the Atlas, and anyone can ask what data about them is used. Contact us through the Feedback page or the UiS data protection officer. You can also complain to the Norwegian Data Protection Authority (Datatilsynet)."
+  "priv.rightsText": "Researchers can ask for corrections or to be left out of the Atlas, and anyone can ask what data about them is used. Contact us through the Feedback page."
 }

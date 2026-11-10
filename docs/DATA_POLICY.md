@@ -39,7 +39,7 @@ NVA (Nasjonalt vitenarkiv, run by Sikt) publishes its metadata openly through a 
 Researcher profiles are personal data, even though they describe professional activity. Before launch:
 
 - Confirm the legal basis and approach with the UiS data protection officer (personvernombud).
-- Publish a short privacy notice on the site: what is shown, where it comes from, how often it is updated. Done as the page "Privacy and cookies" (`#/privacy`, `web/src/views/Privacy.tsx`, texts `priv.*`), linked from the footer; marked as a draft until the data protection officer has reviewed it. Keep it in step with §3a.
+- Publish a short privacy notice on the site: what is shown, where it comes from, how often it is updated. Done as the page "Privacy and cookies" (`#/privacy`, `web/src/views/Privacy.tsx`, texts `priv.*`), linked from the footer. Keep it in step with §3a.
 
 ## 3a. Visitors: no cookies, no tracking, no third parties
 

@@ -210,7 +210,7 @@ function Footer({ atlas }: { atlas: Atlas | null }) {
     <footer>
       <div class="wrap">
         <p><span class="badge">{t("footer.prototype")}</span> {t("footer.prototypeText")}</p>
-        {meta && <p>{t("footer.source", { from: String(meta.period.first_year), date: meta.generated.slice(0, 10) })}</p>}
+        {meta && <p>{t("footer.source", { date: meta.generated.slice(0, 10) })}</p>}
         <p>{t("footer.summaries")}</p>
         <p><a href={links.privacy}>{t("footer.privacy")}</a></p>
         <p class="credit">{t("footer.designedWith")}{" "}

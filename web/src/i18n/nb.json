@@ -106,8 +106,8 @@
   "p.collabDepts": "Samarbeidende institutter",
   "p.collabDeptsSub": "Artikler med medforfattere fra andre institutter.",
   "footer.prototype": "Prototype",
-  "footer.prototypeText": "Testversjon under utvikling. Bruken av data og forskerprofilene venter på godkjenning fra Universitetsbiblioteket og personvernombudet.",
-  "footer.source": "Kilder: Scopus (Elsevier), NVA, PubMed/MEDLINE (gjennom Scopus) og UiS' ansattkatalog. Publikasjoner siden {from}. Oppdateres ukentlig, sist {date}.",
+  "footer.prototypeText": "Testversjon under utvikling.",
+  "footer.source": "Oppdateres ukentlig, sist {date}.",
   "footer.summaries": "Forskersammendragene er generert automatisk fra publikasjoner og beskriver kun forskning. Forskere kan be om retting eller reservere seg.",
   "footer.designerRole": "professor i biomedisinske sensorsystemer, Universitetet i Stavanger.",
   "net.whole": "Hele nettverket",
@@ -757,7 +757,6 @@
   "footer.privacy": "Personvern og informasjonskapsler",
   "priv.title": "Personvern og informasjonskapsler",
   "priv.lede": "Atlaset bruker ingen informasjonskapsler og ingen analyse- eller sporingsverktøy. Her står det hva som lagres i nettleseren din, hva serveren registrerer og hvor forskerprofilene kommer fra.",
-  "priv.draft": "Utkast: erklæringen venter på gjennomgang hos personvernombudet ved UiS.",
   "priv.storageTitle": "Lagring i nettleseren din",
   "priv.storageText": "Atlaset bruker ingen informasjonskapsler. Noen innstillinger og ditt eget arbeid lagres i nettleserens lagring (localStorage og sessionStorage). Dette sendes aldri til UiS eller andre og brukes bare til funksjonene du selv bruker. Slik lagring krever ikke samtykke etter ekomloven § 3-15, fordi den er strengt nødvendig for en tjeneste du selv har bedt om.",
   "priv.colWhat": "Hva",
@@ -784,7 +783,7 @@
   "priv.thirdTitle": "Ingen tredjeparter",
   "priv.thirdText": "Alle filer, også språkmodellen, hentes fra UiS-serveren: nettleseren din kontakter ikke andre tjenester mens du bruker atlaset. Det du skriver i søke-, idé- og teamfeltene behandles i nettleseren og sendes ikke noe sted. Lenker til andre nettsteder (Scopus, NVA, ORCID, finansiører, spørreskjemaet i Microsoft Forms) tar deg til disse tjenestene, der deres egne personvernvilkår gjelder.",
   "priv.profilesTitle": "Forskerprofiler",
-  "priv.profilesText": "Profilene viser forskere ved Universitetet i Stavanger: navn, stilling, enhet og jobb-e-post fra UiS' offentlige ansattkatalog, og publikasjonsdata fra Scopus (Elsevier) og NVA (Sikt). De korte oversiktene skrives automatisk av en KI-språkmodell ut fra forskerens publikasjoner og beskriver bare forskningen. Universitetet i Stavanger er behandlingsansvarlig. Behandlingen er til gjennomgang hos Universitetsbiblioteket og personvernombudet.",
+  "priv.profilesText": "Profilene viser forskere ved Universitetet i Stavanger: navn, stilling, enhet og jobb-e-post fra UiS' offentlige ansattkatalog, og publikasjonsdata fra Scopus (Elsevier) og NVA (Sikt). De korte oversiktene skrives automatisk av en KI-språkmodell ut fra forskerens publikasjoner og beskriver bare forskningen. Universitetet i Stavanger er behandlingsansvarlig.",
   "priv.rightsTitle": "Dine rettigheter",
-  "priv.rightsText": "Forskere kan be om retting eller om å bli utelatt fra atlaset, og alle kan spørre hvilke opplysninger om dem som brukes. Ta kontakt via siden Tilbakemelding eller med personvernombudet ved UiS. Du kan også klage til Datatilsynet."
+  "priv.rightsText": "Forskere kan be om retting eller om å bli utelatt fra atlaset, og alle kan spørre hvilke opplysninger om dem som brukes. Ta kontakt via siden Tilbakemelding."
 }
