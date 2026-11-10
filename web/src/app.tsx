@@ -9,8 +9,9 @@ import { BuilderCallsContext, useBuilderCallsState } from "./builder";
 import { nextTheme, useTheme, type Theme } from "./theme";
 import { SearchView } from "./views/Search";
 import { ProfileView } from "./views/Profile";
-import { FundingContext, callTitle, useFundingState } from "./funding";
+import { FundingContext, callTitle, useFunding, useFundingState } from "./funding";
 import { lazyView } from "./lazy";
+import { NewsContext, callBatches, unseen, useNews, useNewsState } from "./news";
 
 const OverviewView = lazyView(() => import("./views/Overview").then((m) => m.OverviewView));
 const NetworkView = lazyView(() => import("./views/Network").then((m) => m.NetworkView));
@@ -19,6 +20,8 @@ const FundingView = lazyView(() => import("./views/Funding").then((m) => m.Fundi
 const CallView = lazyView(() => import("./views/Call").then((m) => m.CallView));
 const FeedbackView = lazyView(() => import("./views/Feedback").then((m) => m.FeedbackView));
 const BuilderView = lazyView(() => import("./views/Builder").then((m) => m.BuilderView));
+const NewsView = lazyView(() => import("./views/News").then((m) => m.NewsView));
+const PrivacyView = lazyView(() => import("./views/Privacy").then((m) => m.PrivacyView));
 
 export function App() {
   const i18n = useI18nState();
@@ -26,6 +29,7 @@ export function App() {
   const shortlist = useShortlistState();
   const builderCalls = useBuilderCallsState();
   const funding = useFundingState();
+  const news = useNewsState();
   const [atlas, setAtlas] = useState<Atlas | null>(null);
   const [error, setError] = useState<string | null>(null);
   const mainRef = useRef<HTMLElement>(null);
@@ -69,6 +73,8 @@ export function App() {
   else if (route.view === "funding") content = <FundingView atlas={atlas} route={route} />;
   else if (route.view === "feedback") content = <FeedbackView />;
   else if (route.view === "builder") content = <BuilderView atlas={atlas} />;
+  else if (route.view === "news") content = <NewsView atlas={atlas} />;
+  else if (route.view === "privacy") content = <PrivacyView />;
   else if (route.view === "call") content = <CallView atlas={atlas} id={route.id!} key={route.id} />;
   else content = <SearchView atlas={atlas} route={route} />;
 
@@ -78,6 +84,7 @@ export function App() {
     <ShortlistContext.Provider value={shortlist}>
     <FundingContext.Provider value={funding}>
     <BuilderCallsContext.Provider value={builderCalls}>
+    <NewsContext.Provider value={news}>
       <a class="skip" href="#main" onClick={(e) => { e.preventDefault(); mainRef.current?.focus(); }}>
         {i18n.t("app.skip")}
       </a>
@@ -86,6 +93,7 @@ export function App() {
         <div class="wrap"><ErrorBoundary key={`${route.view}/${route.id ?? ""}`}>{content}</ErrorBoundary></div>
       </main>
       <Footer atlas={atlas} />
+    </NewsContext.Provider>
     </BuilderCallsContext.Provider>
     </FundingContext.Provider>
     </ShortlistContext.Provider>
@@ -159,6 +167,7 @@ function Header({ view }: { view: View }) {
           ))}
         </nav>
         <div class="topbar-tools">
+          <NewsButton current={view === "news"} />
           <div class="lang" role="group" aria-label={t("nav.language")}>
             <button type="button" aria-pressed={lang === "nb"} onClick={() => setLang("nb")} lang="nb" title="Norsk"
               aria-label="Norsk">NB</button>
@@ -175,6 +184,25 @@ function Header({ view }: { view: View }) {
   );
 }
 
+/** Bell linking to What's new, with the number of items added since the visitor last looked. */
+function NewsButton({ current }: { current: boolean }) {
+  const { t, num } = useI18n();
+  const { changes, seen } = useNews();
+  const { state } = useFunding();
+  const n = unseen(changes?.researchers ?? [], seen) + (state.status === "ready" ? unseen(callBatches(state.data), seen) : 0);
+  const label = n ? t("news.buttonCount", { n: num(n) }) : t("news.button");
+  return (
+    <a class="theme-toggle news-toggle" href={links.news} aria-label={label} title={label}
+      aria-current={current ? "page" : undefined}>
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor"
+        stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z" /><path d="M10 20.5a2 2 0 0 0 4 0" />
+      </svg>
+      {n > 0 && <span class="news-dot" aria-hidden="true">{n > 99 ? "99+" : num(n)}</span>}
+    </a>
+  );
+}
+
 function Footer({ atlas }: { atlas: Atlas | null }) {
   const { t } = useI18n();
   const meta = atlas?.meta;
@@ -184,6 +212,7 @@ function Footer({ atlas }: { atlas: Atlas | null }) {
         <p><span class="badge">{t("footer.prototype")}</span> {t("footer.prototypeText")}</p>
         {meta && <p>{t("footer.source", { from: String(meta.period.first_year), date: meta.generated.slice(0, 10) })}</p>}
         <p>{t("footer.summaries")}</p>
+        <p><a href={links.privacy}>{t("footer.privacy")}</a></p>
         <p class="credit">{t("footer.designedWith")}{" "}
           <span role="img" aria-label={t("footer.love")}>❤️</span> {t("footer.and")}{" "}
           <span role="img" aria-label={t("footer.coffee")}>☕</span> {t("footer.designedAt")}{" "}

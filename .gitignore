@@ -23,6 +23,9 @@ node_modules/
 web/dist/
 # copy of data/public/, made by web/scripts/sync-data.mjs
 web/public/data/
+# language model and ONNX runtime, fetched/copied by web/scripts/fetch-model.mjs
+web/public/models/
+web/public/ort/
 
 # OS / editors
 .DS_Store

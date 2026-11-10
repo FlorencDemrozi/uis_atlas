@@ -118,6 +118,8 @@ export interface FundingMeta {
   has_ai_profiles: boolean;
   detail_shards?: number;
   has_ideas?: boolean;
+  /** Open or planned calls first seen in recent weekly runs (pipeline/build_changes.py), newest first. */
+  new_calls?: { date: string; ids: string[] }[];
 }
 
 export interface Funding {

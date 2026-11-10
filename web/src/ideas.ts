@@ -60,7 +60,12 @@ let modelPromise: Promise<Extractor> | null = null;
 /** Loads the embedding model once (about 120 MB the first time, then from the browser cache). */
 export function loadModel(onProgress?: (percent: number) => void): Promise<Extractor> {
   modelPromise ??= import("@huggingface/transformers").then(async ({ pipeline, env }) => {
-    env.allowLocalModels = false;
+    // Model and ONNX runtime from this site only (web/scripts/fetch-model.mjs): the
+    // visitor's browser never contacts huggingface.co or a CDN (privacy page).
+    env.allowRemoteModels = false;
+    env.allowLocalModels = true;
+    env.localModelPath = new URL("models/", document.baseURI).href;
+    if (env.backends.onnx.wasm) env.backends.onnx.wasm.wasmPaths = new URL("ort/", document.baseURI).href;
     const files = new Map<string, [number, number]>();
     const extractor = await pipeline("feature-extraction", cfg.model, {
       dtype: "q8",

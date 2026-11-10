@@ -25,9 +25,11 @@ server {
 
     add_header X-Content-Type-Options nosniff always;
     add_header Referrer-Policy strict-origin-when-cross-origin always;
-    # Idea search (transformers.js): model from Hugging Face (redirects to *.hf.co), ONNX
-    # runtime from jsdelivr, WebAssembly and blob: workers.
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self' @CSP_SCRIPT_HASHES@ 'wasm-unsafe-eval' https://cdn.jsdelivr.net blob:; worker-src 'self' blob:; connect-src 'self' https://huggingface.co https://*.huggingface.co https://*.hf.co https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'" always;
+    # Idea and team search (transformers.js): the model (/models/) and the ONNX runtime
+    # (/ort/) are served from this site (web/scripts/fetch-model.mjs), so no other host
+    # is allowed: the visitor's browser contacts nobody else (privacy page). WebAssembly
+    # and blob: workers are still needed.
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' @CSP_SCRIPT_HASHES@ 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; connect-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'" always;
 
     # Hash routing: everything is a real file, so no SPA fallback is needed.
     location / {
@@ -38,6 +40,12 @@ server {
     # Vite's hashed bundles never change.
     location /assets/ {
         expires 1y;
+    }
+
+    # Language model and ONNX runtime: large, rarely changed (the browser also keeps
+    # the model in its own cache).
+    location ~ ^/(models|ort)/ {
+        expires 30d;
     }
 
     # Data and index.html change with every update: always revalidate.

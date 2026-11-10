@@ -2,7 +2,8 @@
 // The faculty/department selection (?org=…) travels with every link and address update.
 import { useEffect, useState } from "preact/hooks";
 
-export type View = "search" | "overview" | "network" | "profile" | "shortlist" | "funding" | "call" | "feedback" | "builder";
+export type View = "search" | "overview" | "network" | "profile" | "shortlist" | "funding" | "call" | "feedback" | "builder"
+  | "news" | "privacy";
 export interface Route { view: View; id?: string; params: URLSearchParams }
 
 /** decodeURIComponent that keeps a malformed escape (e.g. "%E0%A4") as typed instead of throwing. */
@@ -18,6 +19,8 @@ export function parseHash(hash: string): Route {
   if (parts[0] === "network") return { view: "network", params };
   if (parts[0] === "shortlist") return { view: "shortlist", params };
   if (parts[0] === "feedback") return { view: "feedback", params };
+  if (parts[0] === "new") return { view: "news", params };
+  if (parts[0] === "privacy") return { view: "privacy", params };
   // "team": the address of the page before it became the Project builder (2026-11-06).
   if (parts[0] === "builder" || parts[0] === "team") return { view: "builder", params };
   if (parts[0] === "funding" && parts[1]) return { view: "call", id: safeDecode(parts[1]), params };
@@ -60,6 +63,8 @@ export const links = {
   get network() { return build("/network"); },
   get feedback() { return build("/feedback"); },
   get builder() { return build("/builder"); },
+  get news() { return build("/new"); },
+  get privacy() { return build("/privacy"); },
   networkFocus: (id: string) => build("/network", { focus: id }),
   profile: (id: string) => build(`/r/${encodeURIComponent(id)}`),
   shortlist: (ids?: string[]) => build("/shortlist", ids?.length ? { ids: ids.join(",") } : undefined),

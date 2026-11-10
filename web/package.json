@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "sync-data": "node scripts/sync-data.mjs",
-    "dev": "npm run sync-data && vite",
-    "build": "npm run sync-data && tsc --noEmit && vite build",
+    "fetch-model": "node scripts/fetch-model.mjs",
+    "dev": "npm run sync-data && npm run fetch-model && vite",
+    "build": "npm run sync-data && npm run fetch-model && tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },
