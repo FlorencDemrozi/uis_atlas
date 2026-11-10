@@ -42,6 +42,15 @@ server {
         expires 1y;
     }
 
+    # The ONNX runtime's JavaScript module (.mjs) is missing from nginx's mime.types; as
+    # application/octet-stream, with nosniff, the browser refuses to import it ("no
+    # available backend found"). Must come before the next location (first regex wins).
+    location ~ ^/ort/.*\.mjs$ {
+        types { }
+        default_type text/javascript;
+        expires 30d;
+    }
+
     # Language model and ONNX runtime: large, rarely changed (the browser also keeps
     # the model in its own cache).
     location ~ ^/(models|ort)/ {
