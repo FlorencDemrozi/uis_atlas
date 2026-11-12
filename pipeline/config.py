@@ -325,11 +325,15 @@ RAW_CRISTIN = DATA / "raw" / "cristin_persons.json"        # local only
 CRISTIN_CANDIDATES = DATA / "interim" / "cristin_candidates.json"   # written by build_profiles.py
 # People looked up in Cristin: at least this many publications in the last RECENT_YEARS.
 CRISTIN_MIN_RECENT_PUBLICATIONS = 1
-# Cristin sets staff status, title and department, but not who is included: people
-# found only there still need the UNCONFIRMED_* rule. With a number here, current
-# staff found only in Cristin are included with that many publications in the last
-# RECENT_YEARS instead (about +470 people with 1, including students; 2026-11-12).
-CRISTIN_INCLUDE_MIN = None
+# Current staff found only in Cristin are included like directory staff if an active
+# UiS role is academic (Norwegian title, CRISTIN_ACADEMIC_TITLES) and they have at least
+# CRISTIN_INCLUDE_MIN publications in the last RECENT_YEARS (project owner, 2026-11-12).
+# Others (students, master's, technical/administrative, no title) need the UNCONFIRMED_*
+# rule. None: Cristin never widens who is included.
+CRISTIN_INCLUDE_MIN = 1
+CRISTIN_ACADEMIC_TITLES = (r"^(professor|førsteamanuensis|amanuensis|dosent|universitetslektor|"
+                           r"førstelektor|postdo|stipendiat|phd|forsker|seniorforsker|gjesteforsker|"
+                           r"gjesteprofessor|dekan|instituttleder)")
 NVA_PERSON_URL = "https://nva.sikt.no/research-profile/{}"
 # Student theses: written by students, not by the atlas researchers. Not collected.
 NVA_SKIPPED_TYPES = ["DegreeBachelor", "DegreeMaster", "OtherStudentWork"]

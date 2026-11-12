@@ -59,13 +59,19 @@ def test_build_uses_cristin_for_status_title_and_department():
     assert all(p["included"] for p in (kari, ola, liv))     # inclusion rule unchanged
 
 
-def test_cristin_inclusion_is_opt_in():
-    papers = {"p1": {"title": "t", "year": "2025", "citations": 0, "keywords": [], "coauthor_ids": []}}
+def test_cristin_inclusion_needs_an_academic_role():
+    papers = {f"p{i}": {"title": "t", "year": "2025", "citations": 0, "keywords": [], "coauthor_ids": []}
+              for i in (1, 2)}
     authors = [{"scopus_id": "nva-1", "cristin_id": 1, "name": "Kari Nordmann", "department": MATH,
-                "papers": ["p1"]}]
-    cristin = {"1": {"uis": [aff("217.8.2.0", True)]}}
+                "papers": ["p1"]},
+               {"scopus_id": "nva-2", "cristin_id": 2, "name": "Ola Hansen", "department": MATH,
+                "papers": ["p2"]}]
+    cristin = {"1": {"uis": [aff("217.8.2.0", True, nb="Førsteamanuensis", en="Associate professor")]},
+               "2": {"uis": [aff("217.8.2.0", True, nb="Student", en="Student")]}}
     args = dict(reference_year=2026, recent_years=3, min_recent=0, directory=Directory(None),
                 unconfirmed_years=2, unconfirmed_min=3, cristin=cristin)
-    assert not build({"authors": authors, "papers": papers}, {}, {}, **args)["people"]["nva-1"]["included"]
-    assert build({"authors": authors, "papers": papers}, {}, {}, cristin_include_min=1,
-                 **args)["people"]["nva-1"]["included"]
+    off = build({"authors": authors, "papers": papers}, {}, {}, **args)["people"]
+    assert not off["nva-1"]["included"] and not off["nva-2"]["included"]     # opt-in
+    on = build({"authors": authors, "papers": papers}, {}, {}, cristin_include_min=1, **args)["people"]
+    assert on["nva-1"]["included"] and not on["nva-2"]["included"]          # students are not
+    assert on["nva-2"]["staff"] == "current"

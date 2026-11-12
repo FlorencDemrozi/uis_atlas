@@ -48,6 +48,7 @@ overrides.json format (keyed by any of the person's Scopus IDs):
 """
 import csv
 import json
+import re
 import unicodedata
 from collections import Counter, defaultdict
 from datetime import datetime
@@ -223,10 +224,17 @@ def cristin_unit(units: list[dict]) -> dict | None:
     return None   # institution level or a unit outside the faculties: keep the Scopus department
 
 
+def is_academic(affiliation: dict) -> bool:
+    """An academic UiS role in Cristin (config.CRISTIN_ACADEMIC_TITLES, Norwegian title)."""
+    title = (affiliation.get("nb") or "").strip().lower()
+    return bool(re.match(config.CRISTIN_ACADEMIC_TITLES, title))
+
+
 def staff_status(confirmed: bool, record: dict | None) -> tuple[str, list[dict]]:
     """("current" | "former" | "unknown", active UiS affiliations) from the employee
     directory and the person's Cristin record (collect_cristin.py)."""
     active = [a for a in (record or {}).get("uis", []) if a["active"]]
+    active.sort(key=lambda a: not is_academic(a))   # the academic role is the title shown
     if confirmed or active:
         return "current", active
     return ("former" if record and record.get("uis") else "unknown"), []
@@ -278,8 +286,11 @@ def build(atlas: dict, name_parts: dict, overrides: dict, reference_year: int,
         entry, score = matches[0] if matches else (None, 0)
         in_directory = entry is not None and not entry["excluded"]
         cristin_id = next((authors[i]["cristin_id"] for i in members if is_nva(i)), None)
-        status, active = staff_status(in_directory, cristin.get(str(cristin_id)) if cristin_id else None)
-        by_cristin = status == "current" and not in_directory
+        # In the directory, but in a unit outside the atlas: current staff, and Cristin
+        # must not bring them back in.
+        status, active = staff_status(entry is not None,
+                                      cristin.get(str(cristin_id)) if cristin_id and entry is None else None)
+        by_cristin = status == "current" and entry is None
         dept, source = (place(scopus_dept, entry) if not by_cristin
                         else place(scopus_dept, cristin_unit(active)))
         if by_cristin:
@@ -331,6 +342,7 @@ def build(atlas: dict, name_parts: dict, overrides: dict, reference_year: int,
             "_excluded": bool(excluded & set(members)),
             "_confirmed": in_directory,
             "_by_cristin": by_cristin,
+            "_cristin_academic": any(is_academic(a) for a in active),
             "_source": "override" if ov.get("department") else source,
             "_directory": (entry["name"], score) if entry else None,
             # Not in the UiS directory (may have left): only UiS papers count, so work at
@@ -351,8 +363,10 @@ def build(atlas: dict, name_parts: dict, overrides: dict, reference_year: int,
             person["included"] = False
         elif person["_confirmed"]:
             person["included"] = person["n_recent"] >= min_recent
-        elif person["_by_cristin"] and cristin_include_min is not None:   # config.CRISTIN_INCLUDE_MIN
-            person["included"] = person["n_recent"] >= cristin_include_min
+        elif (person["_by_cristin"] and person["_cristin_academic"]
+              and cristin_include_min is not None):   # config.CRISTIN_INCLUDE_MIN
+            person["included"] = (person["n_recent"] >= cristin_include_min
+                                  or person["_n_unconfirmed_recent"] >= unconfirmed_min)
         else:
             person["included"] = person["_n_unconfirmed_recent"] >= unconfirmed_min
 
@@ -505,7 +519,7 @@ def main() -> None:
     # People the directory does not confirm, with recent work: collect_cristin.py checks
     # whether their UiS affiliation is still active.
     candidates = sorted({str(p["cristin_id"]) for p in people.values()
-                         if p["cristin_id"] and p["department"] and not p["_confirmed"]
+                         if p["cristin_id"] and p["department"] and not p["_directory"]
                          and not p["_excluded"] and p["n_recent"] >= config.CRISTIN_MIN_RECENT_PUBLICATIONS})
     write_text(config.CRISTIN_CANDIDATES, json.dumps(candidates))
 
@@ -557,8 +571,9 @@ def main() -> None:
             if config.MIN_RECENT_PUBLICATIONS else "all")
     print(f"Included: {len(included)} – {confirmed} confirmed in the employee directory "
           f"({rule}), "
-          f"{len(included) - confirmed} not in the directory "
-          f"(≥{config.UNCONFIRMED_MIN_RECENT_PUBLICATIONS} since {res['unconfirmed_from']}).")
+          f"{len(included) - confirmed} not in the directory (academic staff in Cristin: "
+          f"≥{config.CRISTIN_INCLUDE_MIN} since {res['recent_from']}; others: "
+          f"≥{config.UNCONFIRMED_MIN_RECENT_PUBLICATIONS} UiS since {res['unconfirmed_from']}).")
     staff = Counter(p["staff"] for p in included)
     print(f"Staff status: {staff['current']} current ({sum(1 for p in included if p['_by_cristin'])} "
           f"of them from Cristin), {staff['former']} former, {staff['unknown']} unknown.\n")
