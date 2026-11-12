@@ -294,6 +294,7 @@ select:focus-visible, input:focus-visible, textarea:focus-visible {
 .role-option .num { font-size: 12px; font-weight: 400; }
 .org-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
 .position { color: var(--ink); font-weight: 500; }
+.unlisted { color: var(--muted); font-style: italic; cursor: help; }
 
 /* ------------------------------------------------------------------ search */
 .hero-search h1 { max-width: 22ch; }

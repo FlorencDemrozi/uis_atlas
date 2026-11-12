@@ -33,6 +33,7 @@ export function SearchView({ atlas, route }: { atlas: Atlas; route: Route }) {
   const [minPubs, setMinPubs] = useState(minOf(route.params.get("min")));
   const roleParam = route.params.get("role");
   const [role, setRole] = useState<Role | "">(isRole(roleParam) ? roleParam : "");
+  const [currentOnly, setCurrentOnly] = useState(route.params.get("staff") === "current");
   const [shown, setShown] = useState(PAGE);
   const param = route.params.get("view");
   const [mode, setMode] = useState<Mode>(param === "split" || param === "table" ? param : "list");
@@ -53,6 +54,7 @@ export function SearchView({ atlas, route }: { atlas: Atlas; route: Route }) {
     const r = route.params.get("role");
     setRole(isRole(r) ? r : "");
     setMinPubs(minOf(route.params.get("min")));
+    setCurrentOnly(route.params.get("staff") === "current");
   }, [route]);
   useEffect(() => {
     const v = route.params.get("view");
@@ -66,15 +68,16 @@ export function SearchView({ atlas, route }: { atlas: Atlas; route: Route }) {
     if (query) p.set("q", query);
     if (minPubs) p.set("min", String(minPubs));
     if (role) p.set("role", role);
+    if (currentOnly) p.set("staff", "current");
     if (mode !== "list") p.set("view", mode);
     if (mode === "split" && selected) p.set("r", selected);
     replaceHash("/", p);
-  }, [query, sel, minPubs, role, mode, selected]);
+  }, [query, sel, minPubs, role, currentOnly, mode, selected]);
   const firstRun = useRef(true);   // keep a shared ?r= on first load
   useEffect(() => {
     if (firstRun.current) { firstRun.current = false; return; }
     setShown(PAGE); setSelected(null);
-  }, [query, sel, minPubs, role]);
+  }, [query, sel, minPubs, role, currentOnly]);
 
   // Search as you type, lightly debounced.
   useEffect(() => {
@@ -84,13 +87,15 @@ export function SearchView({ atlas, route }: { atlas: Atlas; route: Route }) {
 
   // Every filter except the role: the role buttons count these researchers.
   const unroled: Hit[] = useMemo(() => {
-    const keep = (r: Researcher) => inScope(sel, r.department) && r.n_publications >= minPubs;
+    // Current staff: found in the UiS employee directory (they have a position).
+    const keep = (r: Researcher) => inScope(sel, r.department) && r.n_publications >= minPubs
+      && (!currentOnly || !!r.position);
     if (query) return search(index, atlas, query).filter((h) => keep(h.researcher));
     return atlas.researchers.filter(keep)
       .sort((a, b) => (atlas.recent.get(b.scopus_id) ?? 0) - (atlas.recent.get(a.scopus_id) ?? 0)
         || a.name.localeCompare(b.name))
       .map((researcher) => ({ researcher, score: 0, papers: [], terms: [] }));
-  }, [index, atlas, query, sel, minPubs]);
+  }, [index, atlas, query, sel, minPubs, currentOnly]);
   const roleCounts = useMemo(() => {
     const c = new Map<Role, number>();
     for (const h of unroled) c.set(roleOf(h.researcher), (c.get(roleOf(h.researcher)) ?? 0) + 1);
@@ -134,6 +139,10 @@ export function SearchView({ atlas, route }: { atlas: Atlas; route: Route }) {
           <select value={String(minPubs)} onChange={(e) => setMinPubs(Number((e.target as HTMLSelectElement).value))}>
             {[0, 5, 10, 20, 40].map((n) => <option key={n} value={String(n)}>{n ? `≥ ${n}` : t("filter.any")}</option>)}
           </select>
+        </label>
+        <label class="check">
+          <input type="checkbox" checked={currentOnly} onChange={(e) => setCurrentOnly((e.target as HTMLInputElement).checked)} />
+          {t("filter.currentStaff")}
         </label>
         <fieldset class="role-filter">
           <legend>{t("filter.role")}</legend>
