@@ -28,6 +28,14 @@ def test_name_scores():
     assert name_score("Hansen", "Kari", "Kari Nordmann") == 0
 
 
+def test_surname_first_directory_names():
+    assert name_score("Rong", "Chunming", "Rong Chunming") == 3
+    assert name_score("Rong", "C.", "Rong Chunming") == 0           # full given name needed
+    d = Directory({"units": UNITS, "employees": [emp("Rong Chunming", "1259")]})
+    entry, score = d.match("Rong", "Chunming", None)
+    assert entry["name"] == "Chunming Rong" and score == 3          # shown given name first
+
+
 def test_weak_or_tied_matches_need_the_same_faculty():
     d = Directory({"units": UNITS, "employees": [emp("Kari Nordmann", "1259"),
                                                    emp("Kristin Nordmann", "8977")]})

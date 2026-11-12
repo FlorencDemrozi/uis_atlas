@@ -8,6 +8,9 @@ Match strength:
   1  same surname and initial, or the Scopus given name is a middle name
 Weak (1) matches, and ties, only count when the Scopus department is in the
 same faculty as the directory unit.
+
+Some directory names are written surname first ("Rong Chunming"). Such a name is
+also tried in that order, but only matches on the full given name (strength >= 2).
 """
 import re
 import unicodedata
@@ -27,7 +30,30 @@ def tokens(name: str) -> list[str]:
 
 def name_score(surname: str, given: str, full_name: str) -> int:
     s, g, d = tokens(surname), tokens(given), tokens(full_name)
-    if not s or not g or not d or d[-1] not in s:
+    if not s or not g or not d:
+        return 0
+    normal = _score(s, g, d)
+    if normal or d[0] not in s:
+        return normal
+    k = next(i for i, t in enumerate(d) if t not in s) if any(t not in s for t in d) else len(d)
+    reversed_score = _score(s, g, d[k:] + d[:k])        # surname first: move it to the end
+    return reversed_score if reversed_score >= 2 else 0
+
+
+def given_first(full_name: str, surname: str) -> str:
+    """A surname-first directory name in the usual order: "Rong Chunming" -> "Chunming Rong"."""
+    s, d = tokens(surname), tokens(full_name)
+    if not d or not s or d[-1] in s or d[0] not in s:
+        return full_name
+    words = full_name.split()
+    k = 0
+    while k < len(words) - 1 and all(t in s for t in tokens(words[k])):
+        k += 1
+    return " ".join(words[k:] + words[:k])
+
+
+def _score(s: list[str], g: list[str], d: list[str]) -> int:
+    if d[-1] not in s:
         return 0
     rest = [t for t in d if t not in s]         # directory given and middle names
     if not rest:
@@ -71,6 +97,8 @@ class Directory:
             toks = tokens(e["name"])
             if toks:
                 self.by_surname[toks[-1]].append(entry)
+                if toks[0] != toks[-1]:   # the surname may come first
+                    self.by_surname[toks[0]].append(entry)
 
     def match(self, surname: str, given: str, scopus_dept: str | None) -> tuple[dict | None, int]:
         """Best directory entry for one Scopus author, with its strength (0 = none)."""
@@ -84,7 +112,9 @@ class Directory:
         faculty = FACULTY_OF.get(scopus_dept or "")
         same_faculty = [e for e in top if faculty and e["faculty"] == faculty]
         if len(top) == 1 and (best >= 2 or same_faculty):
-            return top[0], best
-        if len(same_faculty) == 1:
-            return same_faculty[0], best
-        return None, 0
+            chosen = top[0]
+        elif len(same_faculty) == 1:
+            chosen = same_faculty[0]
+        else:
+            return None, 0
+        return dict(chosen, name=given_first(chosen["name"], surname)), best
