@@ -56,7 +56,7 @@ from itertools import combinations
 
 import config
 import nva
-from directory import Directory
+from directory import Directory, name_score
 from fsutil import read_jsonl, write_text
 
 NOT_STATED_KEYS = config.NOT_STATED_KEYS
@@ -265,6 +265,25 @@ def build(atlas: dict, name_parts: dict, overrides: dict, reference_year: int,
     for auid in authors:
         clusters[uf.find(auid)].append(auid)
 
+    # The strongest name match each directory entry has, and with whom. A weak match
+    # (initial only, "K. Thorsen") loses to a full-name match of someone else.
+    strongest = {}
+    for auid, (e, sc) in dir_match.items():
+        if sc > strongest.get(e["id"], (0, None))[0]:
+            strongest[e["id"]] = (sc, auid)
+
+    def plausible(e: dict, sc: int, members: list[str]) -> bool:
+        """A weak directory match for one person: not taken by a better match of someone
+        else, and no full given name of the person (e.g. from NVA) contradicts it."""
+        best, holder = strongest.get(e["id"], (0, None))
+        if best > sc and holder not in members:
+            return False
+        for i in members:
+            surname, given = name_parts.get(i) or split_name(authors[i]["name"])
+            if len(given.split(" ")[0].strip(".")) > 1 and not name_score(surname, given, e["name"]):
+                return False
+        return True
+
     people, canon = {}, {}
     for members in clusters.values():
         # A Scopus ID is the profile id whenever the person has one; a previous profile
@@ -284,6 +303,8 @@ def build(atlas: dict, name_parts: dict, overrides: dict, reference_year: int,
         matches = sorted((dir_match[i] for i in members if i in dir_match),
                          key=lambda m: -m[1])
         entry, score = matches[0] if matches else (None, 0)
+        if entry and score < 2 and not plausible(entry, score, members):
+            entry, score = None, 0
         in_directory = entry is not None and not entry["excluded"]
         cristin_id = next((authors[i]["cristin_id"] for i in members if is_nva(i)), None)
         # In the directory, but in a unit outside the atlas: current staff, and Cristin

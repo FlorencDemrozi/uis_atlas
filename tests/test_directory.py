@@ -66,3 +66,25 @@ def test_directory_sets_department_threshold_and_exclusion():
     assert (b["department"], b["included"]) == (MATH, False)           # not in directory: strict rule
     assert c["included"] is False                                      # only in an excluded centre
     assert (dd["department"], dd["included"]) == (MATH, True)          # faculty admin + Scopus dept
+
+
+def test_weak_match_loses_to_full_name_and_contradicting_given_name():
+    # Two different "K. Thorsen" in Scopus; the directory only has Kristian. NVA knows
+    # one of them as Kjetil: he must not get Kristian's directory entry.
+    papers = {p: {"title": "t", "year": "2025", "citations": 0, "keywords": [], "coauthor_ids": []}
+              for p in ("p1", "p2", "p3")}
+    authors = [
+        {"scopus_id": "s1", "name": "K. Thorsen", "department": MATH, "papers": ["p1"]},
+        {"scopus_id": "nva-1", "cristin_id": 1, "name": "Kristian Thorsen", "department": MATH, "papers": ["p1"]},
+        {"scopus_id": "s2", "name": "K. Thorsen", "department": MATH, "papers": ["p2", "p3"]},
+        {"scopus_id": "nva-2", "cristin_id": 2, "name": "Kjetil Thorsen", "department": MATH, "papers": ["p2"]},
+    ]
+    d = Directory({"units": UNITS, "employees": [emp("Kristian Thorsen", "1259")]})
+    res = build({"authors": authors, "papers": papers}, {"s1": ("Thorsen", "K."), "s2": ("Thorsen", "K.")},
+                {}, reference_year=2026, recent_years=3, min_recent=0, directory=d,
+                unconfirmed_years=2, unconfirmed_min=3, links=[("nva-1", "s1"), ("nva-2", "s2")])
+    people = res["people"]
+    kristian = next(p for p in people.values() if "nva-1" in p["scopus_ids"])
+    kjetil = next(p for p in people.values() if "nva-2" in p["scopus_ids"])
+    assert kristian["staff"] == "current" and kristian["position"]["nb"] == "Professor"
+    assert kjetil["position"] is None and kjetil["staff"] == "unknown" and not kjetil["included"]
