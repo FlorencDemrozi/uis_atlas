@@ -334,6 +334,12 @@ CRISTIN_INCLUDE_MIN = 1
 CRISTIN_ACADEMIC_TITLES = (r"^(professor|førsteamanuensis|amanuensis|dosent|universitetslektor|"
                            r"førstelektor|postdo|stipendiat|phd|forsker|seniorforsker|gjesteforsker|"
                            r"gjesteprofessor|dekan|instituttleder)")
+# Fixed-term roles. Cristin often leaves them active after the person has left (PhD
+# candidates who have defended), and the employee directory does list such staff, so a
+# person found only in Cristin with nothing but these roles is not taken as current
+# staff: "former" with a doctoral thesis in the atlas, otherwise "unknown" (2026-11-12).
+CRISTIN_FIXED_TERM_TITLES = (r"^(stipendiat|phd|postdo|vitenskapelig ass|vitenskaplig ass|gjeste|"
+                             r"student|master|u\.pers)")
 NVA_PERSON_URL = "https://nva.sikt.no/research-profile/{}"
 # Student theses: written by students, not by the atlas researchers. Not collected.
 NVA_SKIPPED_TYPES = ["DegreeBachelor", "DegreeMaster", "OtherStudentWork"]

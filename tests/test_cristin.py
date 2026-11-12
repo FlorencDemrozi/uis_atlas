@@ -33,6 +33,17 @@ def test_staff_status():
     assert staff_status(False, None) == ("unknown", [])                     # no Cristin record
 
 
+def test_fixed_term_roles_only_in_cristin_are_not_trusted():
+    phd = {"uis": [aff("217.8.4.0", True, nb="Stipendiat", en="Research fellow")]}
+    assert staff_status(False, phd) == ("unknown", [])
+    assert staff_status(False, phd, has_thesis=True) == ("former", [])      # defended: left
+    assert staff_status(True, phd)[0] == "current"                          # in the directory
+    both = {"uis": [aff("217.8.4.0", True, nb="Postdoktor", en="Postdoc"),
+                    aff("217.8.4.0", True, nb="Førsteamanuensis", en="Associate professor")]}
+    status, active = staff_status(False, both)
+    assert status == "current" and active[0]["nb"] == "Førsteamanuensis"   # permanent title shown
+
+
 def test_cristin_unit_maps_to_atlas_department_or_faculty():
     assert cristin_unit([aff("217.8.10.0", True)])["departments"] == [CHEM]
     assert cristin_unit([aff("217.8.0.0", True)]) == {
@@ -74,4 +85,4 @@ def test_cristin_inclusion_needs_an_academic_role():
     assert not off["nva-1"]["included"] and not off["nva-2"]["included"]     # opt-in
     on = build({"authors": authors, "papers": papers}, {}, {}, cristin_include_min=1, **args)["people"]
     assert on["nva-1"]["included"] and not on["nva-2"]["included"]          # students are not
-    assert on["nva-2"]["staff"] == "current"
+    assert on["nva-2"]["staff"] == "unknown"                               # fixed-term role only

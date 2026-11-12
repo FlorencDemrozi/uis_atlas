@@ -230,13 +230,25 @@ def is_academic(affiliation: dict) -> bool:
     return bool(re.match(config.CRISTIN_ACADEMIC_TITLES, title))
 
 
-def staff_status(confirmed: bool, record: dict | None) -> tuple[str, list[dict]]:
+def is_fixed_term(affiliation: dict) -> bool:
+    """A fixed-term UiS role in Cristin (config.CRISTIN_FIXED_TERM_TITLES, Norwegian title)."""
+    title = (affiliation.get("nb") or "").strip().lower()
+    return bool(re.match(config.CRISTIN_FIXED_TERM_TITLES, title))
+
+
+def staff_status(confirmed: bool, record: dict | None,
+                 has_thesis: bool = False) -> tuple[str, list[dict]]:
     """("current" | "former" | "unknown", active UiS affiliations) from the employee
-    directory and the person's Cristin record (collect_cristin.py)."""
+    directory and the person's Cristin record (collect_cristin.py). Only active
+    fixed-term roles in Cristin are not trusted (see config.CRISTIN_FIXED_TERM_TITLES)."""
+    if confirmed:
+        return "current", []
     active = [a for a in (record or {}).get("uis", []) if a["active"]]
-    active.sort(key=lambda a: not is_academic(a))   # the academic role is the title shown
-    if confirmed or active:
+    if any(not is_fixed_term(a) for a in active):
+        active.sort(key=lambda a: (is_fixed_term(a), not is_academic(a)))   # title shown
         return "current", active
+    if active:
+        return ("former" if has_thesis else "unknown"), []
     return ("former" if record and record.get("uis") else "unknown"), []
 
 
@@ -309,8 +321,10 @@ def build(atlas: dict, name_parts: dict, overrides: dict, reference_year: int,
         cristin_id = next((authors[i]["cristin_id"] for i in members if is_nva(i)), None)
         # In the directory, but in a unit outside the atlas: current staff, and Cristin
         # must not bring them back in.
+        has_thesis = any(papers[p].get("category") == "thesis" for i in members for p in authors[i]["papers"])
         status, active = staff_status(entry is not None,
-                                      cristin.get(str(cristin_id)) if cristin_id and entry is None else None)
+                                      cristin.get(str(cristin_id)) if cristin_id and entry is None else None,
+                                      has_thesis)
         by_cristin = status == "current" and entry is None
         dept, source = (place(scopus_dept, entry) if not by_cristin
                         else place(scopus_dept, cristin_unit(active)))
