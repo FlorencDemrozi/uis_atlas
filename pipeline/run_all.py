@@ -11,7 +11,11 @@ import runlock
 
 HERE = Path(__file__).resolve().parent
 STAGES = [
-    "build_profiles.py", "build_partners.py", "summarize.py", "embed.py", "export_public.py",          # researchers
+    # collect_cristin.py: is the UiS affiliation of people the directory does not confirm
+    # still active? (open API, any network; cached). build_profiles.py lists whom to check
+    # and runs again to use the answers.
+    "build_profiles.py", "collect_cristin.py", "build_profiles.py",
+    "build_partners.py", "summarize.py", "embed.py", "export_public.py",          # researchers
     "team_vectors.py",  # Build a team: public titles + keywords as vectors (cached by text)
     # funding calls: matching on the official text first, so profile_calls.py can pick the
     # EU topics worth an AI profile; the second pass redoes only calls whose profile changed.

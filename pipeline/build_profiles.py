@@ -209,12 +209,36 @@ def place(scopus_dept: str | None, entry: dict | None) -> tuple[str | None, str]
     return config.not_stated(entry["faculty"]), "directory (faculty)"
 
 
+def cristin_unit(units: list[dict]) -> dict | None:
+    """A directory-like entry (see place()) for the atlas unit of active Cristin affiliations."""
+    for table, kind in ((config.NVA_DEPARTMENTS, "dept"), (config.NVA_FACULTIES, "faculty")):
+        for a in units:
+            parts = a["unit"].split(".")
+            for n in range(len(parts), 1, -1):
+                name = table.get(".".join(parts[:n]))
+                if name and kind == "dept":
+                    return {"departments": [name], "faculty": config.FACULTY_OF[name], "excluded": False}
+                if name:
+                    return {"departments": [], "faculty": name, "excluded": False}
+    return None   # institution level or a unit outside the faculties: keep the Scopus department
+
+
+def staff_status(confirmed: bool, record: dict | None) -> tuple[str, list[dict]]:
+    """("current" | "former" | "unknown", active UiS affiliations) from the employee
+    directory and the person's Cristin record (collect_cristin.py)."""
+    active = [a for a in (record or {}).get("uis", []) if a["active"]]
+    if confirmed or active:
+        return "current", active
+    return ("former" if record and record.get("uis") else "unknown"), []
+
+
 def build(atlas: dict, name_parts: dict, overrides: dict, reference_year: int,
           recent_years: int, min_recent: int, directory: Directory | None = None,
           unconfirmed_years: int | None = None, unconfirmed_min: int | None = None,
           links: list | None = None, excluded: set | None = None,
-          previous_ids: set | None = None) -> dict:
-    excluded, previous_ids = excluded or set(), previous_ids or set()
+          previous_ids: set | None = None, cristin: dict | None = None,
+          cristin_include_min: int | None = None) -> dict:
+    excluded, previous_ids, cristin = excluded or set(), previous_ids or set(), cristin or {}
     authors = {a["scopus_id"]: a for a in atlas["authors"]}
     papers = atlas["papers"]
     recent_from = reference_year - recent_years + 1
@@ -252,7 +276,14 @@ def build(atlas: dict, name_parts: dict, overrides: dict, reference_year: int,
         matches = sorted((dir_match[i] for i in members if i in dir_match),
                          key=lambda m: -m[1])
         entry, score = matches[0] if matches else (None, 0)
-        dept, source = place(scopus_dept, entry)
+        in_directory = entry is not None and not entry["excluded"]
+        cristin_id = next((authors[i]["cristin_id"] for i in members if is_nva(i)), None)
+        status, active = staff_status(in_directory, cristin.get(str(cristin_id)) if cristin_id else None)
+        by_cristin = status == "current" and not in_directory
+        dept, source = (place(scopus_dept, entry) if not by_cristin
+                        else place(scopus_dept, cristin_unit(active)))
+        if by_cristin:
+            source = "cristin" if source == "directory" else source.replace("directory", "cristin")
         paper_ids = sorted({p for i in members for p in authors[i]["papers"]},
                            key=lambda p: (-(year_of(papers[p]) or 0), p))
         pub_ids = [p for p in paper_ids if config.is_publication(papers[p])]
@@ -268,14 +299,20 @@ def build(atlas: dict, name_parts: dict, overrides: dict, reference_year: int,
         people[main_id] = {
             "scopus_id": main_id,
             "scopus_ids": members,
-            "cristin_id": next((authors[i]["cristin_id"] for i in members if is_nva(i)), None),
+            "cristin_id": cristin_id,
             "name": ov.get("name") or (entry["name"] if entry and score >= 2 else fullest_name(
                 [authors[i]["name"] for i in members])),
             "orcid": next((authors[i]["orcid"] for i in members if authors[i].get("orcid")), None),
             "faculty": config.FACULTY_OF.get(dept or ""),
             "department": dept,
             "position": ({"nb": entry.get("position_nb"), "en": entry.get("position_en")}
-                         if entry and not entry["excluded"] else None),
+                         if in_directory else
+                         {"nb": active[0].get("nb") or active[0].get("en"),
+                          "en": active[0].get("en") or active[0].get("nb")}
+                         if active and (active[0].get("nb") or active[0].get("en")) else None),
+            # current: in the employee directory or an active UiS affiliation in Cristin;
+            # former: Cristin shows only ended UiS affiliations; unknown: neither.
+            "staff": status,
             "uis_links": ({"nb": entry.get("url_nb"), "en": entry.get("url_en")}
                           if entry and not entry["excluded"] else None),
             "email": entry.get("email") if entry and not entry["excluded"] else None,
@@ -292,7 +329,8 @@ def build(atlas: dict, name_parts: dict, overrides: dict, reference_year: int,
             "last_year": max(all_years, default=None),
             "_include_override": ov.get("include"),
             "_excluded": bool(excluded & set(members)),
-            "_confirmed": entry is not None and not entry["excluded"],
+            "_confirmed": in_directory,
+            "_by_cristin": by_cristin,
             "_source": "override" if ov.get("department") else source,
             "_directory": (entry["name"], score) if entry else None,
             # Not in the UiS directory (may have left): only UiS papers count, so work at
@@ -313,6 +351,8 @@ def build(atlas: dict, name_parts: dict, overrides: dict, reference_year: int,
             person["included"] = False
         elif person["_confirmed"]:
             person["included"] = person["n_recent"] >= min_recent
+        elif person["_by_cristin"] and cristin_include_min is not None:   # config.CRISTIN_INCLUDE_MIN
+            person["included"] = person["n_recent"] >= cristin_include_min
         else:
             person["included"] = person["_n_unconfirmed_recent"] >= unconfirmed_min
 
@@ -436,11 +476,14 @@ def main() -> None:
         print("No employee directory yet (run pipeline/collect_directory.py) – "
               "everyone is treated as unconfirmed.")
     directory = Directory(dir_data)
+    cristin = (json.loads(config.RAW_CRISTIN.read_text(encoding="utf-8")).get("persons", {})
+               if config.RAW_CRISTIN.exists() else {})
+    print(f"Cristin person records: {len(cristin)} (run pipeline/collect_cristin.py to update).")
 
     res = build(atlas, name_parts, overrides, config.REFERENCE_YEAR,
                 config.RECENT_YEARS, config.MIN_RECENT_PUBLICATIONS, directory,
                 config.UNCONFIRMED_RECENT_YEARS, config.UNCONFIRMED_MIN_RECENT_PUBLICATIONS, links,
-                excluded, previous_profile_ids())
+                excluded, previous_profile_ids(), cristin, config.CRISTIN_INCLUDE_MIN)
     people = res["people"]
     included = [p for p in people.values() if p["included"]]
     included.sort(key=lambda p: (p["faculty"], p["department"], p["name"]))
@@ -459,16 +502,22 @@ def main() -> None:
     write_text(config.PAPERS, json.dumps(atlas["papers"], ensure_ascii=False, separators=(",", ":")))
     write_text(config.MERGE_LOG, json.dumps(res["merge_log"], ensure_ascii=False, indent=1))
     write_text(config.PROFILES, json.dumps(out, ensure_ascii=False, indent=1))
+    # People the directory does not confirm, with recent work: collect_cristin.py checks
+    # whether their UiS affiliation is still active.
+    candidates = sorted({str(p["cristin_id"]) for p in people.values()
+                         if p["cristin_id"] and p["department"] and not p["_confirmed"]
+                         and not p["_excluded"] and p["n_recent"] >= config.CRISTIN_MIN_RECENT_PUBLICATIONS})
+    write_text(config.CRISTIN_CANDIDATES, json.dumps(candidates))
 
     # ---- review files for the project owner
     listed = [p for p in people.values() if p["department"] or p["_directory"]]
     write_csv(config.REVIEW_DIR / "researchers.csv",
-              ["status", "scopus_id", "other_scopus_ids", "name", "faculty", "department",
+              ["status", "staff", "scopus_id", "other_scopus_ids", "name", "faculty", "department",
                "department_source", "directory_name", "directory_match", "position",
                "n_publications", f"n_since_{res['recent_from']}", "last_year",
                "affiliation_example", "profile_url"],
               [["excluded (opt-out)" if p["_excluded"] else "included" if p["included"] else "dropped",
-                p["scopus_id"],
+                p["staff"], p["scopus_id"],
                 " ".join(p["scopus_ids"][1:]), p["name"], p["faculty"], p["department"],
                 p["_source"], (p["_directory"] or ["", ""])[0], (p["_directory"] or ["", ""])[1],
                 (p["position"] or {}).get("nb"), p["n_publications"], p["n_recent"], p["last_year"],
@@ -509,7 +558,10 @@ def main() -> None:
     print(f"Included: {len(included)} – {confirmed} confirmed in the employee directory "
           f"({rule}), "
           f"{len(included) - confirmed} not in the directory "
-          f"(≥{config.UNCONFIRMED_MIN_RECENT_PUBLICATIONS} since {res['unconfirmed_from']}).\n")
+          f"(≥{config.UNCONFIRMED_MIN_RECENT_PUBLICATIONS} since {res['unconfirmed_from']}).")
+    staff = Counter(p["staff"] for p in included)
+    print(f"Staff status: {staff['current']} current ({sum(1 for p in included if p['_by_cristin'])} "
+          f"of them from Cristin), {staff['former']} former, {staff['unknown']} unknown.\n")
     by_faculty = defaultdict(Counter)
     for p in included:
         by_faculty[p["faculty"]][p["department"]] += 1

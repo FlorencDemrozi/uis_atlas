@@ -11,6 +11,9 @@ export interface Researcher {
   faculty: string;
   department: string;
   position: { nb: string | null; en: string | null } | null;
+  /** current: UiS employee directory or an active UiS affiliation in Cristin; former: only
+   *  ended UiS affiliations in Cristin; unknown: neither (pipeline/build_profiles.py). */
+  staff?: "current" | "former" | "unknown";
   summary: string | null;
   tags: string[];
   /** Publications only (articles, books, chapters, conference papers, reports, PhD theses). */

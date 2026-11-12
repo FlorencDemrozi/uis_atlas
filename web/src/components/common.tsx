@@ -28,12 +28,13 @@ export function DeptLabel({ name, short = true, withFaculty = false, own = false
   );
 }
 
-/** Job title from the UiS employee directory, in the current language. People not in the
- *  directory (no position) may have left UiS: they are listed because of recent UiS papers. */
+/** Job title (UiS employee directory or Cristin) in the current language. People who are
+ *  not confirmed as current staff are labelled: they are listed because of recent UiS papers. */
 export function Position({ r }: { r: Researcher }) {
   const { lang, t } = useI18n();
-  if (!r.position) return <span class="unlisted" title={t("staff.unlistedTip")}>{t("staff.unlisted")}</span>;
-  const p = r.position[lang] ?? r.position.nb ?? r.position.en;
+  if (r.staff === "former" || r.staff === "unknown")
+    return <span class="unlisted" title={t(`staff.${r.staff}Tip`)}>{t(`staff.${r.staff}`)}</span>;
+  const p = r.position && (r.position[lang] ?? r.position.nb ?? r.position.en);
   return p ? <span class="position">{p}</span> : null;
 }
 

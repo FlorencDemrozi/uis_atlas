@@ -87,9 +87,9 @@ export function SearchView({ atlas, route }: { atlas: Atlas; route: Route }) {
 
   // Every filter except the role: the role buttons count these researchers.
   const unroled: Hit[] = useMemo(() => {
-    // Current staff: found in the UiS employee directory (they have a position).
+    // Current staff: in the UiS employee directory or active at UiS in Cristin.
     const keep = (r: Researcher) => inScope(sel, r.department) && r.n_publications >= minPubs
-      && (!currentOnly || !!r.position);
+      && (!currentOnly || r.staff === "current");
     if (query) return search(index, atlas, query).filter((h) => keep(h.researcher));
     return atlas.researchers.filter(keep)
       .sort((a, b) => (atlas.recent.get(b.scopus_id) ?? 0) - (atlas.recent.get(a.scopus_id) ?? 0)

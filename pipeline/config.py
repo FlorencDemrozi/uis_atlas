@@ -313,6 +313,23 @@ NVA_REFRESH_YEARS = 2           # like SCOPUS_REFRESH_YEARS: recent years are fe
 # A year's file is replaced only if at least this share of its totalHits came in.
 NVA_MIN_FETCHED_SHARE = 0.98
 NVA_PUBLICATION_URL = "https://nva.sikt.no/registration/{}"
+# Cristin person records (collect_cristin.py): is a UiS affiliation still active? A second
+# source of current staff next to the employee directory, which leaves some staff out.
+# Only people the directory does not confirm are looked up; records are read again
+# after CRISTIN_REFRESH_DAYS. Only the UiS affiliations (unit, active, role) are kept.
+CRISTIN_PERSON_URL = "https://api.nva.unit.no/cristin/person/{}"
+CRISTIN_UIS = "217"                       # UiS institution id in Cristin
+CRISTIN_SLEEP = 0.3
+CRISTIN_REFRESH_DAYS = 28
+RAW_CRISTIN = DATA / "raw" / "cristin_persons.json"        # local only
+CRISTIN_CANDIDATES = DATA / "interim" / "cristin_candidates.json"   # written by build_profiles.py
+# People looked up in Cristin: at least this many publications in the last RECENT_YEARS.
+CRISTIN_MIN_RECENT_PUBLICATIONS = 1
+# Cristin sets staff status, title and department, but not who is included: people
+# found only there still need the UNCONFIRMED_* rule. With a number here, current
+# staff found only in Cristin are included with that many publications in the last
+# RECENT_YEARS instead (about +470 people with 1, including students; 2026-11-12).
+CRISTIN_INCLUDE_MIN = None
 NVA_PERSON_URL = "https://nva.sikt.no/research-profile/{}"
 # Student theses: written by students, not by the atlas researchers. Not collected.
 NVA_SKIPPED_TYPES = ["DegreeBachelor", "DegreeMaster", "OtherStudentWork"]

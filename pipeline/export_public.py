@@ -23,7 +23,7 @@ import config
 from fsutil import write_text
 
 RESEARCHER_FIELDS = [
-    "scopus_id", "name", "orcid", "email", "faculty", "department", "position", "summary", "tags",
+    "scopus_id", "name", "orcid", "email", "faculty", "department", "position", "staff", "summary", "tags",
     "n_publications", "n_uis", "output_types", "citations", "pubs_per_year", "first_year", "last_year",
     "top_coauthors", "collab_departments", "other_paper_ids", "scopus_metrics", "links",
 ]
